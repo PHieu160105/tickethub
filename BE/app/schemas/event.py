@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import EventStatus, SeatStatus
+from app.models.enums import EventStatus, Gender, SeatStatus
 
 
 class SeatZoneCreate(BaseModel):
@@ -86,6 +86,25 @@ class SeatZoneResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SeatUserInfoResponse(BaseModel):
+    """Basic user info shown to admin in seat inspector."""
+
+    user_id: int
+    full_name: str
+    email: str
+    gender: Gender
+    age: int
+
+
+class SeatPurchaseInfoResponse(BaseModel):
+    """Purchase details for sold seats."""
+
+    user: SeatUserInfoResponse
+    order_id: int
+    ticket_code: str | None = None
+    issued_at: datetime | None = None
+
+
 class EventDetailResponse(EventCardResponse):
     """Detailed event payload used for booking screen."""
 
@@ -108,6 +127,8 @@ class SeatResponse(BaseModel):
     status: SeatStatus
     lock_expires_at: datetime | None = None
     is_locked_by_me: bool = False
+    locked_by_user: SeatUserInfoResponse | None = None
+    sold_to_user: SeatPurchaseInfoResponse | None = None
 
 
 class SeatMatrixResponse(BaseModel):

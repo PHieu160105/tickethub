@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import { useAuth } from '../hooks/useAuth'
 import { queueApi } from '../lib/api'
 import { queueStorage } from '../lib/storage'
 import type { QueueStatusResponse } from '../types'
@@ -8,6 +9,7 @@ import type { QueueStatusResponse } from '../types'
 export function QueuePage() {
   const { eventKey = '' } = useParams()
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
 
   const [status, setStatus] = useState<QueueStatusResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -16,6 +18,11 @@ export function QueuePage() {
   const queueToken = useMemo(() => queueStorage.getToken(eventKey), [eventKey])
 
   useEffect(() => {
+    if (isAdmin) {
+      navigate(`/events/${eventKey}/seats`, { replace: true })
+      return
+    }
+
     const joinOrPollQueue = async () => {
       try {
         setError(null)
@@ -73,7 +80,7 @@ export function QueuePage() {
     return () => {
       window.clearInterval(pollTimer)
     }
-  }, [eventKey, navigate])
+  }, [eventKey, isAdmin, navigate])
 
   return (
     <main className="queue-page">
@@ -88,7 +95,9 @@ export function QueuePage() {
           <>
             <p className="queue-position">{status.position ? `#${status.position}` : 'Admitting'}</p>
             <p className="queue-message">{status.message}</p>
-            <p className="queue-hint">Bạn đang ở vị trí thứ {status.position ?? '...'} trong hàng đợi. Vui lòng không tải lại trang.</p>
+            <p className="queue-hint">
+              You are currently position {status.position ?? '...'} in line. Please do not refresh this page.
+            </p>
           </>
         )}
 

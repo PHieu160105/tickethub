@@ -12,7 +12,7 @@ from app.api.deps import get_current_active_admin
 from app.core.db import get_db_session
 from app.models.enums import OrderStatus, SeatStatus
 from app.models.event import Event
-from app.models.order import Order, OrderItem, Ticket
+from app.models.order import Order, OrderItem, Ticket, TicketCancellation
 from app.models.seat import Seat
 from app.models.event import SeatZone
 from app.models.user import User
@@ -170,6 +170,15 @@ async def event_stats_detail(
         or 0
     )
 
+    canceled_tickets = int(
+        (
+            await session.scalar(
+                select(func.count(TicketCancellation.id)).where(TicketCancellation.event_id == event.id)
+            )
+        )
+        or 0
+    )
+
     zone_rows = (
         await session.execute(
             select(
@@ -221,6 +230,7 @@ async def event_stats_detail(
         available_seats=available_seats,
         occupancy_rate=occupancy_rate,
         tickets_issued=ticket_count,
+        canceled_tickets=canceled_tickets,
         total_revenue=total_revenue,
         zone_stats=zone_stats,
     )

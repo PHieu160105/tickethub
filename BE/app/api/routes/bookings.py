@@ -5,7 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_customer
 from app.core.db import get_db_session
 from app.models.user import User
 from app.schemas.booking import (
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/bookings", tags=["bookings"])
 async def lock_event_seats(
     payload: LockSeatsRequest,
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_customer),
 ) -> LockSeatsResponse:
     """Lock one or many seats for current authenticated customer."""
 
@@ -43,7 +43,7 @@ async def lock_event_seats(
 async def release_event_seats(
     payload: ReleaseSeatsRequest,
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_customer),
 ) -> APIMessage:
     """Release selected seats if they are currently locked by the same user."""
 
@@ -60,7 +60,7 @@ async def release_event_seats(
 async def checkout(
     payload: CheckoutRequest,
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_customer),
 ) -> CheckoutResponse:
     """Confirm checkout and mark user locked seats as sold tickets."""
 
@@ -78,7 +78,7 @@ async def my_tickets(
     start_from: datetime | None = Query(default=None),
     end_to: datetime | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_customer),
 ) -> list[MyTicketResponse]:
     """List current user's purchased e-tickets with QR payload."""
 
@@ -95,7 +95,7 @@ async def my_tickets(
 async def delete_ticket(
     ticket_id: int,
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_customer),
 ) -> APIMessage:
     """Allow customer to cancel one owned ticket and release seat."""
 

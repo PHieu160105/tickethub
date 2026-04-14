@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 
 import { EventCard } from '../components/EventCard'
-import { eventApi } from '../lib/api'
+import { eventApi, extractApiErrorMessage } from '../lib/api'
 import type { EventCard as EventCardType } from '../types'
 
 const categoryFilters = [
@@ -42,9 +42,8 @@ export function HomePage() {
         end_to: nextFilters.end_at ? dayjs(nextFilters.end_at).toISOString() : undefined,
       })
       setEvents(data)
-    } catch (err) {
-      console.error(err)
-      setError('Failed to load events. Please try again.')
+    } catch (caughtError) {
+      setError(extractApiErrorMessage(caughtError, 'Failed to load events. Please try again.'))
     } finally {
       setLoading(false)
     }

@@ -5,7 +5,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { SeatLegend } from '../components/SeatLegend'
 import { useAuth } from '../hooks/useAuth'
 import { useWebSocketHeartbeat } from '../hooks/useWebSocketHeartbeat'
-import { bookingApi, eventApi, queueApi } from '../lib/api'
+import { bookingApi, eventApi, extractApiErrorMessage, queueApi } from '../lib/api'
 import { queueStorage } from '../lib/storage'
 import type { CheckoutResponse, EventDetail, Seat } from '../types'
 
@@ -48,27 +48,37 @@ export function SeatBookingPage() {
   const { eventKey = '' } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, token, isAuthenticated } = useAuth()
+  const { user, token, isAuthenticated, isAdmin } = useAuth()
 
   const [event, setEvent] = useState<EventDetail | null>(null)
   const [seats, setSeats] = useState<Seat[]>([])
   const [loading, setLoading] = useState(true)
   const [busySeatId, setBusySeatId] = useState<number | null>(null)
   const [guestPreviewSeatIds, setGuestPreviewSeatIds] = useState<number[]>([])
+  const [inspectedSeatIds, setInspectedSeatIds] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
   const [checkoutData, setCheckoutData] = useState<CheckoutResponse | null>(null)
+  const [resettingSeats, setResettingSeats] = useState(false)
   const [nowTick, setNowTick] = useState(() => Date.now())
 
+  const queueTokenFromQuery = useMemo(
+    () => new URLSearchParams(location.search).get('queue_token') ?? undefined,
+    [location.search],
+  )
+
   const queueToken = useMemo(() => {
-    const fromQuery = new URLSearchParams(location.search).get('queue_token')
     const persisted = queueStorage.getToken(eventKey)
-    return fromQuery ?? persisted ?? undefined
-  }, [eventKey, location.search])
+    return persisted ?? queueTokenFromQuery
+  }, [eventKey, queueTokenFromQuery])
 
   useEffect(() => {
-    if (!queueToken) return
-    queueStorage.setToken(eventKey, queueToken)
-  }, [eventKey, queueToken])
+    if (!queueTokenFromQuery) return
+
+    queueStorage.setToken(eventKey, queueTokenFromQuery)
+
+    // Persist token then remove it from URL to prevent stale browser-back bypasses.
+    navigate(`/events/${eventKey}/seats`, { replace: true })
+  }, [eventKey, navigate, queueTokenFromQuery])
 
   const wsBase = import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8000/ws'
 
@@ -85,17 +95,18 @@ export function SeatBookingPage() {
       setEvent(eventResponse)
       setSeats(seatMatrixResponse.seats)
       setGuestPreviewSeatIds([])
+      setInspectedSeatIds([])
 
-      if (isAuthenticated && eventResponse.queue_enabled && !queueToken) {
+      if (isAuthenticated && !isAdmin && eventResponse.queue_enabled && !queueToken) {
         navigate(`/events/${eventKey}/queue`, { replace: true })
         return
       }
-    } catch {
-      setError('Unable to load seat map. You may need queue access token.')
+    } catch (caughtError) {
+      setError(extractApiErrorMessage(caughtError, 'Unable to load seat map. You may need queue access token.'))
     } finally {
       setLoading(false)
     }
-  }, [eventKey, isAuthenticated, navigate, queueToken])
+  }, [eventKey, isAdmin, isAuthenticated, navigate, queueToken])
 
   useEffect(() => {
     void fetchAll()
@@ -149,7 +160,19 @@ export function SeatBookingPage() {
     () => seats.filter((seat) => guestPreviewSeatIds.includes(seat.id) && seat.status !== 'sold'),
     [guestPreviewSeatIds, seats],
   )
-  const displaySeats = isAuthenticated ? selectedSeats : guestPreviewSeats
+  const inspectedSeats = useMemo(
+    () => seats.filter((seat) => inspectedSeatIds.includes(seat.id)),
+    [inspectedSeatIds, seats],
+  )
+  const displaySeats = useMemo(() => {
+    if (isAdmin) {
+      return inspectedSeats
+    }
+    if (isAuthenticated) {
+      return selectedSeats
+    }
+    return guestPreviewSeats
+  }, [guestPreviewSeats, inspectedSeats, isAdmin, isAuthenticated, selectedSeats])
   const totalPrice = useMemo(
     () => displaySeats.reduce((sum, seat) => sum + Number(seat.price), 0),
     [displaySeats],
@@ -175,6 +198,13 @@ export function SeatBookingPage() {
 
   const handleSeatClick = async (seat: Seat) => {
     if (!event || busySeatId) return
+
+    if (isAdmin) {
+      setInspectedSeatIds((previousIds) =>
+        previousIds.includes(seat.id) ? previousIds.filter((id) => id !== seat.id) : [...previousIds, seat.id],
+      )
+      return
+    }
 
     if (!isAuthenticated) {
       if (seat.status === 'sold') return
@@ -226,8 +256,9 @@ export function SeatBookingPage() {
           ),
         )
       }
-    } catch {
-      setError('Failed to lock seat. Please retry.')
+    } catch (caughtError) {
+      setError(extractApiErrorMessage(caughtError, 'Failed to lock seat. Please retry.'))
+      void fetchAll()
     } finally {
       setBusySeatId(null)
     }
@@ -246,8 +277,46 @@ export function SeatBookingPage() {
       setCheckoutData(checkout)
       queueStorage.clearToken(eventKey)
       void fetchAll()
-    } catch {
-      setError('Checkout failed. Lock may have expired.')
+    } catch (caughtError) {
+      setError(extractApiErrorMessage(caughtError, 'Checkout failed. Lock may have expired.'))
+      void fetchAll()
+    }
+  }
+
+  const handleResetSelectedSeats = async () => {
+    if (!event) return
+
+    setError(null)
+
+    if (isAdmin) {
+      setInspectedSeatIds([])
+      return
+    }
+
+    if (!isAuthenticated) {
+      setGuestPreviewSeatIds([])
+      return
+    }
+
+    if (selectedSeats.length === 0) return
+
+    const selectedSeatIds = selectedSeats.map((seat) => seat.id)
+    setResettingSeats(true)
+
+    try {
+      await bookingApi.release(event.id, selectedSeatIds)
+      setSeats((prevSeats) =>
+        prevSeats.map((seat) =>
+          selectedSeatIds.includes(seat.id)
+            ? { ...seat, status: 'available', is_locked_by_me: false, lock_expires_at: null }
+            : seat,
+        ),
+      )
+    } catch (caughtError) {
+      setError(extractApiErrorMessage(caughtError, 'Failed to reset selected seats. Please retry.'))
+      void fetchAll()
+    } finally {
+      setResettingSeats(false)
     }
   }
 
@@ -316,6 +385,7 @@ export function SeatBookingPage() {
                     seat.status === 'locked' && seat.is_locked_by_me ? 'seat-cell--mine' : '',
                     seat.status === 'locked' && !seat.is_locked_by_me ? 'seat-cell--locked' : '',
                     !isAuthenticated && guestPreviewSeatIds.includes(seat.id) ? 'seat-cell--preview' : '',
+                    isAdmin && inspectedSeatIds.includes(seat.id) ? 'seat-cell--inspected' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')
@@ -328,7 +398,7 @@ export function SeatBookingPage() {
                       style={availableStyle}
                       title={`${seat.seat_label} • ${zoneMeta?.name ?? 'Unknown Zone'} • $${seat.price}`}
                       onClick={() => void handleSeatClick(seat)}
-                      disabled={seat.status === 'sold' || busySeatId === seat.id}
+                      disabled={!isAdmin && (seat.status === 'sold' || busySeatId === seat.id)}
                     >
                       {seat.row_label}
                       {seat.seat_number}
@@ -339,8 +409,14 @@ export function SeatBookingPage() {
             </article>
 
             <aside className="seat-summary-card">
-              <h2>Selected Seats</h2>
-              <p>{isAuthenticated ? `${selectedSeats.length} seats locked` : `${guestPreviewSeats.length} seats selected (preview)`}</p>
+              <h2>{isAdmin ? 'Seat Inspector' : 'Selected Seats'}</h2>
+              <p>
+                {isAdmin
+                  ? 'Click any seat to inspect owner details.'
+                  : isAuthenticated
+                    ? `${selectedSeats.length} seats locked`
+                    : `${guestPreviewSeats.length} seats selected (preview)`}
+              </p>
 
               <ul>
                 {displaySeats.map((seat) => (
@@ -357,9 +433,61 @@ export function SeatBookingPage() {
                 <strong>${totalPrice.toFixed(2)}</strong>
               </div>
 
-              <button type="button" className="btn btn-primary" disabled={displaySeats.length === 0} onClick={handleCheckout}>
-                Confirm Checkout
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={displaySeats.length === 0 || resettingSeats}
+                onClick={() => void handleResetSelectedSeats()}
+              >
+                {resettingSeats ? 'Resetting...' : 'Reset Selected Seats'}
               </button>
+
+              {isAdmin && inspectedSeats.length > 0 && (
+                <div className="seat-inspector-stack">
+                  {inspectedSeats.map((inspectedSeat) => (
+                    <div key={inspectedSeat.id} className="seat-inspector-card">
+                      <h3>{inspectedSeat.seat_label}</h3>
+                      <p>Status: {inspectedSeat.status}</p>
+                      <p>Price: ${Number(inspectedSeat.price).toFixed(2)}</p>
+
+                      {inspectedSeat.sold_to_user ? (
+                        <div className="seat-inspector-card__owner">
+                          <strong>Purchased By</strong>
+                          <span>{inspectedSeat.sold_to_user.user.full_name}</span>
+                          <span>{inspectedSeat.sold_to_user.user.email}</span>
+                          <span>
+                            {inspectedSeat.sold_to_user.user.gender} • {inspectedSeat.sold_to_user.user.age} years old
+                          </span>
+                          <span>Order #{inspectedSeat.sold_to_user.order_id}</span>
+                          {inspectedSeat.sold_to_user.ticket_code && <span>Ticket: {inspectedSeat.sold_to_user.ticket_code}</span>}
+                        </div>
+                      ) : inspectedSeat.locked_by_user ? (
+                        <div className="seat-inspector-card__owner">
+                          <strong>Currently Locked By</strong>
+                          <span>{inspectedSeat.locked_by_user.full_name}</span>
+                          <span>{inspectedSeat.locked_by_user.email}</span>
+                          <span>
+                            {inspectedSeat.locked_by_user.gender} • {inspectedSeat.locked_by_user.age} years old
+                          </span>
+                        </div>
+                      ) : (
+                        <p className="state-text">No owner yet for this seat.</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!isAdmin && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={displaySeats.length === 0 || resettingSeats}
+                  onClick={handleCheckout}
+                >
+                  Confirm Checkout
+                </button>
+              )}
             </aside>
           </section>
         </>
@@ -377,7 +505,7 @@ export function SeatBookingPage() {
               className="btn btn-primary"
               onClick={() => {
                 setCheckoutData(null)
-                navigate('/my-tickets')
+                navigate('/my-tickets', { replace: true })
               }}
             >
               Go to My Tickets

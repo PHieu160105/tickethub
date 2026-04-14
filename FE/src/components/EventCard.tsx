@@ -9,8 +9,9 @@ interface EventCardProps {
 }
 
 export function EventCard({ event }: EventCardProps) {
-  const { isAuthenticated } = useAuth()
-  const destination = !isAuthenticated ? `/events/${event.slug}/seats` : event.queue_enabled ? `/events/${event.slug}/queue` : `/events/${event.slug}/seats`
+  const { isAuthenticated, isAdmin } = useAuth()
+  const shouldJoinQueue = isAuthenticated && !isAdmin && event.queue_enabled
+  const destination = !isAuthenticated ? `/events/${event.slug}/seats` : shouldJoinQueue ? `/events/${event.slug}/queue` : `/events/${event.slug}/seats`
 
   return (
     <article className="event-card">
@@ -31,7 +32,7 @@ export function EventCard({ event }: EventCardProps) {
           <span>{event.venue}</span>
         </div>
         <Link to={destination} className="btn btn-primary">
-          {!isAuthenticated ? 'Preview Seats' : event.queue_enabled ? 'Join Queue' : 'Book Seats'}
+          {!isAuthenticated ? 'Preview Seats' : shouldJoinQueue ? 'Join Queue' : 'Book Seats'}
         </Link>
       </div>
     </article>

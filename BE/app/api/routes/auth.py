@@ -9,7 +9,7 @@ from app.core.db import get_db_session
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.auth import AuthTokenResponse, LoginRequest, RegisterRequest, UserResponse
+from app.schemas.auth import AuthTokenResponse, LoginRequest, RegisterRequest, UpdateProfileRequest, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -54,4 +54,21 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_db_se
 async def me(current_user: User = Depends(get_current_user)) -> UserResponse:
     """Return currently authenticated user profile."""
 
+    return UserResponse.model_validate(current_user)
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_me(
+    payload: UpdateProfileRequest,
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+) -> UserResponse:
+    """Allow authenticated user to edit personal profile information."""
+
+    current_user.full_name = payload.full_name
+    current_user.gender = payload.gender
+    current_user.age = payload.age
+
+    await session.commit()
+    await session.refresh(current_user)
     return UserResponse.model_validate(current_user)

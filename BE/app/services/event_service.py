@@ -10,8 +10,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import SeatStatus
 from app.models.event import Event, SeatZone
+from app.models.order import Order, OrderItem, Ticket
 from app.models.seat import Seat
-from app.schemas.event import EventCreateRequest, SeatResponse, SeatZoneResponse
+from app.models.user import User
+from app.schemas.event import (
+    EventCreateRequest,
+    SeatPurchaseInfoResponse,
+    SeatResponse,
+    SeatUserInfoResponse,
+    SeatZoneResponse,
+)
 
 
 def slugify(text: str) -> str:
@@ -172,6 +180,7 @@ async def get_event_seat_matrix(
     session: AsyncSession,
     event_id: int,
     current_user_id: int | None = None,
+    include_user_details: bool = False,
 ) -> tuple[list[SeatZoneResponse], list[SeatResponse]]:
     """Fetch seat matrix with lock ownership hints for current user."""
 
@@ -182,12 +191,77 @@ async def get_event_seat_matrix(
     zone_responses = [SeatZoneResponse.model_validate(zone) for zone in zones]
     seat_responses: list[SeatResponse] = []
 
+    locked_user_map: dict[int, SeatUserInfoResponse] = {}
+    sold_user_map: dict[int, SeatPurchaseInfoResponse] = {}
+
+    if include_user_details and seats:
+        locked_user_ids = {seat.locked_by_user_id for seat in seats if seat.locked_by_user_id is not None}
+        if locked_user_ids:
+            user_rows = (
+                await session.execute(
+                    select(User.id, User.full_name, User.email, User.gender, User.age).where(User.id.in_(locked_user_ids))
+                )
+            ).all()
+            locked_user_map = {
+                row.id: SeatUserInfoResponse(
+                    user_id=row.id,
+                    full_name=row.full_name,
+                    email=row.email,
+                    gender=row.gender,
+                    age=row.age,
+                )
+                for row in user_rows
+            }
+
+        seat_ids = [seat.id for seat in seats]
+        sold_rows = (
+            await session.execute(
+                select(
+                    OrderItem.seat_id,
+                    Order.id.label("order_id"),
+                    User.id.label("user_id"),
+                    User.full_name,
+                    User.email,
+                    User.gender,
+                    User.age,
+                    Ticket.ticket_code,
+                    Ticket.issued_at,
+                )
+                .join(Order, OrderItem.order_id == Order.id)
+                .join(User, Order.user_id == User.id)
+                .outerjoin(Ticket, Ticket.order_item_id == OrderItem.id)
+                .where(OrderItem.seat_id.in_(seat_ids))
+            )
+        ).all()
+
+        sold_user_map = {
+            row.seat_id: SeatPurchaseInfoResponse(
+                user=SeatUserInfoResponse(
+                    user_id=row.user_id,
+                    full_name=row.full_name,
+                    email=row.email,
+                    gender=row.gender,
+                    age=row.age,
+                ),
+                order_id=row.order_id,
+                ticket_code=row.ticket_code,
+                issued_at=_as_utc(row.issued_at),
+            )
+            for row in sold_rows
+        }
+
     for seat in seats:
         # Treat expired locks as available for client rendering. Real unlock still happens in worker.
         normalized_status = seat.status
         lock_expires = _as_utc(seat.lock_expires_at)
         if seat.status == SeatStatus.LOCKED and lock_expires and lock_expires < now:
             normalized_status = SeatStatus.AVAILABLE
+
+        locked_by_user = None
+        if include_user_details and normalized_status == SeatStatus.LOCKED and seat.locked_by_user_id is not None:
+            locked_by_user = locked_user_map.get(seat.locked_by_user_id)
+
+        sold_to_user = sold_user_map.get(seat.id) if include_user_details and seat.status == SeatStatus.SOLD else None
 
         seat_responses.append(
             SeatResponse(
@@ -201,6 +275,8 @@ async def get_event_seat_matrix(
                 status=normalized_status,
                 lock_expires_at=lock_expires,
                 is_locked_by_me=seat.locked_by_user_id == current_user_id,
+                locked_by_user=locked_by_user,
+                sold_to_user=sold_to_user,
             )
         )
 

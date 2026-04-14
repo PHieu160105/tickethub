@@ -66,6 +66,11 @@ class AdminWebSocketManager:
         async with self._lock:
             self._clients.discard(websocket)
 
+    def has_clients(self) -> bool:
+        """Return whether any admin dashboard websocket is currently connected."""
+
+        return bool(self._clients)
+
     async def broadcast(self, payload: dict[str, Any]) -> None:
         """Send metrics update to all active admin dashboard sockets."""
 

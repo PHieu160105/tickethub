@@ -61,6 +61,23 @@ export interface Seat {
   status: SeatStatus
   lock_expires_at: string | null
   is_locked_by_me: boolean
+  locked_by_user?: SeatUserInfo | null
+  sold_to_user?: SeatPurchaseInfo | null
+}
+
+export interface SeatUserInfo {
+  user_id: number
+  full_name: string
+  email: string
+  gender: Gender
+  age: number
+}
+
+export interface SeatPurchaseInfo {
+  user: SeatUserInfo
+  order_id: number
+  ticket_code: string | null
+  issued_at: string | null
 }
 
 export interface SeatMatrixResponse {
@@ -130,6 +147,7 @@ export interface TicketItem {
 export interface DashboardSummary {
   total_revenue: number
   tickets_sold: number
+  cancelled_tickets: number
   active_events: number
   waiting_queue_users: number
 }
@@ -191,6 +209,7 @@ export interface EventDetailStats {
   available_seats: number
   occupancy_rate: number
   tickets_issued: number
+  canceled_tickets: number
   total_revenue: number
   zone_stats: EventZoneStats[]
 }

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 
 import { AdminSidebar } from '../components/AdminSidebar'
-import { adminApi, eventApi } from '../lib/api'
+import { adminApi, eventApi, extractApiErrorMessage } from '../lib/api'
 import type { EventCard, EventDetailStats, EventStatus } from '../types'
 
 interface ZoneForm {
@@ -49,6 +49,7 @@ export function AdminEventsPage() {
   const [updating, setUpdating] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [eventsError, setEventsError] = useState<string | null>(null)
   const [listFilters, setListFilters] = useState<AdminListFilters>({ search: '', category: 'all', start_at: '', end_at: '' })
   const [deletingEventId, setDeletingEventId] = useState<number | null>(null)
   const [statsLoadingId, setStatsLoadingId] = useState<number | null>(null)
@@ -82,6 +83,7 @@ export function AdminEventsPage() {
   const fetchEvents = async (filters: AdminListFilters = listFilters) => {
     try {
       setLoading(true)
+      setEventsError(null)
       const data = await adminApi.listEvents({
         search: filters.search.trim() || undefined,
         category: filters.category === 'all' ? undefined : filters.category,
@@ -89,6 +91,8 @@ export function AdminEventsPage() {
         end_to: filters.end_at ? dayjs(filters.end_at).toISOString() : undefined,
       })
       setEvents(data)
+    } catch (caughtError) {
+      setEventsError(extractApiErrorMessage(caughtError, 'Failed to load events. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -111,8 +115,8 @@ export function AdminEventsPage() {
       const uploaded = await adminApi.uploadEventImage(file)
       setForm((previousForm) => ({ ...previousForm, cover_image_url: uploaded.image_url }))
       setMessage('Image uploaded successfully.')
-    } catch {
-      setMessage('Failed to upload image. Please use jpg/png/webp under 10MB.')
+    } catch (caughtError) {
+      setMessage(extractApiErrorMessage(caughtError, 'Failed to upload image. Please use jpg/png/webp under 10MB.'))
     } finally {
       setUploadingImage(false)
       event.target.value = ''
@@ -140,8 +144,8 @@ export function AdminEventsPage() {
       setMessage('Event created successfully and seat matrix generated.')
       setForm((previousForm) => ({ ...previousForm, title: '', description: '', venue: '' }))
       await fetchEvents()
-    } catch {
-      setMessage('Failed to create event. Please review input values.')
+    } catch (caughtError) {
+      setMessage(extractApiErrorMessage(caughtError, 'Failed to create event. Please review input values.'))
     } finally {
       setSaving(false)
     }
@@ -167,8 +171,8 @@ export function AdminEventsPage() {
         queue_release_batch: detail.queue_release_batch,
         max_active_queue_tokens: detail.max_active_queue_tokens,
       })
-    } catch {
-      setMessage('Failed to load event details for editing.')
+    } catch (caughtError) {
+      setMessage(extractApiErrorMessage(caughtError, 'Failed to load event details for editing.'))
     }
   }
 
@@ -199,8 +203,8 @@ export function AdminEventsPage() {
       setEditingEvent(null)
       setEditForm(null)
       await fetchEvents()
-    } catch {
-      setMessage('Failed to update event. Please review values and try again.')
+    } catch (caughtError) {
+      setMessage(extractApiErrorMessage(caughtError, 'Failed to update event. Please review values and try again.'))
     } finally {
       setUpdating(false)
     }
@@ -224,8 +228,8 @@ export function AdminEventsPage() {
       }
       setMessage('Event deleted successfully.')
       await fetchEvents()
-    } catch {
-      setMessage('Delete failed. Please try again.')
+    } catch (caughtError) {
+      setMessage(extractApiErrorMessage(caughtError, 'Delete failed. Please try again.'))
     } finally {
       setDeletingEventId(null)
     }
@@ -238,8 +242,8 @@ export function AdminEventsPage() {
     try {
       const stats = await adminApi.eventStats(eventData.slug)
       setActiveStats(stats)
-    } catch {
-      setStatsError('Unable to load event statistics.')
+    } catch (caughtError) {
+      setStatsError(extractApiErrorMessage(caughtError, 'Unable to load event statistics.'))
     } finally {
       setStatsLoadingId(null)
     }
@@ -542,6 +546,7 @@ export function AdminEventsPage() {
           </form>
 
           {loading && <p className="state-text">Loading events...</p>}
+          {eventsError && <p className="state-text state-text--error">{eventsError}</p>}
           {statsError && <p className="state-text state-text--error">{statsError}</p>}
           <div className="admin-event-list">
             {events.map((event) => (
@@ -775,6 +780,10 @@ export function AdminEventsPage() {
                 <article className="kpi-card">
                   <p>Tickets Issued</p>
                   <h3>{activeStats.tickets_issued}</h3>
+                </article>
+                <article className="kpi-card kpi-card--danger">
+                  <p>Canceled Tickets</p>
+                  <h3>{activeStats.canceled_tickets}</h3>
                 </article>
                 <article className="kpi-card">
                   <p>Total Revenue</p>

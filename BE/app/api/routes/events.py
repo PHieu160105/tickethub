@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_optional_current_user
 from app.core.db import get_db_session
+from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.event import EventCardResponse, EventDetailResponse, SeatMatrixResponse
 from app.services.event_service import get_event_by_slug_or_id, get_event_seat_matrix, list_live_events
@@ -72,5 +73,10 @@ async def event_seat_matrix(
     """Return full seat matrix for booking UI."""
 
     event = await get_event_by_slug_or_id(session, event_key)
-    zones, seats = await get_event_seat_matrix(session, event.id, current_user_id=current_user.id if current_user else None)
+    zones, seats = await get_event_seat_matrix(
+        session,
+        event.id,
+        current_user_id=current_user.id if current_user else None,
+        include_user_details=bool(current_user and current_user.role == UserRole.ADMIN),
+    )
     return SeatMatrixResponse(event_id=event.id, event_slug=event.slug, queue_enabled=event.queue_enabled, zones=zones, seats=seats)

@@ -42,6 +42,7 @@ FE/
 │  │  ├─ HomePage.tsx
 │  │  ├─ LoginPage.tsx
 │  │  ├─ RegisterPage.tsx
+│  │  ├─ MyAccountPage.tsx
 │  │  ├─ QueuePage.tsx
 │  │  ├─ SeatBookingPage.tsx
 │  │  ├─ MyTicketsPage.tsx
@@ -56,6 +57,7 @@ FE/
 - `/` : landing + event search
 - `/login` : login
 - `/register` : register
+- `/my-account` : profile self-service page
 - `/events/:eventKey/queue` : waiting room
 - `/events/:eventKey/seats` : seat booking screen
 - `/my-tickets` : customer ticket management + QR
@@ -72,11 +74,15 @@ FE/
 - Lock/release ghế
 - Checkout xác nhận đơn hàng (không cần payment gateway thật)
 - Quản lý vé điện tử và QR
+- Cập nhật thông tin cá nhân ở My Account
 
 ### Admin
 - Tạo sự kiện mới
+- Sửa/xóa sự kiện đã release
 - Cấu hình seat matrix theo zone (rows, seats/row, price, color)
 - Theo dõi dashboard realtime (summary + chart + occupancy + demographics)
+- Seat inspector: chọn nhiều ghế (kể cả ghế sold) để xem info người mua/đang giữ ghế
+- Join queue để monitor seat map nhưng không được confirm checkout
 
 ## 5) Giao diện và design
 - Dùng palette + layering theo `stitch/DESIGN.md`
@@ -84,6 +90,7 @@ FE/
 - Typography Inter + Manrope
 - Layout responsive mobile/desktop
 - Background gradient + glass nav để giữ “brand soul”
+- Có nút chuyển theme Light/Dark trực tiếp trên thanh điều hướng
 
 ## 6) Chạy local
 

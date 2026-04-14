@@ -19,6 +19,7 @@ interface AuthContextValue {
     gender: 'male' | 'female' | 'other'
     age: number
   }) => Promise<User>
+  updateProfile: (payload: { full_name: string; gender: 'male' | 'female' | 'other'; age: number }) => Promise<User>
   logout: () => void
   refreshProfile: () => Promise<void>
 }
@@ -62,6 +63,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null)
   }, [])
 
+  const updateProfile = useCallback(async (payload: { full_name: string; gender: 'male' | 'female' | 'other'; age: number }) => {
+    const profile = await authApi.updateMe(payload)
+    authStorage.setUser(profile)
+    setUser(profile)
+    return profile
+  }, [])
+
   const refreshProfile = useCallback(async () => {
     if (!authStorage.getToken()) return
 
@@ -82,10 +90,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAdmin: user?.role === 'admin',
       login,
       register,
+      updateProfile,
       logout,
       refreshProfile,
     }),
-    [user, token, login, logout, refreshProfile, register],
+    [user, token, login, logout, refreshProfile, register, updateProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -54,3 +54,18 @@ class Ticket(TimestampMixin, Base):
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     order_item = relationship("OrderItem", back_populates="ticket")
+
+
+class TicketCancellation(TimestampMixin, Base):
+    """Audit record for canceled tickets to support admin analytics."""
+
+    __tablename__ = "ticket_cancellations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticket_code: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="SET NULL"), nullable=True, index=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    seat_id: Mapped[int] = mapped_column(ForeignKey("seats.id", ondelete="SET NULL"), nullable=True, index=True)
+    canceled_price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    canceled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

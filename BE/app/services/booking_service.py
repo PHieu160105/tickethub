@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import OrderStatus, SeatStatus
 from app.models.event import Event, SeatZone
-from app.models.order import Order, OrderItem, Ticket
+from app.models.order import Order, OrderItem, Ticket, TicketCancellation
 from app.models.seat import Seat
 from app.schemas.booking import CheckoutItemResponse, CheckoutResponse, LockSeatsResponse, MyTicketResponse
 from app.services.queue_service import ensure_queue_access, mark_queue_completed
@@ -348,6 +348,7 @@ async def cancel_ticket(session: AsyncSession, user_id: int, ticket_id: int) -> 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
     ticket, order_item, order, seat = row
+    canceled_at = datetime.now(UTC)
     changed_seat = {
         "id": seat.id,
         "status": SeatStatus.AVAILABLE.value,
@@ -359,6 +360,18 @@ async def cancel_ticket(session: AsyncSession, user_id: int, ticket_id: int) -> 
         seat.status = SeatStatus.AVAILABLE
         seat.locked_by_user_id = None
         seat.lock_expires_at = None
+
+        session.add(
+            TicketCancellation(
+                ticket_code=ticket.ticket_code,
+                user_id=order.user_id,
+                event_id=order.event_id,
+                order_id=order.id,
+                seat_id=seat.id,
+                canceled_price=order_item.price,
+                canceled_at=canceled_at,
+            )
+        )
 
         await session.delete(ticket)
         await session.delete(order_item)

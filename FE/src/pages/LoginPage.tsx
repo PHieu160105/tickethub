@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import type { FormEvent } from 'react'
 
 import { useAuth } from '../hooks/useAuth'
+import { extractApiErrorMessage } from '../lib/api'
 
 export function LoginPage() {
   const { login } = useAuth()
@@ -28,8 +29,8 @@ export function LoginPage() {
       } else {
         navigate(redirectPath ?? '/')
       }
-    } catch {
-      setError('Incorrect email or password.')
+    } catch (caughtError) {
+      setError(extractApiErrorMessage(caughtError, 'Incorrect email or password.'))
     } finally {
       setLoading(false)
     }

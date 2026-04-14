@@ -47,6 +47,14 @@ async def get_current_active_admin(current_user: User = Depends(get_current_user
     return current_user
 
 
+async def get_current_customer(current_user: User = Depends(get_current_user)) -> User:
+    """Allow access only for customer booking actions."""
+
+    if current_user.role != UserRole.CUSTOMER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Customer role is required")
+    return current_user
+
+
 async def get_optional_current_user(
     session: AsyncSession = Depends(get_db_session),
     token: str | None = Depends(oauth2_optional_scheme),

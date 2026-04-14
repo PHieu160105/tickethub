@@ -156,7 +156,7 @@ async def get_queue_status(session: AsyncSession, event_id: int, token: str, use
             token=entry.token,
             status=entry.status,
             position=position,
-            message=f"Bạn đang ở vị trí thứ {position} trong hàng đợi. Vui lòng không tải lại trang...",
+            message=f"You are position {position} in line. Please do not refresh this page.",
         )
 
     if entry.status == QueueStatus.ADMITTED:
@@ -164,20 +164,20 @@ async def get_queue_status(session: AsyncSession, event_id: int, token: str, use
             token=entry.token,
             status=entry.status,
             admitted_until=entry_expires,
-            message="Đến lượt bạn! Hệ thống đã cấp quyền vào màn hình chọn ghế.",
+            message="It is your turn. You can now enter seat booking.",
         )
 
     if entry.status == QueueStatus.COMPLETED:
         return QueueStatusResponse(
             token=entry.token,
             status=entry.status,
-            message="Bạn đã hoàn tất phiên truy cập đặt vé.",
+            message="Your booking access session is complete.",
         )
 
     return QueueStatusResponse(
         token=entry.token,
         status=entry.status,
-        message="Queue token đã hết hạn. Vui lòng vào hàng chờ lại.",
+        message="Your queue token has expired. Please rejoin the waiting room.",
     )
 
 

@@ -3,12 +3,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { AdminSidebar } from '../components/AdminSidebar'
 import { useAuth } from '../hooks/useAuth'
 import { useWebSocketHeartbeat } from '../hooks/useWebSocketHeartbeat'
-import { adminApi } from '../lib/api'
+import { adminApi, extractApiErrorMessage } from '../lib/api'
 import type { AudienceDistribution, DashboardSummary, OccupancyItem, RevenuePoint } from '../types'
 
 const summaryDefault: DashboardSummary = {
   total_revenue: 0,
   tickets_sold: 0,
+  cancelled_tickets: 0,
   active_events: 0,
   waiting_queue_users: 0,
 }
@@ -21,6 +22,7 @@ export function AdminDashboardPage() {
   const [audience, setAudience] = useState<AudienceDistribution>({ age_groups: {}, gender_groups: {} })
   const [occupancy, setOccupancy] = useState<OccupancyItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const wsBase = import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8000/ws'
 
@@ -41,17 +43,43 @@ export function AdminDashboardPage() {
   const fetchDashboard = async () => {
     try {
       setLoading(true)
-      const [summaryRes, revenueRes, audienceRes, occupancyRes] = await Promise.all([
+      setError(null)
+      const [summaryRes, revenueRes, audienceRes, occupancyRes] = await Promise.allSettled([
         adminApi.summary(),
         adminApi.revenue(14),
         adminApi.audience(),
         adminApi.occupancy(),
       ])
 
-      setSummary(summaryRes)
-      setRevenue(revenueRes)
-      setAudience(audienceRes)
-      setOccupancy(occupancyRes)
+      const errorMessages: string[] = []
+
+      if (summaryRes.status === 'fulfilled') {
+        setSummary(summaryRes.value)
+      } else {
+        errorMessages.push(extractApiErrorMessage(summaryRes.reason, 'Summary unavailable'))
+      }
+
+      if (revenueRes.status === 'fulfilled') {
+        setRevenue(revenueRes.value)
+      } else {
+        errorMessages.push(extractApiErrorMessage(revenueRes.reason, 'Revenue chart unavailable'))
+      }
+
+      if (audienceRes.status === 'fulfilled') {
+        setAudience(audienceRes.value)
+      } else {
+        errorMessages.push(extractApiErrorMessage(audienceRes.reason, 'Audience chart unavailable'))
+      }
+
+      if (occupancyRes.status === 'fulfilled') {
+        setOccupancy(occupancyRes.value)
+      } else {
+        errorMessages.push(extractApiErrorMessage(occupancyRes.reason, 'Occupancy table unavailable'))
+      }
+
+      if (errorMessages.length > 0) {
+        setError(errorMessages.slice(0, 2).join(' | '))
+      }
     } finally {
       setLoading(false)
     }
@@ -62,18 +90,44 @@ export function AdminDashboardPage() {
   }, [])
 
   const maxRevenue = useMemo(() => Math.max(...revenue.map((item) => item.revenue), 1), [revenue])
+  const topOccupancy = useMemo(
+    () => [...occupancy].sort((first, second) => second.occupancy_rate - first.occupancy_rate).slice(0, 4),
+    [occupancy],
+  )
 
   return (
     <main className="admin-shell">
       <AdminSidebar />
 
       <section className="admin-content">
-        <header className="section-head">
+        <header className="section-head section-head--hero admin-hero-head">
           <h1>Market Performance</h1>
           <p>Real-time dashboard for seat occupancy, queue pressure and revenue.</p>
         </header>
 
         {loading && <p className="state-text">Loading dashboard...</p>}
+        {error && <p className="state-text state-text--error">{error}</p>}
+        {error && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void fetchDashboard()}>
+            Retry Dashboard Load
+          </button>
+        )}
+
+        <section className="dashboard-showcase panel">
+          <img
+            src="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80"
+            alt="Live audience and stage lighting"
+          />
+          <div className="dashboard-showcase__body">
+            <h2>Live Commerce Pulse</h2>
+            <p>Revenue is net of cancellations. Ticket cancellation trends are tracked in real time for operation planning.</p>
+            <div className="dashboard-showcase__chips">
+              <span className="chip chip-primary">Real-time feed</span>
+              <span className="chip chip-ghost">Queue intelligence</span>
+              <span className="chip chip-ghost">Cancellation monitor</span>
+            </div>
+          </div>
+        </section>
 
         <section className="kpi-grid">
           <article className="kpi-card">
@@ -83,6 +137,10 @@ export function AdminDashboardPage() {
           <article className="kpi-card">
             <p>Tickets Sold</p>
             <h3>{summary.tickets_sold.toLocaleString()}</h3>
+          </article>
+          <article className="kpi-card kpi-card--danger">
+            <p>Cancelled Tickets</p>
+            <h3>{summary.cancelled_tickets.toLocaleString()}</h3>
           </article>
           <article className="kpi-card">
             <p>Active Events</p>
@@ -104,6 +162,25 @@ export function AdminDashboardPage() {
                   <span>{item.date.slice(5)}</span>
                 </div>
               ))}
+            </div>
+          </article>
+
+          <article className="panel">
+            <h2>Top Occupancy Radar</h2>
+            <div className="occupancy-radar">
+              {topOccupancy.map((item) => (
+                <div key={item.event_id} className="occupancy-radar__item">
+                  <div>
+                    <strong>{item.event_title}</strong>
+                    <p>{item.sold_seats} sold / {item.total_seats} seats</p>
+                  </div>
+                  <div className="occupancy-radar__meter">
+                    <span style={{ width: `${Math.min(item.occupancy_rate, 100)}%` }} />
+                  </div>
+                  <em>{item.occupancy_rate}%</em>
+                </div>
+              ))}
+              {topOccupancy.length === 0 && <p className="state-text">No occupancy data yet.</p>}
             </div>
           </article>
 

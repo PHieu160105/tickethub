@@ -29,7 +29,7 @@ BE/
 │  │     ├─ events.py            # Event list/detail/seat matrix
 │  │     ├─ queue.py             # Waiting room endpoints
 │  │     ├─ bookings.py          # lock/release/checkout/my-tickets
-│  │     ├─ admin.py             # Create event + dashboard data
+│  │     ├─ admin.py             # Event CRUD + dashboard + detail stats
 │  │     └─ ws.py                # WebSocket endpoints
 │  ├─ core/
 │  │  ├─ config.py               # Pydantic settings
@@ -112,6 +112,7 @@ Worker nền chạy 3s/lần để quét và release lock hết hạn.
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `GET /api/auth/me`
+- `PATCH /api/auth/me`
 
 ### Customer
 - `GET /api/events`
@@ -122,6 +123,8 @@ Worker nền chạy 3s/lần để quét và release lock hết hạn.
 - `POST /api/bookings/checkout`
 - `GET /api/bookings/my-tickets`
 
+> Luu y: bookings APIs chi cho role `customer`; admin bi chan o dependency layer.
+
 ### Virtual Queue
 - `POST /api/events/{event_key}/queue/join`
 - `GET /api/events/{event_key}/queue/status/{token}`
@@ -130,6 +133,9 @@ Worker nền chạy 3s/lần để quét và release lock hết hạn.
 ### Admin
 - `POST /api/admin/events`
 - `GET /api/admin/events`
+- `PATCH /api/admin/events/{event_key}`
+- `DELETE /api/admin/events/{event_key}`
+- `GET /api/admin/events/{event_key}/stats`
 - `GET /api/admin/dashboard/summary`
 - `GET /api/admin/dashboard/revenue`
 - `GET /api/admin/dashboard/audience`
@@ -159,7 +165,7 @@ cd BE
 python3 -m pytest -q
 ```
 
-Kết quả hiện tại: `6 passed`.
+Kết quả hiện tại: `8 passed`.
 
 ## 9) Ghi chú production
 - Đã tách layer rõ: `routes -> services -> models`

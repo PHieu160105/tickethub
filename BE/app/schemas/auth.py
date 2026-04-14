@@ -41,3 +41,11 @@ class AuthTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+class UpdateProfileRequest(BaseModel):
+    """Payload for user self-service profile update."""
+
+    full_name: str = Field(min_length=2, max_length=120)
+    gender: Gender = Gender.OTHER
+    age: int = Field(ge=10, le=100)

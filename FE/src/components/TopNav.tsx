@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '../hooks/useAuth'
@@ -5,6 +6,15 @@ import { useAuth } from '../hooks/useAuth'
 export function TopNav() {
   const { user, isAuthenticated, isAdmin, logout } = useAuth()
   const navigate = useNavigate()
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const savedTheme = localStorage.getItem('ticketrush-theme')
+    return savedTheme === 'dark' ? 'dark' : 'light'
+  })
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('ticketrush-theme', theme)
+  }, [theme])
 
   const handleLogout = () => {
     logout()
@@ -28,6 +38,14 @@ export function TopNav() {
         </nav>
 
         <div className="top-nav__actions">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setTheme((previousTheme) => (previousTheme === 'light' ? 'dark' : 'light'))}
+          >
+            {theme === 'light' ? 'Dark' : 'Light'}
+          </button>
+
           {!isAuthenticated && (
             <>
               <Link to="/login" className="btn btn-ghost">
@@ -41,7 +59,9 @@ export function TopNav() {
 
           {isAuthenticated && (
             <>
-              <span className="top-nav__user">{user?.full_name}</span>
+              <button type="button" className="top-nav__user" onClick={() => navigate('/my-account')}>
+                {user?.full_name}
+              </button>
               <button type="button" className="btn btn-ghost" onClick={handleLogout}>
                 Logout
               </button>

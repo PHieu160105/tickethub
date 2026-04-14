@@ -7,6 +7,7 @@ import { AdminDashboardPage } from './pages/AdminDashboardPage'
 import { AdminEventsPage } from './pages/AdminEventsPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
+import { MyAccountPage } from './pages/MyAccountPage'
 import { MyTicketsPage } from './pages/MyTicketsPage'
 import { QueuePage } from './pages/QueuePage'
 import { RegisterPage } from './pages/RegisterPage'
@@ -33,6 +34,15 @@ export default function App() {
         <Route
           path="/events/:eventKey/seats"
           element={<SeatBookingPage />}
+        />
+
+        <Route
+          path="/my-account"
+          element={
+            <ProtectedRoute>
+              <MyAccountPage />
+            </ProtectedRoute>
+          }
         />
 
         <Route

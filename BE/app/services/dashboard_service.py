@@ -9,7 +9,7 @@ from sqlalchemy.sql.sqltypes import Date
 
 from app.models.enums import EventStatus, OrderStatus, QueueStatus
 from app.models.event import Event
-from app.models.order import Order, OrderItem
+from app.models.order import Order, OrderItem, TicketCancellation
 from app.models.queue import QueueEntry
 from app.models.user import User
 from app.schemas.admin import AudienceDistributionResponse, DashboardSummaryResponse, RevenuePoint
@@ -18,18 +18,30 @@ from app.schemas.admin import AudienceDistributionResponse, DashboardSummaryResp
 async def get_dashboard_summary(session: AsyncSession) -> DashboardSummaryResponse:
     """Return headline dashboard metrics."""
 
-    total_revenue = await session.scalar(
-        select(func.coalesce(func.sum(Order.total_amount), 0)).where(Order.status == OrderStatus.PAID)
-    )
-    tickets_sold = await session.scalar(select(func.count(OrderItem.id)))
-    active_events = await session.scalar(select(func.count(Event.id)).where(Event.status == EventStatus.LIVE))
-    waiting_queue_users = await session.scalar(select(func.count(QueueEntry.id)).where(QueueEntry.status == QueueStatus.WAITING))
+    summary_row = (
+        await session.execute(
+            select(
+                select(func.coalesce(func.sum(Order.total_amount), 0))
+                .where(Order.status == OrderStatus.PAID)
+                .scalar_subquery()
+                .label("total_revenue"),
+                select(func.count(OrderItem.id)).scalar_subquery().label("tickets_sold"),
+                select(func.count(TicketCancellation.id)).scalar_subquery().label("cancelled_tickets"),
+                select(func.count(Event.id)).where(Event.status == EventStatus.LIVE).scalar_subquery().label("active_events"),
+                select(func.count(QueueEntry.id))
+                .where(QueueEntry.status == QueueStatus.WAITING)
+                .scalar_subquery()
+                .label("waiting_queue_users"),
+            )
+        )
+    ).one()
 
     return DashboardSummaryResponse(
-        total_revenue=float(total_revenue or 0),
-        tickets_sold=int(tickets_sold or 0),
-        active_events=int(active_events or 0),
-        waiting_queue_users=int(waiting_queue_users or 0),
+        total_revenue=float(summary_row.total_revenue or 0),
+        tickets_sold=int(summary_row.tickets_sold or 0),
+        cancelled_tickets=int(summary_row.cancelled_tickets or 0),
+        active_events=int(summary_row.active_events or 0),
+        waiting_queue_users=int(summary_row.waiting_queue_users or 0),
     )
 
 

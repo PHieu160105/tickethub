@@ -47,9 +47,10 @@ class WorkerOrchestrator:
                 async with AsyncSessionLocal() as session:
                     await process_virtual_queue(session)
 
-                async with AsyncSessionLocal() as session:
-                    summary = await get_dashboard_summary(session)
-                    await admin_ws_manager.broadcast(summary.model_dump())
+                if admin_ws_manager.has_clients():
+                    async with AsyncSessionLocal() as session:
+                        summary = await get_dashboard_summary(session)
+                        await admin_ws_manager.broadcast(summary.model_dump())
             except Exception:  # pragma: no cover - defensive runtime logging
                 logger.exception("Background worker iteration failed")
 

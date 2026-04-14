@@ -5,7 +5,6 @@ TicketRush là hệ thống phân phối vé điện tử được xây dựng f
 - **Backend:** FastAPI + PostgreSQL (`BE/`)
 - **Infra local:** Docker Compose (Postgres, Redis, Backend, Frontend)
 
-Dự án bám sát bộ thiết kế gốc trong `stitch/` (6 màn chính) và triển khai đầy đủ luồng nghiệp vụ customer/admin.
 
 ## 1) Chạy nhanh bằng Docker
 
@@ -44,7 +43,7 @@ npm run dev
 cd BE
 python3 -m pytest -q
 ```
-Kết quả: `6 passed`.
+Kết quả: `8 passed`.
 
 ### Frontend
 ```bash
@@ -57,8 +56,8 @@ Kết quả: build/lint pass.
 ## 5) Checklist requirement đối chiếu
 
 ### 5.1 Vai trò nghiệp vụ
-- **Customer:** tìm kiếm event, xem seat map, giữ ghế, checkout, xem QR ticket
-- **Admin:** tạo event + cấu hình seat matrix, xem dashboard realtime doanh thu/occupancy/demographics
+- **Customer:** tìm kiếm event, xem seat map, giữ ghế, checkout, xem QR ticket, cập nhật profile ở My Account
+- **Admin:** tạo/sửa/xóa event, upload ảnh event, xem dashboard realtime, xem seat inspector theo từng ghế
 
 ### 5.2 Trải nghiệm sơ đồ ghế (4.1)
 - FE có seat matrix trực quan theo zone/row/seat
@@ -82,9 +81,10 @@ Kết quả: build/lint pass.
 - Token queue bắt buộc cho event bật queue trước khi thao tác lock/checkout
 
 ### 5.6 Thiết kế/UI/UX
-- Bám design system `stitch/DESIGN.md` (palette, spacing, glass, gradient, editorial tone)
+- Bám design system (palette, spacing, glass, gradient, editorial tone)
 - Responsive mobile/desktop
 - URL routing rõ ràng theo `slug` event
+- Hỗ trợ chuyển theme Light/Dark ngay trên top nav
 
 ### 5.7 Hiệu năng frontend
 - Fetch JSON API bằng axios
@@ -102,6 +102,7 @@ Kết quả: build/lint pass.
 - Password hashing
 - Role-based access control (admin/customer)
 - Guard protected routes ở cả FE và BE
+- Booking API chỉ cho customer; admin không thể lock/release/checkout vé
 
 ### 5.10 OOP/DB independence
 - ORM với SQLAlchemy models (hướng đối tượng)
@@ -110,6 +111,3 @@ Kết quả: build/lint pass.
 ## 6) Tài liệu chi tiết
 - Backend docs: [BE/README.md](./BE/README.md)
 - Frontend docs: [FE/README.md](./FE/README.md)
-
-## 7) Thư mục thiết kế tham chiếu
-- `stitch/page 1..6`: dùng làm base cho landing, seat map, queue, admin event, admin dashboard, my tickets.
