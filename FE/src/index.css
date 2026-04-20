@@ -1,3 +1,4 @@
+@import "tailwindcss";
 @theme {
   /* Colors - Map từ TicketRush config */
   --color-primary: #ffb2b7;
