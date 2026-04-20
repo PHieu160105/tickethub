@@ -7,11 +7,8 @@ import {
   Timer,
   Calendar,
   MapPin,
-  ArrowForward,
-  VerifiedUser,
-  Public,
-  Share,
-  Wallet
+  ArrowRight,
+  Verified,
 } from 'lucide-react'
 
 export default function SeatSelection() {
@@ -262,7 +259,7 @@ export default function SeatSelection() {
                 <Link to="/checkout">
                   <Button className="w-full bg-primary hover:bg-primary/90 text-on-primary py-4 rounded-xl font-headline font-bold uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(252,83,109,0.3)] hover:shadow-[0_0_30px_rgba(252,83,109,0.5)] transition-all flex items-center justify-center gap-2 group">
                     Proceed to Checkout
-                    <ArrowForward className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
               </div>
@@ -270,7 +267,7 @@ export default function SeatSelection() {
 
             {/* Safe Checkout Badge */}
             <div className="flex items-center justify-center gap-4 text-slate-500 py-2">
-              <VerifiedUser className="w-5 h-5" />
+              <Verified className="w-5 h-5" />
               <span className="text-[10px] font-label uppercase tracking-widest">
                 Encrypted Checkout & Secure Tickets
               </span>
@@ -283,167 +280,3 @@ export default function SeatSelection() {
     </div>
   )
 }
-                  Time Remaining
-                </span>
-              </div>
-              <span className="text-2xl font-headline font-bold text-secondary">{formatTime(timeRemaining)}</span>
-            </div>
-
-            {/* Summary Card */}
-            <div className="backdrop-blur-xl bg-slate-900/80 rounded-xl overflow-hidden flex flex-col h-full min-h-[450px] border border-white/5">
-              <div className="p-6 border-b border-white/5">
-                <h3 className="font-headline font-bold uppercase tracking-widest text-slate-400 text-xs">
-                  Order Summary
-                </h3>
-              </div>
-              <div className="flex-1 p-6 space-y-4 overflow-y-auto">
-                {/* Selected Seat Items */}
-                {selectedSeats.map((seat) => (
-                  <div key={seat.id} className="flex justify-between items-center group">
-                    <div className="flex flex-col">
-                      <span className="font-headline font-bold text-white text-lg">
-                        {seat.zone} - Row {seat.id.slice(0, 1)}, Seat {seat.id.slice(1)}
-                      </span>
-                      <span className="text-xs font-label uppercase text-slate-500 tracking-wider">
-                        {seat.benefits}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-headline font-bold text-white">${seat.price}.00</div>
-                      <button
-                        onClick={() => removeSeat(seat.id)}
-                        className="text-[10px] font-label text-primary uppercase hover:underline"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Divider */}
-                <div className="pt-4 border-t border-white/5 space-y-2">
-                  <div className="flex justify-between text-sm text-slate-400">
-                    <span>Service Fee</span>
-                    <span>${serviceFee.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm text-slate-400">
-                    <span>Facility Fee</span>
-                    <span>${facilityFee.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="p-6 bg-slate-800/50">
-                <div className="flex justify-between items-end mb-6">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-label uppercase tracking-widest text-slate-400">Total Amount</span>
-                    <span className="text-4xl font-headline font-bold text-secondary tracking-tighter leading-none">
-                      ${total.toFixed(2)}
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-slate-500 mb-1">Tax incl.</span>
-                </div>
-                <Link to="/checkout">
-                  <Button className="w-full bg-primary hover:bg-primary/90 text-on-primary py-4 rounded-xl font-headline font-bold uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(252,83,109,0.3)] hover:shadow-[0_0_30px_rgba(252,83,109,0.5)] transition-all flex items-center justify-center gap-2 group">
-                    Proceed to Checkout
-                    <ArrowForward className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </Button>
-                </Link>
-              </div>
-            </div>
-
-            {/* Safe Checkout Badge */}
-            <div className="flex items-center justify-center gap-4 text-slate-500 py-2">
-              <VerifiedUser className="w-5 h-5" />
-              <span className="text-[10px] font-label uppercase tracking-widest">
-                Encrypted Checkout & Secure Tickets
-              </span>
-            </div>
-          </aside>
-        </div>
-      </main>
-
-      <Footer />
-    </div>
-  )
-}
-<div class="text-lg font-headline font-bold text-on-surface">$249.00</div>
-<button class="text-[10px] font-label text-primary uppercase hover:underline">Remove</button>
-</div>
-</div>
-<div class="flex justify-between items-center group">
-<div class="flex flex-col">
-<span class="font-headline font-bold text-white text-lg">Platinum - Row B, Seat 15</span>
-<span class="text-xs font-label uppercase text-on-surface/50 tracking-wider">Fast-Pass Entry Included</span>
-</div>
-<div class="text-right">
-<div class="text-lg font-headline font-bold text-on-surface">$249.00</div>
-<button class="text-[10px] font-label text-primary uppercase hover:underline">Remove</button>
-</div>
-</div>
-<!-- Divider -->
-<div class="pt-4 border-t border-white/5 space-y-2">
-<div class="flex justify-between text-sm text-on-surface/60">
-<span>Service Fee</span>
-<span>$18.50</span>
-</div>
-<div class="flex justify-between text-sm text-on-surface/60">
-<span>Facility Fee</span>
-<span>$5.00</span>
-</div>
-</div>
-</div>
-<div class="p-6 bg-surface-container-highest/50">
-<div class="flex justify-between items-end mb-6">
-<div class="flex flex-col">
-<span class="text-xs font-label uppercase tracking-widest text-on-surface/60">Total Amount</span>
-<span class="text-4xl font-headline font-bold text-secondary tracking-tighter leading-none">$521.50</span>
-</div>
-<span class="text-[10px] text-on-surface/40 mb-1">Tax incl.</span>
-</div>
-<button class="w-full bg-primary-container text-on-primary-container py-4 rounded-xl font-headline font-bold uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(252,83,109,0.3)] hover:shadow-[0_0_30px_rgba(252,83,109,0.5)] transition-all flex items-center justify-center gap-2 group">
-                            Proceed to Checkout
-                            <span class="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
-</button>
-</div>
-</div>
-<!-- Safe Checkout Badge -->
-<div class="flex items-center justify-center gap-4 text-on-surface/40 py-2">
-<span class="material-symbols-outlined text-lg">verified_user</span>
-<span class="text-[10px] font-label uppercase tracking-widest">Encrypted Checkout &amp; Secure Tickets</span>
-</div>
-</aside>
-</div>
-</main>
-<!-- Footer -->
-<footer class="bg-slate-950 full-width py-12 border-t border-white/5 mt-20">
-<div class="grid grid-cols-2 md:grid-cols-4 gap-8 px-6 max-w-screen-2xl mx-auto">
-<div class="col-span-2 md:col-span-1">
-<span class="text-xl font-black text-red-500 uppercase font-headline">TicketRush</span>
-<p class="mt-4 text-slate-500 text-xs leading-relaxed max-w-[200px]">The galaxy's premier destination for high-velocity entertainment and stellar events.</p>
-</div>
-<div class="flex flex-col gap-3">
-<h4 class="text-red-400 font-headline tracking-wide uppercase text-xs font-semibold mb-2">Legal</h4>
-<a class="text-slate-500 text-xs hover:text-red-400 transition-colors" href="#">Terms of Service</a>
-<a class="text-slate-500 text-xs hover:text-red-400 transition-colors" href="#">Privacy Policy</a>
-</div>
-<div class="flex flex-col gap-3">
-<h4 class="text-red-400 font-headline tracking-wide uppercase text-xs font-semibold mb-2">Support</h4>
-<a class="text-slate-500 text-xs hover:text-red-400 transition-colors" href="#">Help Center</a>
-<a class="text-slate-500 text-xs hover:text-red-400 transition-colors" href="#">Sell Tickets</a>
-</div>
-<div class="flex flex-col gap-3">
-<h4 class="text-red-400 font-headline tracking-wide uppercase text-xs font-semibold mb-2">Community</h4>
-<a class="text-slate-500 text-xs hover:text-red-400 transition-colors" href="#">Artist Portal</a>
-<a class="text-slate-500 text-xs hover:text-red-400 transition-colors" href="#">Affiliates</a>
-</div>
-</div>
-<div class="max-w-screen-2xl mx-auto px-6 mt-12 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
-<span class="text-slate-500 text-[10px] tracking-widest uppercase">© 2024 TicketRush. Powered by the Cosmic Voyager.</span>
-<div class="flex gap-6 opacity-60">
-<span class="material-symbols-outlined text-xl">public</span>
-<span class="material-symbols-outlined text-xl">share</span>
-<span class="material-symbols-outlined text-xl">account_balance_wallet</span>
-</div>
-</div>
-</footer>
-</body></html>

@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/Input'
 import { Search, Menu, X, User, Ticket } from 'lucide-react'
 import { NavLink, Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { default as LogoSVG } from '@/assets/logo.svg'
+import LogoSVG from '@/assets/logo.svg'
 
 const navLinks = [
   { label: 'Sự kiện', href: '/search' },
@@ -15,7 +15,7 @@ const navLinks = [
 export function Logo() {
   return (
     <Link to="/" aria-label="TicketRush Home" className="flex items-center gap-2">
-      <LogoSVG className="h-8 w-auto text-red-500" />
+      <img src={LogoSVG} alt="TicketRush Logo" className="h-8 w-auto" />
       <span className="text-lg font-black uppercase tracking-[0.3em] text-white">TicketRush</span>
     </Link>
   )
