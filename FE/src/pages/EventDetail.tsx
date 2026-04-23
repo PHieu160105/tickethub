@@ -1,280 +1,327 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Navbar } from '@/components/layout/Navbar'
 import { Footer } from '@/components/layout/Footer'
 import {
   Calendar,
   MapPin,
-  CreditCard,
   Share2,
   Heart,
-  Info,
-  Plus,
-  Minus,
-  Users,
-  Star
+  Star,
+  ChevronDown,
+  Clock,
 } from 'lucide-react'
 
+import { EVENT_DETAILS, getEventById } from '@/mocks'
+
 export default function EventDetail() {
-  const [selectedTier, setSelectedTier] = useState('General Admission - ₫500,000')
-  const [quantity, setQuantity] = useState(2)
+  const { id } = useParams()
+  const eventId = Number(id) || 1
+  const event = getEventById(eventId) || EVENT_DETAILS[0]
+  
+  const [isFavorite, setIsFavorite] = useState(false)
+  const [activeTab, setActiveTab] = useState('concerts')
+  const [locationFilter, setLocationFilter] = useState('')
+  const [dateFilter, setDateFilter] = useState('all')
 
-  const ticketTiers = [
-    { name: 'General Admission', price: 500000, available: 12 },
-    { name: 'Premium Stalls', price: 850000, available: 5 },
-    { name: 'Galactic VIP', price: 2500000, available: 2 }
-  ]
+  const renderStars = (rating: number) => {
+    return (
+      <div className="flex gap-0.5">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star
+            key={star}
+            className={`w-4 h-4 ${
+              star <= Math.floor(rating)
+                ? 'fill-yellow-400 text-yellow-400'
+                : 'fill-gray-600 text-gray-600'
+            }`}
+          />
+        ))}
+      </div>
+    )
+  }
 
-  const artists = [
-    {
-      name: 'X-NEBULA',
-      stage: 'Main Stage • 11:00 PM',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDXTneio-5nNwDz1Ffl7stHMw5qgt6968Ppud5CVp3UusND18ClpYpZh0q5QDP1QrCMFdvAiFYSA75_0jOxZoxTe318IucMP5CL6q6n94LtJbnRYRXmbn4IV80lAfupkWfbP_hptPdrMHsIuHVvtnL_Hc9owOQJGLfilLtuNt1OUB1CzDLUOyaDshReWA0gjw9x4fpnj2U-0h4vzyGIbSPoejTSCN8Xlc6qW9nz8-_v64YmWP9YpA7qkhfBgelo0g23aKUpjbIgBkY'
-    },
-    {
-      name: 'CYBER GLITCH',
-      stage: 'The Void • 09:30 PM',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCpm77bkfvril2rQPhmJyG2NmY-WK-N29B_8jYzQsg0s6fG-WK4yEW1z6TCBPWRqmpP3eMadk2kqmMFY7r1dPl5f13X5oZxNhDNUu_DpLy1tr-QMDQ6iy26wko5okF_fXdaQpr8iPeRh-aU9JOfQxr4KNxSqhi5ctcN9WC3v6XNZfqvMM6hhg5ZCsHSdOlSmrTL-YNZgkhA3vCdmZ4Y1HcKR8s__FIy-MZzFDoujhMzsom7jFlTavR7_jhLt8a9L_ykvkVattPAyow'
-    },
-    {
-      name: 'LYRA-7',
-      stage: 'Acoustic Dome • 07:00 PM',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDjgRHgTLKJ7WBfqi5DUNRw6F7v2KN_dggAEvs70jKYlR1a90n59NiUrhmIj05GYT4lqueLK9Z1KqY5qqwhSggMMpqRotdmvbqfzbUvtf97HHrD5-BS52HfcuSWCV201wPF6b94U1MbqHOu34lan9mZKcwNHIqhCIq6KiynNiyHgGRFH3D1LTsLFQX4zVrnR486lkwfGLlWrVlfJHs1dBRGhjZw-zdsuMP83MSxywQff_njvkZqsrXUSyE2Xt7sqFosHCOxAE638bo'
-    }
-  ]
-
-  const selectedTierData = ticketTiers.find(tier => `${tier.name} - ₫${tier.price.toLocaleString()}` === selectedTier)
-  const subtotal = selectedTierData ? selectedTierData.price * quantity : 0
-  const serviceFee = Math.round(subtotal * 0.045)
-  const total = subtotal + serviceFee
+  if (!event) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold mb-4">Event Not Found</h1>
+          <Link to="/">
+            <Button variant="primary">Back to Home</Button>
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white font-body">
+    <div className="min-h-screen bg-white text-slate-900">
       <Navbar />
 
-      <main className="relative">
-        {/* Hero Section */}
-        <section className="relative h-[614px] md:h-[819px] w-full overflow-hidden">
-          <div className="absolute inset-0">
-            <img
-              alt="Pulsar Beats Festival Banner"
-              className="w-full h-full object-cover"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDlxvf03yapYGPNLNjDTeaVw6IIYW0N4brNmNPuHrIZVQWBK_zgJ_Xs6uhUb457U0V7vRHnlfZymmnIJb64gjoeYztkl_h2UK-AaWLW67vw-Soq9_pEk6xZ0-g5Kw-3QFUHpfMuRCYSE5le9maZr7O4rXPLZUI1IXPmZkRR9oMc4A6it_cMReIfAgSVaKVY6v4qMzAUAOGxIc2dQmv8WhrHLw9IWdtluNd-420-aowZ56kQ2dhcH6uXarhAvwbFAoJUDrXr95O9bHU"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-950/90"></div>
+      {/* Breadcrumb */}
+      <div className="bg-slate-50 border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="text-sm text-slate-600">
+            <Link to="/" className="hover:text-primary">Home</Link>
+            <span className="mx-2">/</span>
+            <Link to="/concerts" className="hover:text-primary">Concerts</Link>
+            <span className="mx-2">/</span>
+            <span className="text-slate-900 font-medium">{event.category}</span>
+            <span className="mx-2">/</span>
+            <span className="text-slate-900 font-medium">{event.title}</span>
           </div>
-          <div className="absolute bottom-0 left-0 w-full px-6 pb-12 md:pb-24">
-            <div className="max-w-screen-2xl mx-auto flex flex-col md:flex-row justify-between items-end gap-8">
-              <div className="max-w-4xl">
-                <div className="inline-block bg-primary px-3 py-1 rounded-sm mb-4">
-                  <span className="text-on-primary-container font-label uppercase tracking-[0.2em] text-xs font-bold">Sold Out Risk: High</span>
-                </div>
-                <h1 className="text-5xl md:text-8xl font-headline font-bold tracking-tight text-white mb-4">
-                  Pulsar Beats <span className="text-primary italic">Festival</span>
-                </h1>
-                <p className="text-xl md:text-2xl text-slate-300 font-body max-w-2xl">
-                  An interstellar odyssey through sound, light, and dimension. Join 50,000 voyagers in the heart of the Orion sector.
-                </p>
-              </div>
-              <div className="flex gap-4 mb-4">
-                <button className="p-4 rounded-full bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-all">
-                  <Share2 className="w-5 h-5" />
-                </button>
-                <button className="p-4 rounded-full bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-all text-primary">
-                  <Heart className="w-5 h-5" style={{ fill: 'currentColor' }} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
+        </div>
+      </div>
 
-        {/* Sticky Info Bar */}
-        <div className="sticky top-[72px] z-40 backdrop-blur-xl bg-slate-900/80 border-y border-white/5 py-4 px-6 mb-12">
-          <div className="max-w-screen-2xl mx-auto flex flex-wrap justify-between items-center gap-6">
-            <div className="flex items-center gap-8">
-              <div className="flex items-center gap-3">
-                <Calendar className="text-primary w-5 h-5" />
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500 font-label">Date</p>
-                  <p className="font-headline font-semibold">Oct 24, 2024</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <MapPin className="text-primary w-5 h-5" />
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500 font-label">Venue</p>
-                  <p className="font-headline font-semibold">Orion Zenith Arena</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <CreditCard className="text-secondary w-5 h-5" />
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500 font-label">Starting From</p>
-                  <p className="font-headline font-semibold text-secondary">₫500,000+</p>
-                </div>
+      {/* Hero Section */}
+      <section className="relative h-[300px] md:h-[400px] overflow-hidden">
+        <div className="absolute inset-0">
+          <img
+            src={event.image}
+            alt={event.title}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-transparent" />
+        </div>
+        
+        <div className="relative max-w-7xl mx-auto px-4 h-full flex items-end pb-8">
+          <div className="flex-1">
+            <div className="flex items-center gap-4 mb-4">
+              <span className="text-sm font-medium text-slate-300">{event.category}</span>
+              <div className="flex items-center gap-2 bg-black/50 px-3 py-1 rounded-full">
+                {renderStars(event.rating)}
+                <span className="text-white font-semibold">{event.rating}</span>
               </div>
             </div>
-            <div className="hidden lg:flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              <span className="text-sm font-label text-slate-400">LIVE BOOKING ACTIVE</span>
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
+              {event.title}
+            </h1>
+            <div className="flex gap-4">
+              <Button variant="primary" size="lg">
+                Find Tickets
+              </Button>
+              <button
+                onClick={() => setIsFavorite(!isFavorite)}
+                className={`p-3 rounded-full border-2 transition-all ${
+                  isFavorite
+                    ? 'bg-red-500 border-red-500 text-white'
+                    : 'bg-transparent border-white text-white hover:bg-white/10'
+                }`}
+              >
+                <Heart className={`w-5 h-5 ${isFavorite ? 'fill-current' : ''}`} />
+              </button>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* Content Grid */}
-        <div className="max-w-screen-2xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 pb-24">
-          {/* Left Column: Details */}
-          <div className="lg:col-span-8 space-y-16">
-            {/* About */}
-            <section>
-              <h2 className="text-3xl font-headline font-bold mb-6 flex items-center gap-4">
-                <span className="w-12 h-[1px] bg-primary"></span>
-                About This Event
-              </h2>
-              <div className="prose prose-invert max-w-none space-y-6 text-slate-300 leading-relaxed">
-                <p className="text-lg">Step into a realm where reality blurs with the digital infinite. Pulsar Beats Festival isn't just a concert—it's a multi-sensory pilgrimage. Experience the world's most advanced 4D spatial audio system and 360-degree holographic visual arrays that transform the Orion Zenith Arena into a breathing cosmic entity.</p>
-                <p>This year's theme, <span className="text-secondary italic">"The Event Horizon,"</span> explores the intersection of synth-heavy industrial techno and ethereal ambient soundscapes. Prepare for 12 hours of uninterrupted velocity.</p>
-              </div>
-            </section>
-
-            {/* Featured Artists */}
-            <section>
-              <h2 className="text-3xl font-headline font-bold mb-8 flex items-center gap-4">
-                <span className="w-12 h-[1px] bg-primary"></span>
-                Featured Artists
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
-                {artists.map((artist, index) => (
-                  <div key={index} className="group relative overflow-hidden rounded-xl bg-slate-800 p-4 transition-all hover:bg-slate-700 border border-white/5">
-                    <img
-                      alt={artist.name}
-                      className="w-full aspect-square object-cover rounded-lg mb-4 filter grayscale group-hover:grayscale-0 transition-all duration-500"
-                      src={artist.image}
-                    />
-                    <h3 className="font-headline font-bold text-xl">{artist.name}</h3>
-                    <p className="text-sm text-primary uppercase tracking-tighter font-label">{artist.stage}</p>
-                  </div>
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Left Content */}
+          <div className="lg:col-span-3 space-y-12">
+            {/* Tabs */}
+            <div className="border-b border-slate-200">
+              <div className="flex gap-8">
+                {[
+                  { key: 'concerts', label: `Concerts • ${event.upcomingEvents.length} RESULTS` },
+                  { key: 'about', label: 'About' },
+                  { key: 'reviews', label: `Reviews • ${event.reviewCount} RESULTS` },
+                  { key: 'fans', label: 'Fans Also Viewed' }
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`pb-4 text-sm font-semibold uppercase tracking-wider border-b-2 transition-colors ${
+                      activeTab === tab.key
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
                 ))}
               </div>
-            </section>
+            </div>
 
-            {/* Venue & Logistics */}
-            <section className="grid md:grid-cols-2 gap-8">
+            {/* Concerts List */}
+            {activeTab === 'concerts' && (
               <div className="space-y-6">
-                <h2 className="text-3xl font-headline font-bold flex items-center gap-4">
-                  <span className="w-12 h-[1px] bg-primary"></span>
-                  Venue Details
-                </h2>
-                <div className="space-y-4">
-                  <div className="flex items-start gap-4 p-4 rounded-xl bg-slate-900 border border-white/5">
-                    {/* <div className="p-2 bg-primary/10 rounded-lg">
-                      <Parking className="text-primary w-5 h-5" />
-                    </div> */}
-                    <div>
-                      <h4 className="font-bold">Parking Available</h4>
-                      <p className="text-sm text-slate-400">Zone A & B open from 4:00 PM. Pre-book parking for a 20% discount.</p>
+                {/* Filters */}
+                <div className="flex flex-wrap gap-4 items-end">
+                  <div className="flex-1 min-w-[200px]">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Location</label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="City or Zip Code"
+                        value={locationFilter}
+                        onChange={(e) => setLocationFilter(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
                     </div>
                   </div>
-                  <div className="flex items-start gap-4 p-4 rounded-xl bg-slate-900 border border-white/5">
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                      <Info className="text-primary w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold">Entry Requirements</h4>
-                      <p className="text-sm text-slate-400">18+ Only. Valid ID and digital ticket required at all checkpoints.</p>
+                  <div className="w-[180px]">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Dates</label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <select
+                        value={dateFilter}
+                        onChange={(e) => setDateFilter(e.target.value)}
+                        className="w-full pl-10 pr-8 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                      >
+                        <option value="all">All Dates</option>
+                        <option value="this-week">This Week</option>
+                        <option value="this-month">This Month</option>
+                        <option value="next-month">Next Month</option>
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>
                   </div>
                 </div>
+
+                {/* Events List */}
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold text-slate-900">Concerts in United States</h3>
+                  {event.upcomingEvents.map((evt) => (
+                    <div
+                      key={evt.id}
+                      className="flex items-center gap-6 p-4 border border-slate-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all bg-white"
+                    >
+                      <div className="flex flex-col items-center bg-slate-100 rounded-lg p-3 min-w-[80px]">
+                        <span className="text-xs font-semibold text-slate-600">{evt.date.split(' ')[0]}</span>
+                        <span className="text-2xl font-bold text-slate-900">{evt.date.split(' ')[1]}</span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Clock className="w-4 h-4 text-slate-400" />
+                          <span className="text-sm font-medium">{evt.time}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <MapPin className="w-4 h-4 text-slate-400" />
+                          <span className="font-semibold text-slate-900">{evt.location}</span>
+                          <span className="text-slate-600">•</span>
+                          <span className="font-semibold text-slate-900">{evt.venue}</span>
+                        </div>
+                        <p className="text-sm text-slate-600">{evt.tour}</p>
+                      </div>
+                      <Link to={`/checkout?event=${evt.id}`}>
+                        <Button variant="primary" size="sm">
+                          Find Tickets
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Load More */}
+                <div className="text-center pt-6">
+                  <Button variant="outline" className="mx-auto">
+                    More Events
+                    <ChevronDown className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
               </div>
-              <div className="rounded-2xl overflow-hidden h-64 border border-white/10 grayscale contrast-125 opacity-80 hover:opacity-100 transition-all">
-                <img
-                  alt="Venue Map"
-                  className="w-full h-full object-cover"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuD5VMJzRgB194cmOHTHkSnE9U7U2rmhuFMvhgmw_B6wQa6-sjeiAh1z7Gj9dG_pk2S6ozTNtC-sVRvFdKirN8oYV7gJ_SgjXhIvhjjJOOeSOQVed2XsoQHvl83OmSuSBYYF8AQ-eQvxZyw0g2jasTbaOloZctQCP2yGtRrdJrsGMthfx_rP0-Fq8R1n59rmymarcBN8dUTbyMYi-ieJ1pomRIhubCiRvFM4H5SX4cZzD1LKFeSYPdLLM9On9GjbPIYDzKoZh-1OZSM"
-                />
+            )}
+
+            {/* About Section */}
+            {activeTab === 'about' && (
+              <div className="prose max-w-none">
+                <h2 className="text-2xl font-bold mb-4">About {event.title}</h2>
+                <p className="text-slate-700 leading-relaxed mb-6">{event.description}</p>
+                <div className="grid md:grid-cols-2 gap-6 mt-8">
+                  <div className="p-6 bg-slate-50 rounded-lg">
+                    <h3 className="font-semibold mb-3">Ticket Information</h3>
+                    <ul className="space-y-2 text-sm text-slate-700">
+                      <li>• General Admission starts at $50</li>
+                      <li>• VIP packages available</li>
+                      <li>• All tickets are mobile-only</li>
+                      <li>• Will call available at venue</li>
+                    </ul>
+                  </div>
+                  <div className="p-6 bg-slate-50 rounded-lg">
+                    <h3 className="font-semibold mb-3">Age Requirements</h3>
+                    <ul className="space-y-2 text-sm text-slate-700">
+                      <li>• All ages welcome</li>
+                      <li>• Children under 2 free</li>
+                      <li>• Valid ID required for entry</li>
+                      <li>• 21+ for VIP areas</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
-            </section>
+            )}
+
+            {/* Reviews Section */}
+            {activeTab === 'reviews' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="text-4xl font-bold">{event.rating}</div>
+                    <div>
+                      {renderStars(event.rating)}
+                      <p className="text-sm text-slate-600 mt-1">Based on {event.reviewCount} reviews</p>
+                    </div>
+                  </div>
+                  <Button variant="primary">Write a review</Button>
+                </div>
+
+                <div className="space-y-6 pt-6 border-t border-slate-200">
+                  {event.reviews.map((review) => (
+                    <div key={review.id} className="border-b border-slate-200 pb-6">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            {renderStars(review.rating)}
+                            <span className="font-semibold">{review.title}</span>
+                          </div>
+                          <p className="text-sm text-slate-600">
+                            by {review.author} on {review.date} • {review.venue}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-slate-700">{review.content}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Fans Also Viewed */}
+            {activeTab === 'fans' && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                {event.relatedArtists.map((artist) => (
+                  <Link key={artist.id} to={`/artist/${artist.id}`} className="group">
+                    <div className="aspect-[4/3] rounded-lg overflow-hidden mb-3">
+                      <img
+                        src={artist.image}
+                        alt={artist.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                    <h3 className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
+                      {artist.name}
+                    </h3>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Right Column: Quick Booking */}
-          <div className="lg:col-span-4">
-            <div className="sticky top-32 backdrop-blur-xl bg-slate-900/80 p-8 rounded-2xl border border-white/10 shadow-2xl space-y-8">
-              <div>
-                <div className="flex justify-between items-start mb-6">
-                  <h3 className="text-2xl font-headline font-bold">Quick Booking</h3>
-                  <span className="bg-red-500/20 text-red-400 px-3 py-1 rounded-full text-xs font-bold font-label animate-pulse">
-                    Only {selectedTierData?.available || 12} tickets left!
-                  </span>
+          {/* Right Sidebar - Advertisement */}
+          <div className="hidden lg:block">
+            <div className="sticky top-24 space-y-6">
+              <div className="bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl p-6 text-white text-center">
+                <p className="text-xs uppercase tracking-wider mb-2 opacity-80">Advertisement</p>
+                <div className="aspect-square rounded-lg bg-white/10 flex items-center justify-center mb-4">
+                  <span className="text-sm font-medium">Ad Space</span>
                 </div>
-                <div className="space-y-6">
-                  {/* Type Selector */}
-                  <div className="space-y-2">
-                    <label className="text-xs uppercase tracking-widest text-slate-500 font-label">Ticket Tier</label>
-                    <select
-                      className="w-full bg-slate-800 border-none rounded-xl py-4 px-4 text-white focus:ring-2 focus:ring-primary"
-                      value={selectedTier}
-                      onChange={(e) => setSelectedTier(e.target.value)}
-                    >
-                      {ticketTiers.map((tier) => (
-                        <option key={tier.name} value={`${tier.name} - ₫${tier.price.toLocaleString()}`}>
-                          {tier.name} - ₫{tier.price.toLocaleString()}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Qty Selector */}
-                  <div className="space-y-2">
-                    <label className="text-xs uppercase tracking-widest text-slate-500 font-label">Quantity</label>
-                    <div className="flex items-center justify-between bg-slate-800 rounded-xl p-2">
-                      <button
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                        className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-white/10"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="text-xl font-headline font-bold">{quantity.toString().padStart(2, '0')}</span>
-                      <button
-                        onClick={() => setQuantity(Math.min(10, quantity + 1))}
-                        className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-white/10"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Price Breakdown */}
-                  <div className="pt-6 border-t border-white/5 space-y-3">
-                    <div className="flex justify-between text-slate-400">
-                      <span>Tickets ({quantity}x)</span>
-                      <span>₫{subtotal.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Service Fee</span>
-                      <span>₫{serviceFee.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-xl font-bold font-headline pt-2 text-secondary">
-                      <span>Total Price</span>
-                      <span>₫{total.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <Link to="/seat-selection">
-                <Button className="w-full bg-primary hover:bg-primary/90 py-5 rounded-xl font-headline font-black text-on-primary uppercase tracking-widest shadow-[0_0_15px_rgba(252,83,109,0.4)] transition-all active:scale-95">
-                  Select Seats
+                <p className="text-sm">Bundle your ticket with a hotel and save up to 57%!</p>
+                <Button variant="secondary" className="w-full mt-4">
+                  Find My Hotel
                 </Button>
-              </Link>
-
-              <div className="text-center space-y-4">
-                <p className="text-xs text-slate-500 uppercase tracking-tighter">Secure Checkout Powered by Interstellar Pay</p>
-                <div className="flex justify-center gap-4 opacity-50 grayscale">
-                  <CreditCard className="w-5 h-5" />
-                  <Users className="w-5 h-5" />
-                  <Star className="w-5 h-5" />
-                </div>
               </div>
             </div>
           </div>
