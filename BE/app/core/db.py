@@ -8,14 +8,16 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
+from sqlalchemy.pool import NullPool
+
 engine = create_async_engine(
     settings.database_url,
     future=True,
-    pool_pre_ping=True,
-    pool_size=20,
-    max_overflow=30,
-    pool_timeout=15,
-    pool_recycle=1800,
+    poolclass=NullPool,
+    connect_args={
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    },
 )
 AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 

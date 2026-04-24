@@ -18,7 +18,7 @@ naming_convention = {
 class Base(DeclarativeBase):
     """Root ORM base class used by all tables."""
 
-    metadata = MetaData(naming_convention=naming_convention)
+    metadata = MetaData(naming_convention=naming_convention, schema="ticket_rush")
 
 
 class TimestampMixin:

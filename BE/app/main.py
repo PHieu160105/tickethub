@@ -21,7 +21,9 @@ settings = get_settings()
 async def lifespan(_: FastAPI):
     """Initialize schema/seed data and start background workers."""
 
+    from sqlalchemy import text
     async with engine.begin() as conn:
+        await conn.execute(text("CREATE SCHEMA IF NOT EXISTS ticket_rush"))
         await conn.run_sync(Base.metadata.create_all)
 
     from app.core.db import AsyncSessionLocal
