@@ -1,4 +1,3 @@
-import { cn } from '@/lib/utils';
 import { Container } from './Container';
 import { CreditCard, Smartphone, } from 'lucide-react';
 import { Link } from 'react-router-dom';

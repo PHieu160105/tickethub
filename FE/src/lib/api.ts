@@ -68,7 +68,15 @@ export function extractApiErrorMessage(error: unknown, fallback: string): string
   return fallback
 }
 
-api.interceptors.request.use((config) => {
+async function handleAuthError(error: unknown): Promise<never> {
+  if (axios.isAxiosError(error) && error.response?.status === 401) {
+    authStorage.clearAll()
+    window.location.href = '/login'
+  }
+  throw error
+}
+
+api.interceptors.request.use((config: any) => {
   const token = authStorage.getToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
