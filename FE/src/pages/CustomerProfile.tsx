@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
-import { StatCard } from '../components/ui/StatCard';
-import { CustomerSidebar } from '../components/layout/CustomerSidebar';
+import { CustomerSidebar } from '@/components/layout/CustomerSidebar';
+import { Navbar } from '@/components/layout/Navbar'; // Đảm bảo đường dẫn đúng
+import { 
+  User, Mail, Phone, MapPin, Camera, CreditCard, 
+  PartyPopper, Heart, Star, Globe, Lock, ShieldCheck 
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const CustomerProfile: React.FC = () => {
+  const navigate = useNavigate();
   const [profileData, setProfileData] = useState({
     fullName: 'Marcus Voyager',
     email: 'marcus.v@cosmic.com',
@@ -10,182 +16,194 @@ const CustomerProfile: React.FC = () => {
     location: 'San Francisco, CA',
     language: 'English (US)',
     currency: 'USD ($)',
-    twoFactorEnabled: false,
   });
 
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleUpdate = () => {
+    setIsUpdating(true);
+    setTimeout(() => setIsUpdating(false), 1000);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0e27] to-[#1a1f3a] text-[#dee0ff] font-body selection:bg-primary-container selection:text-on-primary-container">
-      {/* Top Navigation Bar */}
-      <header className="bg-slate-950/80 backdrop-blur-xl sticky top-0 z-50 border-b border-white/10 shadow-[0_0_15px_rgba(233,69,96,0.2)]">
-        <div className="flex justify-between items-center w-full px-6 py-4 max-w-screen-2xl mx-auto">
-          <div className="text-2xl font-black italic tracking-tighter text-red-500 uppercase font-headline">
-            TicketRush
-          </div>
-          <nav className="hidden md:flex items-center gap-8 font-headline font-bold tracking-tight">
-            <a className="text-slate-300 hover:text-white transition-colors" href="#">Events</a>
-            <a className="text-slate-300 hover:text-white transition-colors" href="#">Venues</a>
-            <a className="text-slate-300 hover:text-white transition-colors" href="#">Deals</a>
-            <a className="text-red-500 border-b-2 border-red-500 pb-1" href="#">My Tickets</a>
-          </nav>
-          <div className="flex items-center gap-4">
-            <div className="relative hidden lg:block">
-              <input className="bg-surface-container-highest/50 border-none rounded-full px-4 py-1.5 text-sm focus:ring-1 focus-ring-primary w-64 text-on-surface-variant" placeholder="Search events..." type="text"/>
-            </div>
-            <button className="text-slate-300 hover:bg-white/5 p-2 rounded-full transition-all duration-300 active:scale-90">
-              <span className="material-symbols-outlined">notifications</span>
-            </button>
-            <button className="text-slate-300 hover:bg-white/5 p-2 rounded-full transition-all duration-300 active:scale-90">
-              <span className="material-symbols-outlined">shopping_cart</span>
-            </button>
-            <div className="w-10 h-10 rounded-full border-2 border-primary overflow-hidden">
-              <img alt="User profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBBpVFotIOM_CAG3j95-kR8iwtagTj5T-IL7EeB2SdQbm49bD1SSMFHNOO1Z_C-aL5QDMrjgGRuYRz02i9sdycdLW0MesoYUUhg_uv7e2b4KZYWM78g-vboMzD7QK_uQRu6ulvka3SaD-7uLhws8GScHPW2pqnCPC6fP20hawTpqeOKd3tDfPsATini3T3iZ-5EB27IjnNbW2DZM9399QdWVA_kLgQMOQq_jAFbYJY5B2W-CByjn9wKUXIGtzU4hsKV8zOYtmRriPs" className="w-full h-full object-cover"/>
-            </div>
-          </div>
-        </div>
-      </header>
+    <>
+      <Navbar />
+      <div className="pt-[80px] min-h-screen bg-[#0B0F19] flex">
+        {/* Sidebar */}
+        <CustomerSidebar 
+          activeTab="profile" 
+          userName="Marcus Voyager" 
+          membershipLevel="Elite Voyager Member" 
+          onNavigate={(tab) => navigate(`/customer/${tab}`)}
+        />
 
-      <div className="max-w-screen-2xl mx-auto flex flex-col md:flex-row min-h-[calc(100vh-80px)]">
-        <CustomerSidebar activeTab="profile" userName="Marcus Voyager" membershipLevel="Elite Voyager Member" />
+        {/* Main Content */}
+        <main className="flex-1 p-8 lg:p-12 max-w-5xl mx-auto space-y-10">
+          
+          {/* Header Profile */}
+          <div className="flex items-center gap-8 mb-10">
+            <div className="relative group">
+              <div className="w-32 h-32 rounded-3xl bg-slate-800 border-4 border-slate-700 overflow-hidden flex items-center justify-center shadow-xl">
+                 <User className="w-16 h-16 text-slate-500" />
+              </div>
+              <button className="absolute -bottom-3 -right-3 bg-red-500 p-3 rounded-full shadow-lg hover:bg-red-400 transition-colors">
+                <Camera className="w-5 h-5 text-white" />
+              </button>
+            </div>
+            <div>
+              <h1 className="text-4xl font-black text-white font-headline tracking-tight">MARCUS VOYAGER</h1>
+              <div className="flex items-center gap-2 mt-2">
+                <Star className="w-5 h-5 text-amber-400 fill-current" />
+                <span className="text-amber-400 font-bold uppercase tracking-widest text-sm">Elite Voyager Member</span>
+              </div>
+            </div>
+          </div>
 
-        <main className="flex-1 p-6 md:p-10 space-y-12 overflow-x-hidden">
-          <section className="relative">
-            <div className="absolute -top-20 -left-20 w-64 h-64 bg-primary/10 blur-[100px] rounded-full"></div>
-            <div className="flex flex-col md:flex-row items-center gap-8 relative z-10">
-              <div className="relative group">
-                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-surface-container-highest overflow-hidden shadow-2xl">
-                  <img alt="User avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmdg28w6ZpSQFRFip_k58b_uYURDtOmdcNmy5seFpybIN8uXii-vgN2cl4nMhx99bwMv4to2C96o6_p5dpKJDXiCgAd3Z0j4ufbOZYXOI5TU5MDdgLP9R-uepkHv4z-hdSZjnbDUoqf2SH1SliISSuvLsFY7frad0AuVyPm6U1JVR1k7r5w0DtHcX84vEWN6ZPy7a2Zz2qWZg0yQ9G-uUNdo9l6-RHjSbr1SsKH2jnxWnK0mCQJ-WxnOw_G2K__vG4GzQddJOodZ4" className="w-full h-full object-cover"/>
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-slate-900/60 border border-white/5 p-6 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Total Spent</p>
+                <p className="text-3xl font-black text-white">$4,280</p>
+              </div>
+              <div className="p-3 bg-white/5 rounded-xl"><CreditCard className="w-6 h-6 text-slate-400" /></div>
+            </div>
+            <div className="bg-slate-900/60 border border-white/5 p-6 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Events Attended</p>
+                <p className="text-3xl font-black text-white">24</p>
+              </div>
+              <div className="p-3 bg-white/5 rounded-xl"><PartyPopper className="w-6 h-6 text-slate-400" /></div>
+            </div>
+            <div className="bg-slate-900/60 border border-white/5 p-6 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Favorite Artists</p>
+                <p className="text-3xl font-black text-white">12</p>
+              </div>
+              <div className="p-3 bg-white/5 rounded-xl"><Heart className="w-6 h-6 text-slate-400" /></div>
+            </div>
+          </div>
+
+          {/* Profile Form & Settings Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Left: Personal Info */}
+            <div className="lg:col-span-2 space-y-6">
+              <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                <span className="w-1 h-6 bg-red-500 rounded-full"></span> Personal Information
+              </h2>
+              
+              <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Full Name</label>
+                    <div className="relative">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                      <input 
+                        type="text" 
+                        value={profileData.fullName}
+                        onChange={(e) => setProfileData({...profileData, fullName: e.target.value})}
+                        className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition-all" 
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Email Address</label>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                      <input 
+                        type="email" 
+                        value={profileData.email}
+                        onChange={(e) => setProfileData({...profileData, email: e.target.value})}
+                        className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition-all" 
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Phone Number</label>
+                    <div className="relative">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                      <input 
+                        type="tel" 
+                        value={profileData.phone}
+                        onChange={(e) => setProfileData({...profileData, phone: e.target.value})}
+                        className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition-all" 
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Location</label>
+                    <div className="relative">
+                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                      <input 
+                        type="text" 
+                        value={profileData.location}
+                        onChange={(e) => setProfileData({...profileData, location: e.target.value})}
+                        className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition-all" 
+                      />
+                    </div>
+                  </div>
                 </div>
-                <button className="absolute bottom-2 right-2 bg-primary text-on-primary-container p-2 rounded-full shadow-lg hover:scale-110 transition-transform">
-                  <span className="material-symbols-outlined text-sm">edit</span>
+                
+                <button 
+                  onClick={handleUpdate}
+                  disabled={isUpdating}
+                  className="mt-4 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg shadow-red-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isUpdating ? 'Updating...' : 'Save Changes'}
                 </button>
               </div>
-              <div className="text-center md:text-left">
-                <h1 className="text-4xl md:text-5xl font-headline font-black tracking-tighter mb-2 text-white">MARCUS VOYAGER</h1>
-                <p className="font-body text-secondary flex items-center justify-center md:justify-start gap-2">
-                  <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
-                  Elite Voyager Member since Dec 2022
-                </p>
-              </div>
             </div>
-          </section>
 
-          <section className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <StatCard title="Total Spent" value="$4,280" icon={<span className="material-symbols-outlined">payments</span>} />
-            <StatCard title="Events Attended" value="24" icon={<span className="material-symbols-outlined">celebration</span>} />
-            <StatCard title="Favorite Artists" value="12" icon={<span className="material-symbols-outlined">favorite</span>} />
-          </section>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <section className="lg:col-span-8 glass-panel p-8 rounded-2xl space-y-8">
-              <div>
-                <h2 className="text-xl font-headline font-bold text-white mb-6 flex items-center gap-3">
-                  <span className="w-1 h-6 bg-primary rounded-full"></span>Personal Information
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="font-label text-[10px] tracking-widest uppercase text-slate-500">Full Name</label>
-                    <input className="w-full bg-surface-container-highest border-none rounded-xl px-4 py-3 text-on-surface focus:ring-1 focus:ring-primary transition-all" type="text" value={profileData.fullName} onChange={(e) => setProfileData({ ...profileData, fullName: e.target.value })}/>
+            {/* Right: Preferences & Security */}
+            <div className="space-y-8">
+              {/* Preferences */}
+              <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 space-y-4">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span className="w-1 h-5 bg-amber-400 rounded-full"></span> Preferences
+                </h3>
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-slate-400 text-sm">Language</span>
+                  <div className="flex items-center gap-2 text-white font-bold text-sm">
+                    <Globe className="w-4 h-4 text-slate-500" />
+                    <span>{profileData.language}</span>
                   </div>
-                  <div className="space-y-2">
-                    <label className="font-label text-[10px] tracking-widest uppercase text-slate-500">Email Address</label>
-                    <input className="w-full bg-surface-container-highest border-none rounded-xl px-4 py-3 text-on-surface focus:ring-1 focus:ring-primary transition-all" type="email" value={profileData.email} onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}/>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="font-label text-[10px] tracking-widest uppercase text-slate-500">Phone Number</label>
-                    <input className="w-full bg-surface-container-highest border-none rounded-xl px-4 py-3 text-on-surface focus:ring-1 focus:ring-primary transition-all" type="tel" value={profileData.phone} onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}/>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="font-label text-[10px] tracking-widest uppercase text-slate-500">Location</label>
-                    <input className="w-full bg-surface-container-highest border-none rounded-xl px-4 py-3 text-on-surface focus:ring-1 focus:ring-primary transition-all" type="text" value={profileData.location} onChange={(e) => setProfileData({ ...profileData, location: e.target.value })}/>
+                </div>
+                <div className="flex items-center justify-between py-2 border-t border-white/5">
+                  <span className="text-slate-400 text-sm">Currency</span>
+                  <div className="flex items-center gap-2 text-white font-bold text-sm">
+                    <CreditCard className="w-4 h-4 text-slate-500" />
+                    <span>{profileData.currency}</span>
                   </div>
                 </div>
               </div>
-              <div className="pt-6 border-t border-white/5">
-                <button className="bg-primary text-on-primary-container px-8 py-3 rounded-xl font-headline font-bold uppercase tracking-wider text-sm shadow-[0_0_15px_rgba(233,69,96,0.4)] hover:brightness-110 active:scale-95 transition-all">Update Profile</button>
+
+              {/* Security */}
+              <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 space-y-4">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span className="w-1 h-5 bg-blue-500 rounded-full"></span> Security
+                </h3>
+                <button className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors group">
+                  <div className="flex items-center gap-3">
+                    <Lock className="w-5 h-5 text-slate-500 group-hover:text-blue-400" />
+                    <span className="text-sm font-bold text-slate-300 group-hover:text-white">Change Password</span>
+                  </div>
+                </button>
+                <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors group">
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck className="w-5 h-5 text-slate-500 group-hover:text-blue-400" />
+                    <span className="text-sm font-bold text-slate-300 group-hover:text-white">Two-Factor Auth</span>
+                  </div>
+                  <div className="w-10 h-5 bg-slate-700 rounded-full relative cursor-pointer">
+                    <div className="absolute left-1 top-1 w-3 h-3 bg-slate-400 rounded-full"></div>
+                  </div>
+                </div>
               </div>
-            </section>
-
-            <div className="lg:col-span-4 space-y-8">
-              <section className="glass-panel p-8 rounded-2xl space-y-6">
-                <h2 className="text-xl font-headline font-bold text-white flex items-center gap-3">
-                  <span className="w-1 h-6 bg-secondary rounded-full"></span>Preferences
-                </h2>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-body text-slate-300">Language</span>
-                    <select className="bg-surface-container-highest border-none rounded-lg text-xs font-headline font-bold py-1 pl-2 pr-8 text-on-surface focus:ring-0" value={profileData.language} onChange={(e) => setProfileData({ ...profileData, language: e.target.value })}>
-                      <option>English (US)</option><option>French</option><option>Japanese</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-body text-slate-300">Currency</span>
-                    <select className="bg-surface-container-highest border-none rounded-lg text-xs font-headline font-bold py-1 pl-2 pr-8 text-on-surface focus:ring-0" value={profileData.currency} onChange={(e) => setProfileData({ ...profileData, currency: e.target.value })}>
-                      <option>USD ($)</option><option>EUR (€)</option><option>GBP (£)</option>
-                    </select>
-                  </div>
-                </div>
-              </section>
-
-              <section className="glass-panel p-8 rounded-2xl space-y-6">
-                <h2 className="text-xl font-headline font-bold text-white flex items-center gap-3">
-                  <span className="w-1 h-6 bg-tertiary rounded-full"></span>Security
-                </h2>
-                <div className="space-y-4">
-                  <button className="w-full flex items-center justify-between text-left p-3 rounded-xl hover:bg-white/5 transition-colors group">
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-slate-500">lock</span>
-                      <span className="text-sm font-body text-slate-300">Change Password</span>
-                    </div>
-                    <span className="material-symbols-outlined text-slate-600 group-hover:text-primary transition-colors">chevron_right</span>
-                  </button>
-                  <div className="flex items-center justify-between p-3 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-slate-500">verified_user</span>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-body text-slate-300">Two-Factor Auth</span>
-                        <span className="text-[10px] text-primary">Highly Recommended</span>
-                      </div>
-                    </div>
-                    <div className="relative inline-flex items-center cursor-pointer">
-                      <div className="w-11 h-6 bg-surface-container-highest rounded-full border border-white/10"></div>
-                      <div className={`absolute left-1 top-1 w-4 h-4 rounded-full transition-transform ${profileData.twoFactorEnabled ? 'bg-primary translate-x-5' : 'bg-slate-400'}`}></div>
-                    </div>
-                  </div>
-                </div>
-              </section>
             </div>
           </div>
         </main>
       </div>
-
-      <footer className="bg-slate-950 border-t border-white/5 py-12">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 px-6 max-w-screen-2xl mx-auto">
-          <div className="col-span-2 md:col-span-1 space-y-4">
-            <div className="text-xl font-black text-red-500 font-headline uppercase">TicketRush</div>
-            <p className="text-slate-500 text-xs font-headline font-semibold tracking-wide">© 2024 TicketRush. Powered by the Cosmic Voyager.</p>
-          </div>
-          <div className="space-y-2">
-            <p className="font-label text-[10px] tracking-widest uppercase text-slate-400 mb-4">Platform</p>
-            <a className="block text-slate-500 hover:text-red-400 transition-colors font-label text-xs uppercase" href="#">Help Center</a>
-            <a className="block text-slate-500 hover:text-red-400 transition-colors font-label text-xs uppercase" href="#">Sell Tickets</a>
-            <a className="block text-slate-500 hover:text-red-400 transition-colors font-label text-xs uppercase" href="#">Artist Portal</a>
-          </div>
-          <div className="space-y-2">
-            <p className="font-label text-[10px] tracking-widest uppercase text-slate-400 mb-4">Legal</p>
-            <a className="block text-slate-500 hover:text-red-400 transition-colors font-label text-xs uppercase" href="#">Terms of Service</a>
-            <a className="block text-slate-500 hover:text-red-400 transition-colors font-label text-xs uppercase" href="#">Privacy Policy</a>
-            <a className="block text-slate-500 hover:text-red-400 transition-colors font-label text-xs uppercase" href="#">Affiliates</a>
-          </div>
-          <div className="space-y-4">
-            <p className="font-label text-[10px] tracking-widest uppercase text-slate-400 mb-4">Newsletter</p>
-            <div className="flex gap-2">
-              <input className="bg-surface-container-low border-none rounded-lg text-xs w-full" placeholder="Email" type="email"/>
-              <button className="bg-primary text-on-primary-container p-2 rounded-lg"><span className="material-symbols-outlined text-sm">send</span></button>
-            </div>
-          </div>
-        </div>
-      </footer>
-    </div>
+    </>
   );
 };
 

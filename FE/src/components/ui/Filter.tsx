@@ -1,18 +1,25 @@
-import { cn } from '@/lib/utils';
-import { forwardRef, type HTMLAttributes } from 'react';
+import { X } from 'lucide-react'
 
-export interface FilterSectionProps extends HTMLAttributes<HTMLDivElement> {
-  title: string;
-  onReset?: () => void;
+interface FilterSectionProps {
+  title: string
+  children: React.ReactNode
+  onReset: () => void
+  activeFiltersCount?: number
 }
 
-export const FilterSection = forwardRef<HTMLDivElement, FilterSectionProps>(
-  ({ className, title, onReset, children, ...props }, ref) => (
-    <div ref={ref} className={cn('glass-panel p-6 rounded-xl', className)} {...props}>
+export function FilterSection({ title, children, onReset, activeFiltersCount = 0 }: FilterSectionProps) {
+  return (
+    <div className="glass-panel p-6 rounded-xl border border-white/10">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="font-headline font-bold uppercase tracking-widest text-sm text-secondary">{title}</h3>
-        {onReset && (
-          <button onClick={onReset} className="text-xs text-slate-400 hover:text-primary transition-colors">
+        <h3 className="text-yellow-400 font-headline font-bold text-lg uppercase tracking-wider">
+          {title}
+        </h3>
+        {activeFiltersCount > 0 && (
+          <button
+            onClick={onReset}
+            className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
+          >
+            <X className="w-3 h-3" />
             Reset All
           </button>
         )}
@@ -20,47 +27,57 @@ export const FilterSection = forwardRef<HTMLDivElement, FilterSectionProps>(
       {children}
     </div>
   )
-);
-FilterSection.displayName = 'FilterSection';
-
-export interface FilterCategoryProps extends HTMLAttributes<HTMLDivElement> {
-  label: string;
 }
 
-export const FilterCategory = forwardRef<HTMLDivElement, FilterCategoryProps>(
-  ({ className, label, children, ...props }, ref) => (
-    <div ref={ref} className={cn('mb-8', className)} {...props}>
-      <p className="text-xs font-headline font-bold uppercase tracking-widest text-slate-400 mb-4">{label}</p>
-      <div className="space-y-3">{children}</div>
+interface FilterCategoryProps {
+  label: string
+  children: React.ReactNode
+}
+
+export function FilterCategory({ label, children }: FilterCategoryProps) {
+  return (
+    <div className="mb-6 last:mb-0">
+      <h4 className="text-xs font-headline font-bold uppercase tracking-widest text-slate-400 mb-3">
+        {label}
+      </h4>
+      {children}
     </div>
   )
-);
-FilterCategory.displayName = 'FilterCategory';
-
-export interface FilterOptionProps extends HTMLAttributes<HTMLLabelElement> {
-  checked?: boolean;
-  label: string;
 }
 
-export const FilterOption = forwardRef<HTMLLabelElement, FilterOptionProps>(
-  ({ className, checked, label, children, ...props }, ref) => (
-    <label ref={ref} className={cn('flex items-center gap-3 cursor-pointer group', className)} {...props}>
-      <div
-        className={cn(
-          'w-5 h-5 rounded border flex items-center justify-center transition-colors bg-surface-container-highest',
-          checked ? 'border-primary bg-primary/20' : 'border-outline-variant/50 group-hover:border-primary'
-        )}
-      >
-        {checked && (
-          <span className="material-symbols-outlined text-[14px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
-            check
-          </span>
-        )}
-        {!checked && <div className="w-2 h-2 bg-primary rounded-sm opacity-0 group-hover:opacity-40" />}
+interface FilterOptionProps {
+  label: string
+  checked: boolean
+  onChange: () => void
+}
+
+export function FilterOption({ label, checked, onChange }: FilterOptionProps) {
+  return (
+    <label className="flex items-center gap-3 mb-3 cursor-pointer group">
+      <div className="relative">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onChange}
+          className="sr-only"
+        />
+        <div className={`w-5 h-5 rounded border-2 transition-all ${
+          checked 
+            ? 'bg-primary border-primary' 
+            : 'border-slate-600 group-hover:border-slate-500'
+        }`}>
+          {checked && (
+            <svg className="w-full h-full text-white p-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+          )}
+        </div>
       </div>
-      <span className={cn('text-sm font-body', checked ? 'text-primary' : 'text-on-surface')}>{label}</span>
-      {children}
+      <span className={`text-sm transition-colors ${
+        checked ? 'text-white font-semibold' : 'text-slate-300 group-hover:text-white'
+      }`}>
+        {label}
+      </span>
     </label>
   )
-);
-FilterOption.displayName = 'FilterOption';
+}

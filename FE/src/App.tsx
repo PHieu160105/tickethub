@@ -14,6 +14,8 @@ import Search from './pages/Search'
 import Queue from './pages/Queue'
 import SeatSelection from './pages/SeatSelection'
 import ErrorPage from './pages/Error'
+import VirtualQueue from './pages/VirtualQueue'
+import Register from './pages/Register'
 
 function App() {
   return (
@@ -23,7 +25,9 @@ function App() {
           <Route path="/" element={<CustomerLayout />}>
             <Route index element={<Home />} />
             <Route path="login" element={<Login />} />
+            <Route path="register" element={<Register/>} />
             <Route path="event/:id" element={<EventDetail />} />
+            <Route path="queue" element={<VirtualQueue />} />
             <Route path="checkout" element={<Checkout />} />
             <Route path="confirmation" element={<Confirmation />} />
             <Route path="profile" element={<CustomerProfile />} />

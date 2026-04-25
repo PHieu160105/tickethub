@@ -1,0 +1,394 @@
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Button } from '@/components/ui/Button'
+import { ArrowLeft, Eye, EyeOff, Mail, Lock, User, Phone, Calendar, Users, Rocket } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext'
+import LogoSVG from '@/assets/logo.svg'
+import { FcGoogle } from 'react-icons/fc'
+import { FaFacebook } from 'react-icons/fa'
+
+export function Logo() {
+  return (
+    <img src={LogoSVG} alt="TicketRush Logo" className="h-15 w-auto mx-auto" />
+  )
+}
+
+export default function Register() {
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    phone: '',
+    dateOfBirth: '',
+    gender: '',
+    password: '',
+    confirmPassword: '',
+    agreeToTerms: false,
+  })
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const { register } = useAuth()
+  const navigate = useNavigate()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!formData.agreeToTerms) {
+      alert('Please agree to the Terms & Conditions')
+      return
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      alert('Passwords do not match')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      await register(formData.email, formData.password, formData.fullName)
+      // Force reload to update navbar immediately
+      window.location.href = '/'
+    } catch (error) {
+      console.error('Registration failed:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+    }))
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0B0F19] flex flex-col relative overflow-hidden">
+      {/* Star Field Background */}
+      <div className="fixed inset-0 opacity-30 pointer-events-none animate-float-slow"
+        style={{
+          backgroundImage: `radial-gradient(2px 2px at 20px 30px, #eee, rgba(0,0,0,0)), radial-gradient(2px 2px at 40px 70px, #fff, rgba(0,0,0,0)), radial-gradient(2px 2px at 50px 160px, #ddd, rgba(0,0,0,0)), radial-gradient(2px 2px at 90px 40px, #fff, rgba(0,0,0,0)), radial-gradient(2px 2px at 130px 80px, #fff, rgba(0,0,0,0)), radial-gradient(2px 2px at 160px 120px, #ddd, rgba(0,0,0,0))`,
+          backgroundRepeat: 'repeat',
+          backgroundSize: '200px 200px'
+        }} 
+      />
+
+      <main className="flex-grow flex items-center justify-center px-6 py-12 relative z-10">
+        {/* Auth Container */}
+        <div className="w-full max-w-[600px] animate-fade-in-up">
+          {/* Logo Section
+          <Logo /> */}
+
+          {/* Sign Up Card */}
+          <div className="backdrop-blur-xl bg-slate-900/80 rounded-xl p-8 md:p-10 shadow-2xl relative overflow-hidden group border border-white/10">
+            {/* Subtle light sweep overlay */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+            
+            <div className="relative z-10">
+              <div className="mb-8 text-center">
+                <h2 className="text-3xl font-headline font-bold tracking-tight text-white mb-2">
+                  Join the <span className="text-primary">Rush</span>
+                </h2>
+                <p className="text-slate-400 text-sm font-body">
+                  Create your portal to the most exclusive celestial events.
+                </p>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Full Name */}
+                <div className="space-y-2">
+                  <label className="block font-label text-[10px] tracking-[0.15em] uppercase font-semibold text-secondary">
+                    Full Name
+                  </label>
+                  <div className="relative group/input">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
+                    <input
+                      className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-4 text-white placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 transition-all duration-300"
+                      placeholder="Enter your full name"
+                      type="text"
+                      name="fullName"
+                      value={formData.fullName}
+                      onChange={handleChange}
+                      required
+                    />
+                    <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-primary group-focus-within/input:w-full transition-all duration-500 ease-out" />
+                  </div>
+                </div>
+
+                {/* Email & Phone Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-2">
+                    <label className="block font-label text-[10px] tracking-[0.15em] uppercase font-semibold text-secondary">
+                      Email Address
+                    </label>
+                    <div className="relative group/input">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
+                      <input
+                        className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-4 text-white placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 transition-all duration-300"
+                        placeholder="name@cosmos.com"
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        required
+                      />
+                      <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-primary group-focus-within/input:w-full transition-all duration-500 ease-out" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block font-label text-[10px] tracking-[0.15em] uppercase font-semibold text-secondary">
+                      Phone Number
+                    </label>
+                    <div className="relative group/input">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
+                      <input
+                        className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-4 text-white placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 transition-all duration-300"
+                        placeholder="+1 (555) 000-0000"
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleChange}
+                      />
+                      <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-primary group-focus-within/input:w-full transition-all duration-500 ease-out" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Date of Birth & Gender Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-2">
+                    <label className="block font-label text-[10px] tracking-[0.15em] uppercase font-semibold text-secondary">
+                      Date of Birth
+                    </label>
+                    <div className="relative group/input">
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
+                      <input
+                        className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-4 text-white placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 transition-all duration-300"
+                        type="date"
+                        name="dateOfBirth"
+                        value={formData.dateOfBirth}
+                        onChange={handleChange}
+                        required
+                      />
+                      <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-primary group-focus-within/input:w-full transition-all duration-500 ease-out" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block font-label text-[10px] tracking-[0.15em] uppercase font-semibold text-secondary">
+                      Gender
+                    </label>
+                    <div className="relative group/input">
+                      <Users className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
+                      <select
+                        className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-4 text-white focus:ring-0 focus:bg-slate-800 transition-all duration-300 appearance-none cursor-pointer"
+                        name="gender"
+                        value={formData.gender}
+                        onChange={handleChange}
+                        required
+                      >
+                        <option value="">Select gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                        <option value="prefer-not">Prefer not to say</option>
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                      <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-primary group-focus-within/input:w-full transition-all duration-500 ease-out" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Password & Confirm Password Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-2">
+                    <label className="block font-label text-[10px] tracking-[0.15em] uppercase font-semibold text-secondary">
+                      Password
+                    </label>
+                    <div className="relative group/input">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
+                      <input
+                        className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-12 text-white placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 transition-all duration-300"
+                        placeholder="••••••••"
+                        type={showPassword ? 'text' : 'password'}
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                      <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-primary group-focus-within/input:w-full transition-all duration-500 ease-out" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block font-label text-[10px] tracking-[0.15em] uppercase font-semibold text-secondary">
+                      Confirm Password
+                    </label>
+                    <div className="relative group/input">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
+                      <input
+                        className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-12 text-white placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 transition-all duration-300"
+                        placeholder="••••••••"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                      <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-primary group-focus-within/input:w-full transition-all duration-500 ease-out" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Terms Checkbox */}
+                <div className="flex items-start gap-3 pt-2">
+                  <input
+                    type="checkbox"
+                    name="agreeToTerms"
+                    checked={formData.agreeToTerms}
+                    onChange={handleChange}
+                    className="mt-1 w-4 h-4 rounded border-slate-600 bg-slate-800 text-primary focus:ring-primary focus:ring-offset-0 cursor-pointer"
+                  />
+                  <label className="text-xs text-slate-400 font-body leading-relaxed cursor-pointer select-none">
+                    I agree to the{' '}
+                    <a href="#terms" className="text-secondary font-bold hover:underline decoration-secondary/30 underline-offset-4">
+                      Terms & Conditions
+                    </a>
+                    {' '}and the celestial processing of my personal data.
+                  </label>
+                </div>
+
+                {/* Submit Button */}
+                <Button
+                  type="submit"
+                  className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary-container font-headline font-bold uppercase tracking-widest text-sm glow-button hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 group/btn"
+                  variant="primary"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <span className="animate-spin">⟳</span>
+                      Creating Account...
+                    </>
+                  ) : (
+                    <>
+                      Create Account
+                      <Rocket className="h-5 w-5 group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform duration-300" />
+                    </>
+                  )}
+                </Button>
+              </form>
+
+              {/* Divider */}
+              <div className="relative my-8 flex items-center">
+                <div className="flex-grow border-t border-slate-600/20" />
+                <span className="mx-4 font-label text-[10px] tracking-[0.2em] text-slate-500 uppercase bg-slate-900/0 px-2">
+                  Or Register With
+                </span>
+                <div className="flex-grow border-t border-slate-600/20" />
+              </div>
+
+              {/* Social Login */}
+              <div className="grid grid-cols-2 gap-4">
+                <button className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc">
+                  <FcGoogle className="w-5 h-5" />
+                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-white">
+                    Google
+                  </span>
+                </button>
+                <button className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc">
+                  <FaFacebook className="w-5 h-5 text-[#1877F2]" />
+                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-white">
+                    Facebook
+                  </span>
+                </button>
+              </div>
+
+              {/* Footer Link */}
+              <div className="mt-8 text-center">
+                <p className="text-sm font-body text-slate-400">
+                  Already have an account?
+                  <Link to="/login" className="text-primary font-bold hover:underline decoration-primary/30 underline-offset-4 ml-1">
+                    Login
+                  </Link>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Back link */}
+          <div className="mt-8 text-center">
+            <Link to="/" className="inline-flex items-center gap-2 text-slate-500 hover:text-white transition-colors text-xs font-label uppercase tracking-widest">
+              <ArrowLeft className="h-4 w-4" />
+              Return to Surface
+            </Link>
+          </div>
+        </div>
+      </main>
+
+      {/* Simple Page Footer */}
+      <footer className="relative z-10 py-8 px-6 text-center">
+        <div className="max-w-screen-2xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+          <p className="text-[10px] font-label tracking-widest uppercase text-slate-500/50">
+            © 2024 TicketRush. Powered by the Cosmic Voyager.
+          </p>
+          <div className="flex gap-6">
+            <a className="text-[10px] font-label tracking-widest uppercase text-slate-500/50 hover:text-secondary transition-colors" href="#support">
+              Support
+            </a>
+            <a className="text-[10px] font-label tracking-widest uppercase text-slate-500/50 hover:text-secondary transition-colors" href="#privacy">
+              Privacy
+            </a>
+            <a className="text-[10px] font-label tracking-widest uppercase text-slate-500/50 hover:text-secondary transition-colors" href="#security">
+              Security
+            </a>
+          </div>
+        </div>
+      </footer>
+
+      {/* Custom Animations Style */}
+      <style>{`
+        @keyframes float-slow {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        .animate-float-slow {
+          animation: float-slow 6s ease-in-out infinite;
+        }
+        @keyframes fade-in-up {
+          0% {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fade-in-up {
+          animation: fade-in-up 0.6s ease-out forwards;
+        }
+      `}</style>
+    </div>
+  )
+}
