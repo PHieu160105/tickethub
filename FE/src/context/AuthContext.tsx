@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string) => {
     // Simulate API call - replace with actual API call in production
     await new Promise(resolve => setTimeout(resolve, 500))
 
