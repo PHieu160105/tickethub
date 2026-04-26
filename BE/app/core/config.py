@@ -25,12 +25,21 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440
 
-    # NoDecode prevents pydantic-settings from forcing JSON parsing for comma-separated env strings.
-    allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    # pydantic-settings v2 auto-parses env values for complex types via json.loads.
+    # To accept a plain comma-separated string, keep the raw value as str and
+    # expose it as a list via a property.
+    allowed_origins_raw: str = Field(
+        default="http://localhost:5173", validation_alias="ALLOWED_ORIGINS"
+    )
 
     hold_minutes_default: int = 10
     queue_batch_size_default: int = 50
     queue_admit_ttl_minutes: int = 15
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        """CORS origins as a list."""
+        return [origin.strip() for origin in self.allowed_origins_raw.split(",") if origin.strip()]
 
     @field_validator("debug", mode="before")
     @classmethod
@@ -42,16 +51,6 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return value.strip().lower() in {"1", "true", "yes", "on", "debug", "development"}
         return bool(value)
-
-    @field_validator("allowed_origins", mode="before")
-    @classmethod
-    def parse_allowed_origins(cls, value: object) -> list[str]:
-        """Allow comma-separated CORS origins in env variables."""
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        if isinstance(value, list):
-            return value
-        return ["http://localhost:5173"]
 
         if isinstance(value, list):
             return value
