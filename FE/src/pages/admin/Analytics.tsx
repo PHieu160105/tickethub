@@ -35,7 +35,7 @@ export default function AdminAnalytics() {
       setAudience(audienceRes)
       setOccupancy(occupancyRes)
     } catch (errorValue) {
-      setError(extractApiErrorMessage(errorValue, 'Khong the tai du lieu analytics.'))
+      setError(extractApiErrorMessage(errorValue, 'Không thể tải dữ liệu analytics.'))
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -47,7 +47,7 @@ export default function AdminAnalytics() {
   }, [])
 
   if (loading) {
-    return <div className="text-sm text-gray-300">Dang tai du lieu analytics...</div>
+    return <div className="text-sm text-gray-300">Đang tải dữ liệu analytics...</div>
   }
 
   const ageEntries = Object.entries(audience?.age_groups ?? {})
@@ -57,12 +57,11 @@ export default function AdminAnalytics() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-display font-bold text-white">Thong ke khan gia</h2>
-          <p className="text-gray-400 mt-1">Du lieu lay truc tiep tu API admin</p>
+          <h2 className="text-2xl font-display font-bold text-white">Thống kê khán giả</h2>
         </div>
         <Button variant="outline" onClick={() => void loadAnalyticsData(true)} isLoading={refreshing}>
           <RefreshCcw className="h-4 w-4" />
-          Lam moi
+          Làm mới
         </Button>
       </div>
 
@@ -75,19 +74,19 @@ export default function AdminAnalytics() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Tong khan gia</p>
+            <p className="text-sm text-gray-400">Tổng khán giả</p>
             <p className="text-2xl font-bold text-white mt-2">{totalAudience.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Nhom tuoi</p>
+            <p className="text-sm text-gray-400">Nhóm tuổi</p>
             <p className="text-2xl font-bold text-brand-yellow mt-2">{ageEntries.length}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Nhom gioi tinh</p>
+            <p className="text-sm text-gray-400">Nhóm giới tính</p>
             <p className="text-2xl font-bold text-cyan-400 mt-2">{genderEntries.length}</p>
           </CardContent>
         </Card>
@@ -98,12 +97,12 @@ export default function AdminAnalytics() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <PieChart className="h-5 w-5 text-brand-red" />
-              Phan bo do tuoi
+              Phân bố độ tuổi
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {ageEntries.length === 0 ? (
-              <p className="text-sm text-gray-400">Chua co du lieu do tuoi.</p>
+              <p className="text-sm text-gray-400">Chưa có dữ liệu độ tuổi.</p>
             ) : (
               ageEntries.map(([ageRange, count]) => {
                 const percentage = totalAudience > 0 ? (count / totalAudience) * 100 : 0
@@ -132,12 +131,12 @@ export default function AdminAnalytics() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Users className="h-5 w-5 text-cyan-400" />
-              Phan bo gioi tinh
+              Phân bố giới tính
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {genderEntries.length === 0 ? (
-              <p className="text-sm text-gray-400">Chua co du lieu gioi tinh.</p>
+              <p className="text-sm text-gray-400">Chưa có dữ liệu giới tính.</p>
             ) : (
               genderEntries.map(([gender, count]) => {
                 const percentage = totalAudience > 0 ? (count / totalAudience) * 100 : 0
@@ -149,7 +148,7 @@ export default function AdminAnalytics() {
                         {percentage.toFixed(1)}%
                       </Badge>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">{count} nguoi</p>
+                    <p className="text-xs text-gray-400 mt-1">{count} người</p>
                   </div>
                 )
               })
@@ -162,21 +161,21 @@ export default function AdminAnalytics() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <BarChart3 className="h-5 w-5 text-brand-yellow" />
-            Occupancy theo su kien
+            Occupancy theo sự kiện
           </CardTitle>
         </CardHeader>
         <CardContent>
           {occupancy.length === 0 ? (
-            <p className="text-sm text-gray-400">Chua co du lieu su kien.</p>
+            <p className="text-sm text-gray-400">Chưa có dữ liệu sự kiện.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10 text-left text-gray-400">
-                    <th className="pb-3 font-medium">Su kien</th>
+                    <th className="pb-3 font-medium">Sự kiện</th>
                     <th className="pb-3 font-medium">Sold</th>
                     <th className="pb-3 font-medium">Locked</th>
-                    <th className="pb-3 font-medium">Tong ghe</th>
+                    <th className="pb-3 font-medium">Tổng ghế</th>
                     <th className="pb-3 font-medium text-right">Occupancy</th>
                   </tr>
                 </thead>

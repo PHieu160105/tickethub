@@ -2,6 +2,8 @@ import { cn } from '@/lib/utils';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, CalendarDays, Users, BarChart3, Settings, LogOut, Ticket } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import LogoSVG from '@/assets/logo.svg'
+
 
 const adminLinks = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, exact: true },
@@ -12,6 +14,11 @@ const adminLinks = [
   { label: 'Cài đặt', href: '/admin/settings', icon: Settings, exact: false },
 ];
 
+export function Logo() {
+  return (
+    <img src={LogoSVG} alt="TicketRush Logo" className="display-inline flex items-center gap-2 h-10 w-auto" />
+  )
+}
 export function AdminSidebar() {
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -32,10 +39,11 @@ export function AdminSidebar() {
   return (
     <aside className="w-64 bg-space-800 border-r border-white/10 flex flex-col h-full">
       <div className="p-4 border-b border-white/10">
-        <span className="text-lg font-display font-bold">
-          <span className="text-brand-red">Ticket</span>
-          <span className="text-brand-yellow">Rush</span>
-          <span className="text-xs ml-2 px-2 py-0.5 rounded bg-brand-red/20 text-brand-red">Admin</span>
+        <span className="flex items-start text-lg font-display font-bold">
+          <Logo />
+          <span className="relative top-0.9 ml-1 px-1 py-0.5 rounded bg-brand-red/20 text-brand-red text-s">
+            Admin
+          </span>
         </span>
       </div>
 

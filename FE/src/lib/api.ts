@@ -23,6 +23,7 @@ import type {
   RevenuePoint,
   SeatMatrixResponse,
   TicketItem,
+  SeatZone,
 } from '../types'
 
 const apiBaseURL = API_BASE_URL
@@ -210,5 +211,20 @@ export const adminApi = {
   },
   async revenueByEvent() {
     return withRetry(() => api.get<AdminEventRevenueItem[]>('/admin/tickets/revenue-by-event'))
+  },
+  async getZones(eventKey: string | number) {
+    return withRetry(() => api.get<SeatZone[]>(`/admin/events/${eventKey}/zones`))
+  },
+  async createZone(eventKey: string | number, payload: Omit<SeatZone, 'id'>) {
+    const response = await api.post<SeatZone>(`/admin/events/${eventKey}/zones`, payload)
+    return response.data
+  },
+  async updateZone(eventKey: string | number, zoneId: number, payload: Omit<SeatZone, 'id'>) {
+    const response = await api.patch<SeatZone>(`/admin/events/${eventKey}/zones/${zoneId}`, payload)
+    return response.data
+  },
+  async deleteZone(eventKey: string | number, zoneId: number) {
+    const response = await api.delete(`/admin/events/${eventKey}/zones/${zoneId}`)
+    return response.data
   },
 }

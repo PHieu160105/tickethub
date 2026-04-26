@@ -22,8 +22,8 @@ class Event(TimestampMixin, Base):
     venue: Mapped[str] = mapped_column(String(200), nullable=False)
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    cover_image_url: Mapped[str] = mapped_column(String(500), default="", nullable=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    cover_image_url: Mapped[str] = mapped_column(Text, default="", nullable=False)
 
     status: Mapped[EventStatus] = mapped_column(Enum(EventStatus, native_enum=False), default=EventStatus.DRAFT, nullable=False)
     hold_minutes: Mapped[int] = mapped_column(Integer, default=10, nullable=False)

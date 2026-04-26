@@ -73,7 +73,7 @@ function AppRoutes() {
           path="/admin"
           element={
             <RequireAdmin>
-              <AdminLayout title="Quan tri he thong" />
+              <AdminLayout title="Quản trị Hệ thống" />
             </RequireAdmin>
           }
         >

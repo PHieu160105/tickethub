@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
 import type { AdminUserItem } from '@/types'
-import { Calendar, Mail, Search, Ticket, UserRound } from 'lucide-react'
+import { Calendar, Mail, Search, Ticket, UserRound, Filter } from 'lucide-react'
+import { Listbox } from '@headlessui/react';
 
 const PAGE_SIZE = 10
 
@@ -19,6 +20,49 @@ function genderLabel(gender: string) {
   if (gender === 'male') return 'Male'
   if (gender === 'female') return 'Female'
   return 'Other'
+}
+
+type Role = {
+  value: string;
+  label: string;
+};
+
+interface RoleSelectProps {
+  roleFilter: string;
+  setRoleFilter: React.Dispatch<React.SetStateAction<string>>;
+}
+
+function RoleSelect({ roleFilter, setRoleFilter }: RoleSelectProps) {
+  const roles: Role[] = [
+    { value: 'all', label: 'Tất cả vai trò' },
+    { value: 'admin', label: 'Admin' },
+    { value: 'customer', label: 'Customer' },
+  ];
+
+  return (
+    <Listbox value={roleFilter} onChange={(value) => setRoleFilter(value)}>
+      <div className="relative">
+        <Listbox.Button
+          className="w-48 px-3 py-2 bg-space-800 text-white border border-gray-600 rounded-md shadow-sm text-left"
+        >
+          {roles.find((r) => r.value === roleFilter)?.label}
+        </Listbox.Button>
+        <Listbox.Options
+          className="absolute z-50 mt-1 w-48 bg-space-900 text-white border border-white/20 rounded-md shadow-lg"
+        >
+          {roles.map((role) => (
+            <Listbox.Option
+              key={role.value}
+              value={role.value}
+              className="px-3 py-2 cursor-pointer hover:bg-space-700"
+            >
+              {role.label}
+            </Listbox.Option>
+          ))}
+        </Listbox.Options>
+      </div>
+    </Listbox>
+  );
 }
 
 export default function AdminUsers() {
@@ -44,7 +88,7 @@ export default function AdminUsers() {
       setUsers(response.items)
       setTotal(response.total)
     } catch (errorValue) {
-      setError(extractApiErrorMessage(errorValue, 'Khong the tai danh sach users.'))
+      setError(extractApiErrorMessage(errorValue, 'Không thể tải danh sách users.'))
     } finally {
       setLoading(false)
     }
@@ -60,8 +104,7 @@ export default function AdminUsers() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-display font-bold text-white">Quan ly nguoi dung</h2>
-        <p className="text-gray-400 mt-1">Filter va phan trang server-side</p>
+        <h2 className="text-2xl font-display font-bold text-white">Quản lý người dùng</h2>
       </div>
 
       {error && (
@@ -73,7 +116,7 @@ export default function AdminUsers() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Tong users (filtered)</p>
+            <p className="text-sm text-gray-400">Tổng users (filtered)</p>
             <p className="text-2xl font-bold text-white mt-2">{total}</p>
           </CardContent>
         </Card>
@@ -97,7 +140,7 @@ export default function AdminUsers() {
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Tim theo ten hoac email..."
+                placeholder="Tìm theo tên hoặc email..."
                 className="pl-10"
                 value={searchTerm}
                 onChange={(event) => {
@@ -106,31 +149,30 @@ export default function AdminUsers() {
                 }}
               />
             </div>
-            <select
-              className="h-10 px-3 rounded-lg bg-space-700/50 border border-white/20 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-red"
-              value={roleFilter}
-              onChange={(event) => {
-                setRoleFilter(event.target.value)
-                setPage(1)
-              }}
-            >
-              <option value="all">Tat ca vai tro</option>
-              <option value="admin">Admin</option>
-              <option value="customer">Customer</option>
-            </select>
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-gray-400" />
+              <div className="relative">
+                <RoleSelect roleFilter={roleFilter} setRoleFilter={setRoleFilter} />
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                  <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                  </svg>
+                </div>
+              </div>
+            </div>  
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Danh sach nguoi dung</CardTitle>
+          <CardTitle>Danh sách người dùng</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-gray-300">Dang tai users...</p>
+            <p className="text-sm text-gray-300">Đang tải users...</p>
           ) : users.length === 0 ? (
-            <p className="text-sm text-gray-400">Khong co users phu hop.</p>
+            <p className="text-sm text-gray-400">Không có users phù hợp.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -171,7 +213,7 @@ export default function AdminUsers() {
 
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>
-              Truoc
+              Trước
             </Button>
             <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
               Sau
@@ -180,7 +222,7 @@ export default function AdminUsers() {
         </CardContent>
       </Card>
 
-      <Modal isOpen={selectedUser !== null} onClose={() => setSelectedUser(null)} title="Chi tiet user" className="max-w-lg">
+      <Modal isOpen={selectedUser !== null} onClose={() => setSelectedUser(null)} title="Chi tiết user" className="max-w-lg">
         {selectedUser ? (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
@@ -194,11 +236,11 @@ export default function AdminUsers() {
             </div>
             <div className="space-y-2 text-sm text-gray-300">
               <div className="flex items-center gap-2"><Mail className="h-4 w-4" /><span>{selectedUser.email}</span></div>
-              <div className="flex items-center gap-2"><UserRound className="h-4 w-4" /><span>{genderLabel(selectedUser.gender)}, {selectedUser.age} tuoi</span></div>
-              <div className="flex items-center gap-2"><Ticket className="h-4 w-4" /><span>{selectedUser.total_tickets} tickets da mua</span></div>
+              <div className="flex items-center gap-2"><UserRound className="h-4 w-4" /><span>{genderLabel(selectedUser.gender)}, {selectedUser.age} tuổi</span></div>
+              <div className="flex items-center gap-2"><Ticket className="h-4 w-4" /><span>{selectedUser.total_tickets} tickets đã mua</span></div>
               <div className="flex items-center gap-2"><Calendar className="h-4 w-4" /><span>Registered {new Date(selectedUser.registered_at).toLocaleString('vi-VN')}</span></div>
             </div>
-            <div className="pt-2 flex justify-end"><Button variant="ghost" onClick={() => setSelectedUser(null)}>Dong</Button></div>
+            <div className="pt-2 flex justify-end"><Button variant="ghost" onClick={() => setSelectedUser(null)}>Đóng</Button></div>
           </div>
         ) : null}
       </Modal>

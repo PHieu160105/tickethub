@@ -1,10 +1,10 @@
 """Admin management and analytics routes."""
 
+from base64 import b64encode
 from datetime import datetime
 from pathlib import Path
-from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -285,11 +285,10 @@ async def list_admin_events(
 
 @router.post("/events/upload-image", response_model=UploadImageResponse)
 async def upload_event_image(
-    request: Request,
     file: UploadFile = File(...),
     _: User = Depends(get_current_active_admin),
 ) -> UploadImageResponse:
-    """Upload event cover image file and return a public URL."""
+    """Encode uploaded event image as a data URL for DB storage."""
 
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only image files are allowed")
@@ -302,14 +301,8 @@ async def upload_event_image(
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image must be <= 10MB")
 
-    static_dir = Path(__file__).resolve().parents[2] / "static" / "event-images"
-    static_dir.mkdir(parents=True, exist_ok=True)
-
-    filename = f"{uuid4().hex}{extension}"
-    image_path = static_dir / filename
-    image_path.write_bytes(content)
-
-    image_url = f"{str(request.base_url).rstrip('/')}/static/event-images/{filename}"
+    base64_content = b64encode(content).decode("ascii")
+    image_url = f"data:{file.content_type};base64,{base64_content}"
     return UploadImageResponse(image_url=image_url)
 
 
