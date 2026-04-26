@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -266,7 +266,11 @@ async def process_virtual_queue(session: AsyncSession) -> int:
 
     events = list(
         await session.scalars(
-            select(Event).where(Event.queue_enabled.is_(True), Event.status.in_([EventStatus.LIVE, EventStatus.DRAFT]))
+            select(Event).where(
+                Event.queue_enabled.is_(True),
+                Event.is_deleted.is_(False),
+                Event.status.in_([EventStatus.LIVE, EventStatus.DRAFT]),
+            )
         )
     )
 
@@ -329,3 +333,12 @@ async def process_virtual_queue(session: AsyncSession) -> int:
 
     await session.commit()
     return updated_entries
+
+
+async def cleanup_expired_queue_entries(session: AsyncSession) -> int:
+    """Delete stale queue rows long after their admission/expiry window."""
+
+    cutoff = datetime.now(UTC) - timedelta(hours=24)
+    result = await session.execute(delete(QueueEntry).where(QueueEntry.expires_at.is_not(None), QueueEntry.expires_at < cutoff))
+    await session.commit()
+    return result.rowcount or 0

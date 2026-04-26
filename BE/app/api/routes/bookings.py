@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_customer
 from app.core.db import get_db_session
+from app.core.rate_limit import rate_limit
 from app.models.user import User
 from app.schemas.booking import (
     CheckoutRequest,
@@ -22,7 +23,7 @@ from app.services.booking_service import cancel_ticket, checkout_locked_seats, f
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 
-@router.post("/lock", response_model=LockSeatsResponse)
+@router.post("/lock", response_model=LockSeatsResponse, dependencies=[Depends(rate_limit("bookings-lock", times=5, seconds=60))])
 async def lock_event_seats(
     payload: LockSeatsRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -39,7 +40,7 @@ async def lock_event_seats(
     )
 
 
-@router.post("/release", response_model=APIMessage)
+@router.post("/release", response_model=APIMessage, dependencies=[Depends(rate_limit("bookings-release", times=12, seconds=60))])
 async def release_event_seats(
     payload: ReleaseSeatsRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -56,7 +57,7 @@ async def release_event_seats(
     return APIMessage(detail=f"Released {released_count} seats")
 
 
-@router.post("/checkout", response_model=CheckoutResponse)
+@router.post("/checkout", response_model=CheckoutResponse, dependencies=[Depends(rate_limit("bookings-checkout", times=5, seconds=60))])
 async def checkout(
     payload: CheckoutRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -77,6 +78,8 @@ async def my_tickets(
     search: str | None = Query(default=None, max_length=120),
     start_from: datetime | None = Query(default=None),
     end_to: datetime | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_customer),
 ) -> list[MyTicketResponse]:
@@ -88,6 +91,8 @@ async def my_tickets(
         search=search,
         start_from=start_from,
         end_to=end_to,
+        limit=limit,
+        offset=offset,
     )
 
 

@@ -8,6 +8,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import event_seat_cache_namespace, public_api_cache
+from app.core.search import build_ilike_pattern
 from app.models.enums import OrderStatus, SeatStatus
 from app.models.event import Event, SeatZone
 from app.models.order import Order, OrderItem, Ticket, TicketCancellation
@@ -26,7 +28,7 @@ def _as_utc(value: datetime | None) -> datetime | None:
 
 
 async def _get_event_or_404(session: AsyncSession, event_id: int) -> Event:
-    event = await session.scalar(select(Event).where(Event.id == event_id))
+    event = await session.scalar(select(Event).where(Event.id == event_id, Event.is_deleted.is_(False)))
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
     return event
@@ -98,6 +100,7 @@ async def lock_seats(
         raise
 
     if changed_seats:
+        await public_api_cache.invalidate_namespace(event_seat_cache_namespace(event_id))
         await seat_ws_manager.broadcast_seat_changes(event_id=event_id, payload=changed_seats)
 
     return LockSeatsResponse(
@@ -145,6 +148,7 @@ async def release_seats(session: AsyncSession, user_id: int, event_id: int, seat
         raise
 
     if changed_seats:
+        await public_api_cache.invalidate_namespace(event_seat_cache_namespace(event_id))
         await seat_ws_manager.broadcast_seat_changes(event_id=event_id, payload=changed_seats)
 
     return count
@@ -224,7 +228,7 @@ async def checkout_locked_seats(
             session.add(order_item)
             await session.flush()
 
-            ticket_code = f"TR-{order.id}-{seat.id}-{uuid4().hex[:8].upper()}"
+            ticket_code = f"TR-{now.strftime('%Y%m%d')}-{uuid4().hex[:12].upper()}"
             qr_payload = f"ticketrush://ticket/{ticket_code}"
             session.add(
                 Ticket(
@@ -266,6 +270,7 @@ async def checkout_locked_seats(
         raise
 
     if changed_seats:
+        await public_api_cache.invalidate_namespace(event_seat_cache_namespace(event_id))
         await seat_ws_manager.broadcast_seat_changes(event_id=event_id, payload=changed_seats)
 
     return CheckoutResponse(
@@ -283,6 +288,8 @@ async def fetch_my_tickets(
     search: str | None = None,
     start_from: datetime | None = None,
     end_to: datetime | None = None,
+    limit: int = 20,
+    offset: int = 0,
 ) -> list[MyTicketResponse]:
     """Return customer purchased tickets with event and seat details."""
 
@@ -297,9 +304,9 @@ async def fetch_my_tickets(
         .order_by(Ticket.issued_at.desc())
     )
 
-    if search:
-        pattern = f"%{search.strip()}%"
-        stmt = stmt.where(or_(Ticket.ticket_code.ilike(pattern), Event.title.ilike(pattern)))
+    pattern = build_ilike_pattern(search)
+    if pattern:
+        stmt = stmt.where(or_(Ticket.ticket_code.ilike(pattern, escape="\\"), Event.title.ilike(pattern, escape="\\")))
 
     if start_from:
         stmt = stmt.where(Event.start_at >= start_from)
@@ -307,7 +314,7 @@ async def fetch_my_tickets(
     if end_to:
         stmt = stmt.where(Event.start_at <= end_to)
 
-    rows = (await session.execute(stmt)).all()
+    rows = (await session.execute(stmt.limit(limit).offset(offset))).all()
 
     return [
         MyTicketResponse(
@@ -391,6 +398,7 @@ async def cancel_ticket(session: AsyncSession, user_id: int, ticket_id: int) -> 
         raise
 
     await seat_ws_manager.broadcast_seat_changes(event_id=seat.event_id, payload=[changed_seat])
+    await public_api_cache.invalidate_namespace(event_seat_cache_namespace(seat.event_id))
 
 
 async def release_expired_locks(session: AsyncSession) -> dict[int, list[dict[str, int | str | None]]]:

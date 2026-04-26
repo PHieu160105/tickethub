@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_optional_current_user
+from app.core.cache import EVENT_LIST_CACHE_NAMESPACE, event_seat_cache_namespace, public_api_cache
 from app.core.db import get_db_session
 from app.models.enums import UserRole
 from app.models.user import User
@@ -27,16 +28,21 @@ async def list_events(
 ) -> list[EventCardResponse]:
     """List events with optional search and category filters."""
 
-    events = await list_live_events(
-        session,
-        search=search,
-        category=category,
-        start_from=start_from,
-        end_to=end_to,
-        limit=limit,
-        offset=offset,
+    cache_key = (
+        search or "",
+        category or "",
+        start_from.isoformat() if start_from else "",
+        end_to.isoformat() if end_to else "",
+        limit,
+        offset,
     )
-    return [EventCardResponse.model_validate(event) for event in events]
+    cached = await public_api_cache.get(EVENT_LIST_CACHE_NAMESPACE, cache_key)
+    if cached is not None:
+        return cached
+
+    events = await list_live_events(session, search=search, category=category, start_from=start_from, end_to=end_to, limit=limit, offset=offset)
+    response = [EventCardResponse.model_validate(event) for event in events]
+    return await public_api_cache.set(EVENT_LIST_CACHE_NAMESPACE, cache_key, response, ttl_seconds=300)
 
 
 @router.get("/{event_key}", response_model=EventDetailResponse)
@@ -73,10 +79,18 @@ async def event_seat_matrix(
     """Return full seat matrix for booking UI."""
 
     event = await get_event_by_slug_or_id(session, event_key)
+    if current_user is None:
+        cached = await public_api_cache.get(event_seat_cache_namespace(event.id), "anonymous")
+        if cached is not None:
+            return cached
+
     zones, seats = await get_event_seat_matrix(
         session,
         event.id,
         current_user_id=current_user.id if current_user else None,
         include_user_details=bool(current_user and current_user.role == UserRole.ADMIN),
     )
-    return SeatMatrixResponse(event_id=event.id, event_slug=event.slug, queue_enabled=event.queue_enabled, zones=zones, seats=seats)
+    response = SeatMatrixResponse(event_id=event.id, event_slug=event.slug, queue_enabled=event.queue_enabled, zones=zones, seats=seats)
+    if current_user is None:
+        return await public_api_cache.set(event_seat_cache_namespace(event.id), "anonymous", response, ttl_seconds=30)
+    return response

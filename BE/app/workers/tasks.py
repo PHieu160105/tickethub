@@ -3,10 +3,11 @@
 import asyncio
 import logging
 
+from app.core.cache import event_seat_cache_namespace, public_api_cache
 from app.core.db import AsyncSessionLocal
 from app.services.booking_service import release_expired_locks
 from app.services.dashboard_service import get_dashboard_summary
-from app.services.queue_service import process_virtual_queue
+from app.services.queue_service import cleanup_expired_queue_entries, process_virtual_queue
 from app.ws.connection_manager import admin_ws_manager, seat_ws_manager
 
 logger = logging.getLogger(__name__)
@@ -42,10 +43,14 @@ class WorkerOrchestrator:
                 async with AsyncSessionLocal() as session:
                     released_by_event = await release_expired_locks(session)
                     for event_id, payload in released_by_event.items():
+                        await public_api_cache.invalidate_namespace(event_seat_cache_namespace(event_id))
                         await seat_ws_manager.broadcast_seat_changes(event_id, payload)
 
                 async with AsyncSessionLocal() as session:
                     await process_virtual_queue(session)
+
+                async with AsyncSessionLocal() as session:
+                    await cleanup_expired_queue_entries(session)
 
                 if admin_ws_manager.has_clients():
                     async with AsyncSessionLocal() as session:

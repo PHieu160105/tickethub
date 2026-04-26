@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.db import get_db_session
+from app.core.rate_limit import rate_limit
 from app.models.user import User
 from app.schemas.queue import QueueHeartbeatResponse, QueueJoinResponse, QueueStatusResponse
 from app.services.event_service import get_event_by_slug_or_id
@@ -13,7 +14,7 @@ from app.services.queue_service import get_queue_status, heartbeat_queue_token, 
 router = APIRouter(prefix="/events/{event_key}/queue", tags=["queue"])
 
 
-@router.post("/join", response_model=QueueJoinResponse)
+@router.post("/join", response_model=QueueJoinResponse, dependencies=[Depends(rate_limit("queue-join", times=5, seconds=60))])
 async def join_queue(
     event_key: str,
     session: AsyncSession = Depends(get_db_session),
@@ -25,7 +26,7 @@ async def join_queue(
     return await join_event_queue(session, event=event, user_id=current_user.id)
 
 
-@router.get("/status/{token}", response_model=QueueStatusResponse)
+@router.get("/status/{token}", response_model=QueueStatusResponse, dependencies=[Depends(rate_limit("queue-status", times=60, seconds=60))])
 async def queue_status(
     event_key: str,
     token: str,
@@ -38,7 +39,7 @@ async def queue_status(
     return await get_queue_status(session, event_id=event.id, token=token, user_id=current_user.id)
 
 
-@router.post("/heartbeat/{token}", response_model=QueueHeartbeatResponse)
+@router.post("/heartbeat/{token}", response_model=QueueHeartbeatResponse, dependencies=[Depends(rate_limit("queue-heartbeat", times=30, seconds=60))])
 async def queue_heartbeat(
     event_key: str,
     token: str,

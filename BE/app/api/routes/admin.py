@@ -9,7 +9,9 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_admin
+from app.core.cache import EVENT_LIST_CACHE_NAMESPACE, event_seat_cache_namespace, public_api_cache
 from app.core.db import get_db_session
+from app.core.search import build_ilike_pattern, sanitize_search_query
 from app.models.enums import OrderStatus, SeatStatus
 from app.models.event import Event
 from app.models.order import Order, OrderItem, Ticket, TicketCancellation
@@ -69,6 +71,8 @@ async def create_event(
     try:
         event = await create_event_with_matrix(session, admin_user.id, payload)
         await session.commit()
+        await public_api_cache.invalidate_namespace(EVENT_LIST_CACHE_NAMESPACE)
+        await public_api_cache.invalidate_namespace(event_seat_cache_namespace(event.id))
     except Exception:
         await session.rollback()
         raise
@@ -99,6 +103,8 @@ async def update_event(
     try:
         await session.commit()
         await session.refresh(event)
+        await public_api_cache.invalidate_namespace(EVENT_LIST_CACHE_NAMESPACE)
+        await public_api_cache.invalidate_namespace(event_seat_cache_namespace(event.id))
     except Exception:
         await session.rollback()
         raise
@@ -112,13 +118,15 @@ async def delete_event(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> APIMessage:
-    """Delete one released event and all related rows via cascade rules."""
+    """Soft-delete one event while retaining historical analytics data."""
 
     event = await get_event_by_slug_or_id(session, event_key)
 
     try:
-        await session.delete(event)
+        event.is_deleted = True
         await session.commit()
+        await public_api_cache.invalidate_namespace(EVENT_LIST_CACHE_NAMESPACE)
+        await public_api_cache.invalidate_namespace(event_seat_cache_namespace(event.id))
     except Exception:
         await session.rollback()
         raise
@@ -254,14 +262,16 @@ async def list_admin_events(
 ) -> list[EventCardResponse]:
     """List all events for admin management view."""
 
-    stmt = select(Event).order_by(Event.created_at.desc())
+    stmt = select(Event).where(Event.is_deleted.is_(False)).order_by(Event.created_at.desc())
 
-    if search:
-        pattern = f"%{search.strip()}%"
-        stmt = stmt.where(Event.title.ilike(pattern) | Event.venue.ilike(pattern))
+    pattern = build_ilike_pattern(search)
+    if pattern:
+        stmt = stmt.where(Event.title.ilike(pattern, escape="\\") | Event.venue.ilike(pattern, escape="\\"))
 
     if category:
-        stmt = stmt.where(Event.category.ilike(category.strip()))
+        normalized_category = sanitize_search_query(category, max_length=80)
+        if normalized_category:
+            stmt = stmt.where(Event.category.ilike(normalized_category))
 
     if start_from:
         stmt = stmt.where(Event.start_at >= start_from)
@@ -325,9 +335,9 @@ async def list_admin_users(
         .order_by(User.created_at.desc())
     )
 
-    if search:
-        pattern = f"%{search.strip()}%"
-        stmt = stmt.where(User.full_name.ilike(pattern) | User.email.ilike(pattern))
+    pattern = build_ilike_pattern(search)
+    if pattern:
+        stmt = stmt.where(User.full_name.ilike(pattern, escape="\\") | User.email.ilike(pattern, escape="\\"))
 
     if role:
         stmt = stmt.where(User.role == role.strip().lower())
@@ -486,6 +496,7 @@ async def dashboard_occupancy(
             func.sum(case((Seat.status == SeatStatus.LOCKED, 1), else_=0)).label("locked_seats"),
         )
         .join(Seat, Seat.event_id == Event.id)
+        .where(Event.is_deleted.is_(False))
         .group_by(Event.id, Event.title)
         .order_by(Event.start_at.asc())
     )

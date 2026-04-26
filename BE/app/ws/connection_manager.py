@@ -6,26 +6,37 @@ from typing import Any
 
 from fastapi import WebSocket
 
+MAX_CONNECTIONS_PER_USER = 5
+
 
 class SeatWebSocketManager:
     """Handles fan-out of seat status updates for each event room."""
 
     def __init__(self) -> None:
         self._rooms: dict[int, set[WebSocket]] = defaultdict(set)
+        self._user_connections: dict[int, set[WebSocket]] = defaultdict(set)
         self._lock = asyncio.Lock()
 
-    async def connect(self, event_id: int, websocket: WebSocket) -> None:
+    async def connect(self, event_id: int, user_id: int, websocket: WebSocket) -> bool:
         """Accept and register a seat-map WebSocket client."""
+
+        async with self._lock:
+            if len(self._user_connections[user_id]) >= MAX_CONNECTIONS_PER_USER:
+                await websocket.close(code=4004, reason="Too many connections")
+                return False
 
         await websocket.accept()
         async with self._lock:
             self._rooms[event_id].add(websocket)
+            self._user_connections[user_id].add(websocket)
+        return True
 
-    async def disconnect(self, event_id: int, websocket: WebSocket) -> None:
+    async def disconnect(self, event_id: int, user_id: int, websocket: WebSocket) -> None:
         """Remove socket from the event room."""
 
         async with self._lock:
             self._rooms[event_id].discard(websocket)
+            self._user_connections[user_id].discard(websocket)
 
     async def broadcast_seat_changes(self, event_id: int, payload: list[dict[str, Any]]) -> None:
         """Push seat delta updates to all listeners of an event."""
@@ -44,6 +55,8 @@ class SeatWebSocketManager:
             async with self._lock:
                 for conn in dead_connections:
                     self._rooms[event_id].discard(conn)
+                for user_connections in self._user_connections.values():
+                    user_connections.difference_update(dead_connections)
 
 
 class AdminWebSocketManager:
@@ -51,20 +64,29 @@ class AdminWebSocketManager:
 
     def __init__(self) -> None:
         self._clients: set[WebSocket] = set()
+        self._user_connections: dict[int, set[WebSocket]] = defaultdict(set)
         self._lock = asyncio.Lock()
 
-    async def connect(self, websocket: WebSocket) -> None:
+    async def connect(self, user_id: int, websocket: WebSocket) -> bool:
         """Accept and track one dashboard socket."""
+
+        async with self._lock:
+            if len(self._user_connections[user_id]) >= MAX_CONNECTIONS_PER_USER:
+                await websocket.close(code=4004, reason="Too many connections")
+                return False
 
         await websocket.accept()
         async with self._lock:
             self._clients.add(websocket)
+            self._user_connections[user_id].add(websocket)
+        return True
 
-    async def disconnect(self, websocket: WebSocket) -> None:
+    async def disconnect(self, user_id: int, websocket: WebSocket) -> None:
         """Drop disconnected dashboard socket."""
 
         async with self._lock:
             self._clients.discard(websocket)
+            self._user_connections[user_id].discard(websocket)
 
     def has_clients(self) -> bool:
         """Return whether any admin dashboard websocket is currently connected."""
@@ -85,6 +107,8 @@ class AdminWebSocketManager:
             async with self._lock:
                 for conn in dead_connections:
                     self._clients.discard(conn)
+                for user_connections in self._user_connections.values():
+                    user_connections.difference_update(dead_connections)
 
 
 seat_ws_manager = SeatWebSocketManager()

@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.search import build_ilike_pattern, sanitize_search_query
 from app.models.enums import SeatStatus
 from app.models.event import Event, SeatZone
 from app.models.order import Order, OrderItem, Ticket
@@ -141,14 +142,16 @@ async def list_live_events(
 ) -> list[Event]:
     """Return events with basic optional search filters."""
 
-    stmt = select(Event).order_by(Event.start_at.asc())
+    stmt = select(Event).where(Event.is_deleted.is_(False)).order_by(Event.start_at.asc())
 
-    if search:
-        pattern = f"%{search.strip()}%"
-        stmt = stmt.where(Event.title.ilike(pattern) | Event.venue.ilike(pattern))
+    pattern = build_ilike_pattern(search)
+    if pattern:
+        stmt = stmt.where(Event.title.ilike(pattern, escape="\\") | Event.venue.ilike(pattern, escape="\\"))
 
     if category:
-        stmt = stmt.where(Event.category.ilike(category.strip()))
+        normalized_category = sanitize_search_query(category, max_length=80)
+        if normalized_category:
+            stmt = stmt.where(Event.category.ilike(normalized_category))
 
     if start_from:
         stmt = stmt.where(Event.start_at >= start_from)
@@ -162,13 +165,16 @@ async def list_live_events(
     return list(result)
 
 
-async def get_event_by_slug_or_id(session: AsyncSession, slug_or_id: str) -> Event:
+async def get_event_by_slug_or_id(session: AsyncSession, slug_or_id: str, include_deleted: bool = False) -> Event:
     """Resolve event by slug path segment or numeric id."""
 
     if slug_or_id.isdigit():
         stmt = select(Event).where(Event.id == int(slug_or_id))
     else:
         stmt = select(Event).where(Event.slug == slug_or_id)
+
+    if not include_deleted:
+        stmt = stmt.where(Event.is_deleted.is_(False))
 
     event = await session.scalar(stmt)
     if not event:

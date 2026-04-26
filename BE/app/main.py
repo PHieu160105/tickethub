@@ -3,8 +3,9 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
@@ -51,6 +52,7 @@ async def lifespan(_: FastAPI):
 
     async with engine.begin() as conn:
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS ticket_rush"))
+        await conn.execute(text("ALTER TABLE IF EXISTS ticket_rush.events ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE"))
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all, checkfirst=True)
@@ -87,8 +89,27 @@ app.include_router(api_router)
 app.include_router(ws_router)
 
 
+@app.exception_handler(ValueError)
+async def value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
+    """Return consistent validation-style payload for ValueError exceptions."""
+
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": str(exc)})
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(_: Request, __: Exception) -> JSONResponse:
+    """Return sanitized fallback payload for unexpected runtime errors."""
+
+    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Internal server error"})
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
-    """Liveness probe endpoint."""
+    """Liveness probe endpoint with DB connectivity check."""
 
-    return {"status": "ok"}
+    from sqlalchemy import text
+
+    async with engine.begin() as conn:
+        await conn.execute(text("SELECT 1"))
+
+    return {"status": "ok", "db": "connected"}

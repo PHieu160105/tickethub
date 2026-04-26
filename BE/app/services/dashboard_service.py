@@ -27,7 +27,10 @@ async def get_dashboard_summary(session: AsyncSession) -> DashboardSummaryRespon
                 .label("total_revenue"),
                 select(func.count(OrderItem.id)).scalar_subquery().label("tickets_sold"),
                 select(func.count(TicketCancellation.id)).scalar_subquery().label("cancelled_tickets"),
-                select(func.count(Event.id)).where(Event.status == EventStatus.LIVE).scalar_subquery().label("active_events"),
+                select(func.count(Event.id))
+                .where(Event.status == EventStatus.LIVE, Event.is_deleted.is_(False))
+                .scalar_subquery()
+                .label("active_events"),
                 select(func.count(QueueEntry.id))
                 .where(QueueEntry.status == QueueStatus.WAITING)
                 .scalar_subquery()
