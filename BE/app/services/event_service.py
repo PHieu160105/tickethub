@@ -14,13 +14,7 @@ from app.models.event import Event, SeatZone
 from app.models.order import Order, OrderItem, Ticket
 from app.models.seat import Seat
 from app.models.user import User
-from app.schemas.event import (
-    EventCreateRequest,
-    SeatPurchaseInfoResponse,
-    SeatResponse,
-    SeatUserInfoResponse,
-    SeatZoneResponse,
-)
+from app.schemas.event import EventCreateRequest, SeatPurchaseInfoResponse, SeatResponse, SeatUserInfoResponse, SeatZoneCreate, SeatZoneResponse
 
 
 def slugify(text: str) -> str:
@@ -28,7 +22,6 @@ def slugify(text: str) -> str:
 
     value = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
     return value or "event"
-
 
 
 def row_label_from_index(index: int) -> str:
@@ -40,6 +33,29 @@ def row_label_from_index(index: int) -> str:
         value, remainder = divmod(value - 1, 26)
         label = chr(65 + remainder) + label
     return label
+
+
+def _build_zone_seats(event_id: int, zone: SeatZone, payload: SeatZoneCreate) -> list[Seat]:
+    """Generate full seat matrix models for one zone payload."""
+
+    seat_models: list[Seat] = []
+    for row_index in range(1, payload.row_count + 1):
+        row_label = row_label_from_index(row_index)
+        for seat_number in range(1, payload.seats_per_row + 1):
+            seat_label = f"{payload.code}-{row_label}{seat_number}"
+            seat_models.append(
+                Seat(
+                    event_id=event_id,
+                    zone_id=zone.id,
+                    row_index=row_index,
+                    row_label=row_label,
+                    seat_number=seat_number,
+                    seat_label=seat_label,
+                    price=payload.price,
+                    status=SeatStatus.AVAILABLE,
+                )
+            )
+    return seat_models
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -109,26 +125,115 @@ async def create_event_with_matrix(session: AsyncSession, admin_id: int, payload
         await session.flush()
         zone_models.append(zone)
 
-        for row_index in range(1, zone_payload.row_count + 1):
-            row_label = row_label_from_index(row_index)
-            for seat_number in range(1, zone_payload.seats_per_row + 1):
-                seat_label = f"{zone_payload.code}-{row_label}{seat_number}"
-                seat_models.append(
-                    Seat(
-                        event_id=event.id,
-                        zone_id=zone.id,
-                        row_index=row_index,
-                        row_label=row_label,
-                        seat_number=seat_number,
-                        seat_label=seat_label,
-                        price=zone_payload.price,
-                        status=SeatStatus.AVAILABLE,
-                    )
-                )
+        seat_models.extend(_build_zone_seats(event.id, zone, zone_payload))
 
     session.add_all(seat_models)
     await session.flush()
     return event
+
+
+async def list_event_zones(session: AsyncSession, event_id: int) -> list[SeatZone]:
+    """List all zones of an event by stable ordering."""
+
+    return list(await session.scalars(select(SeatZone).where(SeatZone.event_id == event_id).order_by(SeatZone.id.asc())))
+
+
+async def create_event_zone(session: AsyncSession, event: Event, payload: SeatZoneCreate) -> SeatZone:
+    """Create one zone and generate all seats for it."""
+
+    existing = await session.scalar(
+        select(func.count(SeatZone.id)).where(SeatZone.event_id == event.id, func.lower(SeatZone.code) == payload.code.lower())
+    )
+    if existing:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Zone code already exists in this event")
+
+    zone = SeatZone(
+        event_id=event.id,
+        code=payload.code,
+        name=payload.name,
+        row_count=payload.row_count,
+        seats_per_row=payload.seats_per_row,
+        price=payload.price,
+        color=payload.color,
+    )
+    session.add(zone)
+    await session.flush()
+
+    session.add_all(_build_zone_seats(event.id, zone, payload))
+
+    await session.flush()
+    return zone
+
+
+async def update_event_zone(session: AsyncSession, event: Event, zone_id: int, payload: SeatZoneCreate) -> SeatZone:
+    """Update one zone and regenerate seats only when zone has no sold/locked seats."""
+
+    zone = await session.scalar(select(SeatZone).where(SeatZone.id == zone_id, SeatZone.event_id == event.id))
+    if not zone:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zone not found")
+
+    duplicate = await session.scalar(
+        select(func.count(SeatZone.id)).where(
+            SeatZone.event_id == event.id,
+            SeatZone.id != zone.id,
+            func.lower(SeatZone.code) == payload.code.lower(),
+        )
+    )
+    if duplicate:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Zone code already exists in this event")
+
+    blocked = await session.scalar(
+        select(func.count(Seat.id)).where(
+            Seat.zone_id == zone.id,
+            Seat.status.in_([SeatStatus.SOLD, SeatStatus.LOCKED]),
+        )
+    )
+    if blocked:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot update zone while it has sold/locked seats",
+        )
+    
+    zone.code = payload.code
+    zone.name = payload.name
+    zone.row_count = payload.row_count
+    zone.seats_per_row = payload.seats_per_row
+    zone.price = payload.price
+    zone.color = payload.color
+
+
+    existing_seats = list(await session.scalars(select(Seat).where(Seat.zone_id == zone.id)))
+    for seat in existing_seats:
+        await session.delete(seat)
+    await session.flush()
+
+    session.add_all(_build_zone_seats(event.id, zone, payload))
+
+    await session.flush()
+    return zone
+
+
+async def delete_event_zone(session: AsyncSession, event: Event, zone_id: int) -> None:
+    """Delete zone if it does not contain sold/locked seats."""
+
+    zone = await session.scalar(select(SeatZone).where(SeatZone.id == zone_id, SeatZone.event_id == event.id))
+    if not zone:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zone not found")
+
+    blocked = await session.scalar(
+        select(func.count(Seat.id)).where(
+            Seat.zone_id == zone.id,
+            Seat.status.in_([SeatStatus.SOLD, SeatStatus.LOCKED]),
+        )
+    )
+    if blocked:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete zone while it has sold/locked seats",
+        )
+
+    await session.delete(zone)
+    await session.flush()
 
 
 async def list_live_events(

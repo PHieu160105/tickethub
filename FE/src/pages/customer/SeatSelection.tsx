@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { Footer } from '@/components/layout/Footer'
@@ -30,6 +30,7 @@ function groupSeatsByZone(seats: Seat[]) {
 }
 
 export default function SeatSelection() {
+  const COUNTDOWN_SECONDS = 10 * 60
   const { eventKey } = useParams<{ eventKey: string }>()
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
@@ -39,6 +40,7 @@ export default function SeatSelection() {
 
   const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([])
   const [statusMessage, setStatusMessage] = useState<string>('')
+  const [remainingSeconds, setRemainingSeconds] = useState(COUNTDOWN_SECONDS)
 
   const queueToken = eventKey ? queueStorage.getToken(eventKey) : null
 
@@ -51,6 +53,21 @@ export default function SeatSelection() {
   )
 
   const subtotal = selectedSeats.reduce((sum, seat) => sum + Number(seat.price), 0)
+  const isCountdownExpired = remainingSeconds <= 0
+
+  useEffect(() => {
+    setRemainingSeconds(COUNTDOWN_SECONDS)
+  }, [eventKey])
+
+  useEffect(() => {
+    if (remainingSeconds <= 0) return
+    const timer = window.setInterval(() => {
+      setRemainingSeconds((prev) => Math.max(prev - 1, 0))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [remainingSeconds])
+
+  const countdownLabel = `${String(Math.floor(remainingSeconds / 60)).padStart(2, '0')}:${String(remainingSeconds % 60).padStart(2, '0')}`
 
   const toggleSeat = (seat: Seat) => {
     if (seat.status === 'sold') return
@@ -65,7 +82,7 @@ export default function SeatSelection() {
   }
 
   const handleLockSeats = async () => {
-    if (!matrix || selectedSeatIds.length === 0) return
+    if (!matrix || selectedSeatIds.length === 0 || isCountdownExpired) return
     if (!isAuthenticated) {
       navigate('/login')
       return
@@ -217,13 +234,13 @@ export default function SeatSelection() {
                 <span>Subtotal</span>
                 <span>${subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-400">
+              <div className={`flex items-center gap-2 text-xs ${isCountdownExpired ? 'text-red-300' : 'text-slate-400'}`}>
                 <Clock3 className="w-4 h-4" />
-                Lock duration follows event settings
+                Countdown: {countdownLabel}
               </div>
             </div>
 
-            <Button className="w-full" onClick={handleLockSeats} disabled={selectedSeatIds.length === 0} isLoading={isLocking}>
+            <Button className="w-full" onClick={handleLockSeats} disabled={selectedSeatIds.length === 0 || isCountdownExpired} isLoading={isLocking}>
               <Ticket className="w-4 h-4" />
               Lock Selected Seats
             </Button>
@@ -239,6 +256,13 @@ export default function SeatSelection() {
               <p className="text-xs text-emerald-300 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4" />
                 {statusMessage}
+              </p>
+            )}
+
+            {isCountdownExpired && (
+              <p className="text-xs text-red-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                Hết thời gian giữ chỗ (10 phút). Vui lòng tải lại trang để chọn lại ghế.
               </p>
             )}
           </div>
