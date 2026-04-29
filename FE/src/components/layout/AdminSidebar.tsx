@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CalendarDays, Users, BarChart3, Settings, LogOut, Ticket } from 'lucide-react';
+import { Building2, LayoutDashboard, CalendarDays, Users, BarChart3, Settings, LogOut, Ticket } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import LogoSVG from '@/assets/logo.svg'
 
@@ -8,6 +8,7 @@ import LogoSVG from '@/assets/logo.svg'
 const adminLinks = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, exact: true },
   { label: 'Sự kiện', href: '/admin/events', icon: CalendarDays, exact: false },
+  { label: 'Venue Studio', href: '/admin/venues', icon: Building2, exact: false },
   { label: 'Vé & Doanh thu', href: '/admin/tickets', icon: Ticket, exact: false },
   { label: 'Thống kê', href: '/admin/analytics', icon: BarChart3, exact: false },
   { label: 'Người dùng', href: '/admin/users', icon: Users, exact: false },

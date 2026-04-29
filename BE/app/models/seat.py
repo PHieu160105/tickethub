@@ -29,7 +29,15 @@ class Seat(TimestampMixin, Base):
     lock_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     locked_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
+    x_coord: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)  # 0-100%
+    y_coord: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)  # 0-100%
+    rotation: Mapped[float] = mapped_column(Numeric(5, 2), default=0, nullable=False)  # 0-360 degrees
+    section_id: Mapped[int | None] = mapped_column(ForeignKey("sections.id"), nullable=True, index=True)
+    venue_layout_id: Mapped[int | None] = mapped_column(ForeignKey("venue_layouts.id"), nullable=True, index=True)
+
     sold_order_item = relationship("OrderItem", back_populates="seat", uselist=False)
     zone = relationship("SeatZone", back_populates="seats")
     event = relationship("Event", back_populates="seats")
     locked_by_user = relationship("User", back_populates="locked_seats", foreign_keys=[locked_by_user_id])
+    section = relationship("Section", back_populates="seats")
+    venue_layout = relationship("VenueLayout", back_populates="seats")

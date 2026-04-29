@@ -33,8 +33,18 @@ from app.schemas.admin import (
 )
 from app.schemas.common import APIMessage
 from app.schemas.event import EventCardResponse, EventCreateRequest, EventDetailResponse, EventOccupancyResponse, EventUpdateRequest
+from app.schemas.event import (
+    SeatSingleCreateRequest,
+    SeatBulkCreateRequest,
+    SeatCreateResponse,
+    SeatBulkCreateResponse,
+)
 from app.services.dashboard_service import get_audience_distribution, get_dashboard_summary, get_revenue_series
 from app.services.event_service import create_event_with_matrix, get_event_by_slug_or_id, get_event_seat_matrix
+from app.models.seat import Seat
+from app.models.event import SeatZone
+from app.models.enums import SeatStatus
+import math
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -78,6 +88,172 @@ async def create_event(
         raise
 
     return await _build_event_detail_response(session, event)
+
+
+@router.post("/events/{event_key}/seats/single", response_model=SeatCreateResponse)
+async def create_event_seat_single(
+    event_key: str,
+    payload: SeatSingleCreateRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _: User = Depends(get_current_active_admin),
+) -> SeatCreateResponse:
+    """Create one seat for an existing event with explicit coordinates."""
+
+    event = await get_event_by_slug_or_id(session, event_key)
+
+    if not payload.zone_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="zone_id is required")
+
+    zone = await session.scalar(select(SeatZone).where(SeatZone.id == payload.zone_id, SeatZone.event_id == event.id))
+    if not zone:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zone not found for this event")
+
+    # Ensure label uniqueness
+    exists = await session.scalar(select(func.count()).select_from(Seat).where(Seat.event_id == event.id, Seat.seat_label == payload.seat_label))
+    if exists and exists > 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Seat label already exists for this event")
+
+    price = float(payload.price) if payload.price is not None else float(zone.price)
+
+    seat = Seat(
+        event_id=event.id,
+        zone_id=zone.id,
+        row_index=0,
+        row_label="",
+        seat_number=0,
+        seat_label=payload.seat_label,
+        price=price,
+        status=SeatStatus.AVAILABLE,
+        x_coord=payload.x,
+        y_coord=payload.y,
+        rotation=payload.rotation,
+        section_id=payload.section_id,
+    )
+    session.add(seat)
+    try:
+        await session.commit()
+        await session.refresh(seat)
+    except Exception:
+        await session.rollback()
+        raise
+
+    return SeatCreateResponse(id=seat.id, seat_label=seat.seat_label, x=float(seat.x_coord) if seat.x_coord is not None else None, y=float(seat.y_coord) if seat.y_coord is not None else None)
+
+
+@router.post("/events/{event_key}/seats/bulk", response_model=SeatBulkCreateResponse)
+async def create_event_seat_bulk(
+    event_key: str,
+    payload: SeatBulkCreateRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _: User = Depends(get_current_active_admin),
+) -> SeatBulkCreateResponse:
+    """Bulk-generate seats for an event (straight pattern supported)."""
+
+    event = await get_event_by_slug_or_id(session, event_key)
+
+    if not payload.zone_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="zone_id is required for bulk generation")
+
+    zone = await session.scalar(select(SeatZone).where(SeatZone.id == payload.zone_id, SeatZone.event_id == event.id))
+    if not zone:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zone not found for this event")
+
+    # Fetch existing labels to avoid duplicates
+    existing_labels = set(await session.scalars(select(Seat.seat_label).where(Seat.event_id == event.id)))
+
+    created: list[SeatCreateResponse] = []
+    seats_to_add: list[Seat] = []
+
+    rows = payload.rows
+    cols = payload.cols
+    prefix = payload.label_prefix
+    start_x = payload.start_x
+    start_y = payload.start_y
+    gap_x = payload.gap_x
+    gap_y = payload.gap_y
+
+    if payload.pattern == "straight":
+        for r in range(rows):
+            for c in range(cols):
+                x = start_x + c * gap_x
+                y = start_y + r * gap_y
+                # clamp
+                x = max(0.0, min(100.0, x))
+                y = max(0.0, min(100.0, y))
+                label = f"{prefix}{r+1}-{c+1}"
+                if label in existing_labels:
+                    continue
+                existing_labels.add(label)
+                seat = Seat(
+                    event_id=event.id,
+                    zone_id=zone.id,
+                    row_index=r + 1,
+                    row_label="",
+                    seat_number=c + 1,
+                    seat_label=label,
+                    price=float(zone.price),
+                    status=SeatStatus.AVAILABLE,
+                    x_coord=round(x, 2),
+                    y_coord=round(y, 2),
+                    rotation=0.0,
+                    section_id=payload.section_id,
+                )
+                seats_to_add.append(seat)
+
+    elif payload.pattern == "arc":
+        if not payload.arc_config:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="arc_config required for arc pattern")
+        cfg = payload.arc_config
+        base_radius = cfg.radius
+        start_angle = cfg.start_angle
+        end_angle = cfg.end_angle
+        for r in range(rows):
+            radius = base_radius + r * gap_y
+            seats_in_row = cols + r * 2
+            for c in range(seats_in_row):
+                angle = start_angle + (end_angle - start_angle) * (c / (seats_in_row - 1 if seats_in_row > 1 else 1))
+                rad = math.radians(angle)
+                x = cfg.center_x + radius * math.sin(rad)
+                y = cfg.center_y + radius * math.cos(rad)
+                # normalize assuming center and radius in percentage
+                x = max(0.0, min(100.0, x))
+                y = max(0.0, min(100.0, y))
+                label = f"{prefix}{r+1}-{c+1}"
+                if label in existing_labels:
+                    continue
+                existing_labels.add(label)
+                seat = Seat(
+                    event_id=event.id,
+                    zone_id=zone.id,
+                    row_index=r + 1,
+                    row_label="",
+                    seat_number=c + 1,
+                    seat_label=label,
+                    price=float(zone.price),
+                    status=SeatStatus.AVAILABLE,
+                    x_coord=round(x, 2),
+                    y_coord=round(y, 2),
+                    rotation=angle,
+                    section_id=payload.section_id,
+                )
+                seats_to_add.append(seat)
+
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported pattern")
+
+    if seats_to_add:
+        session.add_all(seats_to_add)
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        # refresh newly created seats for ids
+        for s in seats_to_add:
+            await session.refresh(s)
+            created.append(SeatCreateResponse(id=s.id, seat_label=s.seat_label, x=float(s.x_coord) if s.x_coord is not None else None, y=float(s.y_coord) if s.y_coord is not None else None))
+
+    return SeatBulkCreateResponse(created_count=len(created), seats=created)
 
 
 @router.patch("/events/{event_key}", response_model=EventDetailResponse)

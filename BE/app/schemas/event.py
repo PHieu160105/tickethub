@@ -150,3 +150,55 @@ class EventOccupancyResponse(BaseModel):
     sold_seats: int
     locked_seats: int
     occupancy_rate: float
+
+
+# ── Admin Seat Creation Schemas ──
+
+
+class SeatSingleCreateRequest(BaseModel):
+    """Create a single seat for an event with coordinates (percent 0-100)."""
+
+    seat_label: str = Field(min_length=1, max_length=100)
+    x: float = Field(ge=0.0, le=100.0)
+    y: float = Field(ge=0.0, le=100.0)
+    rotation: float = Field(default=0.0, ge=0.0, le=360.0)
+    zone_id: int | None = None
+    section_id: int | None = None
+    price: Decimal | None = None
+
+
+class ArcConfig(BaseModel):
+    center_x: float = Field(ge=0.0, le=100.0)
+    center_y: float = Field(ge=0.0, le=100.0)
+    radius: float = Field(gt=0.0)
+    start_angle: float
+    end_angle: float
+
+
+class SeatBulkCreateRequest(BaseModel):
+    """Bulk generate seats for an event using supported patterns."""
+
+    zone_id: int | None = None
+    section_id: int | None = None
+    pattern: str = Field(default="straight")  # straight | arc | zigzag
+    rows: int = Field(default=1, ge=1)
+    cols: int = Field(default=1, ge=1)
+    gap_x: float = Field(default=3.0, ge=0.0)
+    gap_y: float = Field(default=3.0, ge=0.0)
+    start_x: float = Field(default=0.0, ge=0.0, le=100.0)
+    start_y: float = Field(default=0.0, ge=0.0, le=100.0)
+    label_prefix: str = Field(default="A", min_length=1, max_length=6)
+    arc_config: ArcConfig | None = None
+
+
+class SeatCreateResponse(BaseModel):
+    id: int
+    seat_label: str
+    x: float | None
+    y: float | None
+
+
+class SeatBulkCreateResponse(BaseModel):
+    created_count: int
+    seats: list[SeatCreateResponse]
+

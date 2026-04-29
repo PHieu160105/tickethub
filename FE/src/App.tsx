@@ -17,6 +17,8 @@ import VirtualQueue from './pages/customer/VirtualQueue'
 import Register from './pages/customer/Register'
 import AdminDashboard from './pages/admin/Dashboard'
 import AdminEvents from './pages/admin/Events'
+import AdminVenues from './pages/admin/Venues'
+import AdminSeatPlanner from './pages/admin/SeatPlanner'
 import AdminTickets from './pages/admin/Tickets'
 import AdminAnalytics from './pages/admin/Analytics'
 import AdminUsers from './pages/admin/Users'
@@ -79,6 +81,8 @@ function AppRoutes() {
         >
           <Route index element={<AdminDashboard />} />
           <Route path="events" element={<AdminEvents />} />
+          <Route path="events/:eventKey/seating" element={<AdminSeatPlanner />} />
+          <Route path="venues" element={<AdminVenues />} />
           <Route path="tickets" element={<AdminTickets />} />
           <Route path="analytics" element={<AdminAnalytics />} />
           <Route path="users" element={<AdminUsers />} />

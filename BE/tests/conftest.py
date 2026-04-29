@@ -7,6 +7,8 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+import sqlalchemy as sa
+
 from app.core.security import hash_password
 from app.models import Base
 from app.models.enums import EventStatus, Gender, UserRole
@@ -23,6 +25,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     session_maker = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     async with engine.begin() as conn:
+        await conn.execute(sa.text("ATTACH DATABASE ':memory:' AS ticket_rush"))
         await conn.run_sync(Base.metadata.create_all)
 
     async with session_maker() as session:

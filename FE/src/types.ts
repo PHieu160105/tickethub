@@ -33,6 +33,49 @@ export interface EventCard {
   queue_enabled: boolean
 }
 
+export interface VenueSummary {
+  id: number
+  name: string
+  city: string | null
+  venue_type: string
+  capacity: number | null
+  is_active: boolean
+  created_at: string
+}
+
+export interface VenueDetail extends VenueSummary {
+  address: string | null
+  width: number
+  height: number
+  svg_source: string | null
+  svg_processed: string | null
+  created_by_user_id: number
+  updated_at: string
+}
+
+export interface VenueLayoutItem {
+  id: number
+  venue_id: number
+  name: string
+  description: string | null
+  svg_data: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface VenueSectionItem {
+  id: number
+  venue_layout_id: number
+  name: string
+  code: string
+  color: string
+  price_base: number
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
 export interface SeatZone {
   id: number
   code: string
@@ -86,6 +129,37 @@ export interface SeatMatrixResponse {
   queue_enabled: boolean
   zones: SeatZone[]
   seats: Seat[]
+}
+
+export interface SeatMapSection {
+  id: number
+  name: string
+  code: string
+  color: string
+  price_base: number
+}
+
+export interface SeatMapSeat {
+  id: number
+  label: string
+  x: number | null
+  y: number | null
+  rotation: number
+  section_id: number | null
+  section_name: string | null
+  price: number
+  status: SeatStatus
+  lock_expires_at: string | null
+  is_locked_by_me: boolean
+}
+
+export interface SeatMapResponse {
+  event_id: number
+  event_title: string
+  venue_name: string
+  sections: SeatMapSection[]
+  seats: SeatMapSeat[]
+  seat_count: number
 }
 
 export interface QueueJoinResponse {

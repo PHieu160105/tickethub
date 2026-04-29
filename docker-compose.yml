@@ -22,7 +22,7 @@ services:
     env_file:
       - .env
     ports:
-      - "6379:6379"
+      - "6380:6379"
 
   backend:
     build: ./BE

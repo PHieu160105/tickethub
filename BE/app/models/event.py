@@ -33,8 +33,12 @@ class Event(TimestampMixin, Base):
     max_active_queue_tokens: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
 
     created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    venue_id: Mapped[int | None] = mapped_column(ForeignKey("venues.id"), nullable=True, index=True)
+    venue_layout_id: Mapped[int | None] = mapped_column(ForeignKey("venue_layouts.id"), nullable=True, index=True)
 
     created_by = relationship("User", back_populates="events_created")
+    venue_obj = relationship("Venue", back_populates="events")
+    venue_layout = relationship("VenueLayout", back_populates="events")
     zones = relationship("SeatZone", back_populates="event", cascade="all,delete")
     seats = relationship("Seat", back_populates="event", cascade="all,delete")
     orders = relationship("Order", back_populates="event", cascade="all,delete")

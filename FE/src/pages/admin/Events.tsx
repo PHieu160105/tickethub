@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
 import type { EventCard, EventStatus, SeatZone } from '@/types'
-import { Calendar, Clock, Edit, Filter, MapPin, Search, Trash2, Users, LayoutGrid, Palette, Plus, Check, Loader2 } from 'lucide-react'
+import { Calendar, Clock, Edit, Filter, MapPin, Search, Trash2, Users, LayoutGrid, Palette, Plus, Check, Loader2, Wand2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { Listbox } from '@headlessui/react';
 
 interface EventFormState {
@@ -112,6 +113,7 @@ function StatusSelect({ statusFilter, setStatusFilter }: StatusSelectProps) {
 
 
 export default function AdminEvents() {
+  const navigate = useNavigate()
   // Existing Event States
   const [events, setEvents] = useState<EventCard[]>([])
   const [loading, setLoading] = useState(true)
@@ -337,9 +339,9 @@ export default function AdminEvents() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">Quản lý sự kiện</h1>
-        <Button 
-                className="py-4 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary-container font-headline font-bold uppercase tracking-widest text-sm glow-button hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 group/btn"
-            variant="primary" onClick={openCreateModal}>
+        <Button
+          className="py-4 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary-container font-headline font-bold uppercase tracking-widest text-sm glow-button hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 group/btn"
+          variant="primary" onClick={openCreateModal}>
           <Plus className="mr-2 h-4 w-4" /> Tạo sự kiện
         </Button>
       </div>
@@ -368,7 +370,7 @@ export default function AdminEvents() {
                 <StatusSelect statusFilter={statusFilter} setStatusFilter={setStatusFilter} />
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
                   <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                   </svg>
                 </div>
               </div>
@@ -393,10 +395,10 @@ export default function AdminEvents() {
                 style={
                   event.cover_image_url
                     ? {
-                        backgroundImage: `linear-gradient(180deg, rgba(3,7,18,0.72) 0%, rgba(3,7,18,0.88) 60%, rgba(3,7,18,0.94) 100%), url(${event.cover_image_url})`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                      }
+                      backgroundImage: `linear-gradient(180deg, rgba(3,7,18,0.72) 0%, rgba(3,7,18,0.88) 60%, rgba(3,7,18,0.94) 100%), url(${event.cover_image_url})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }
                     : undefined
                 }
               >
@@ -434,6 +436,9 @@ export default function AdminEvents() {
 
                   <div className="flex justify-end gap-2 pt-2">
                     {/* ✅ Đã sửa nút Zone để mở đúng modal quản lý zone */}
+                    <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/events/${event.slug}/seating`)}>
+                      <Wand2 className="h-4 w-4" /> Seat Planner
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => openZoneModal(event.slug)}>
                       <LayoutGrid className="h-4 w-4" /> Zone
                     </Button>
