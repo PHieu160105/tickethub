@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
+import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
 import type { EventCard, EventStatus, SeatZone, VenueLayoutItem, VenueSummary } from '@/types'
 import { Calendar, Edit, Filter, MapPin, Search, Trash2, Users, LayoutGrid, Palette, Plus, Check, Loader2, Wand2 } from 'lucide-react'
@@ -402,6 +403,10 @@ export default function AdminEvents() {
     } catch (e) {
       setZoneError(extractApiErrorMessage(e, 'Lỗi khi xóa zone.'))
     }
+  }
+
+  if (loading) {
+    return <GlobalLoader />
   }
 
   return (

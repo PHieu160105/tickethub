@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { CustomerSidebar } from '@/components/layout/CustomerSidebar'
 import { Navbar } from '@/components/layout/Navbar'
+import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { TicketCard } from '@/components/ui/TicketCard'
 import { useAuth } from '@/context/AuthContext'
 import { useCancelTicket, useMyTickets } from '@/features/booking/hooks/useBooking'
@@ -40,6 +41,10 @@ const CustomerTicket: React.FC = () => {
   useEffect(() => {
     void refetch()
   }, [refetch])
+
+  if (isLoading) {
+    return <GlobalLoader />
+  }
 
   const filteredTickets = useMemo(() => {
     const now = Date.now()

@@ -5,6 +5,7 @@ import { Footer } from '@/components/layout/Footer'
 import { Navbar } from '@/components/layout/Navbar'
 import { Button } from '@/components/ui/Button'
 import { EventCard } from '@/components/ui/EventCard'
+import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { Input } from '@/components/ui/Input'
 import { useEvents } from '@/features/events/hooks/useEvents'
 import { Calendar, ChevronLeft, ChevronRight, DollarSign, MapPin, Search as SearchIcon, SlidersHorizontal, X } from 'lucide-react'
@@ -96,6 +97,10 @@ export default function Search() {
     setSortBy('recommended')
     setCurrentPage(1)
     setUrlParams({}, { replace: true })
+  }
+
+  if (isLoading) {
+    return <GlobalLoader />
   }
 
   return (

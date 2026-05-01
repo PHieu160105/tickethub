@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/Button'
 import { EventCard } from '@/components/ui/EventCard'
+import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { useEvents } from '@/features/events/hooks/useEvents'
 import { CalendarDays, MapPin, Sparkles } from 'lucide-react'
 
@@ -40,6 +41,11 @@ export default function Home() {
 
     return () => clearInterval(interval)
   }, [topEvents])
+
+  if (isLoading) {
+    return <GlobalLoader />
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <section className="relative h-[480px] md:h-[480px] overflow-hidden border-b border-white/10">

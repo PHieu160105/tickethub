@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { InteractiveSeatCanvas } from '@/components/admin/InteractiveSeatCanvas'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
+import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
 import type { VenueDetail, VenueLayoutItem, VenuePolygonItem, VenueSeatItem, VenueSectionItem, VenueSummary } from '@/types'
 
@@ -1574,6 +1575,10 @@ export default function AdminVenues() {
         goToStep(nextStep)
     }
 
+    if (loading) {
+        return <GlobalLoader />
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -2224,11 +2229,11 @@ export default function AdminVenues() {
                                     <div>
                                         <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Khu vực ghế</label>
                                         <select
-                                            className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 px-3 text-white outline-none"
+                                            className="h-11 w-full rounded-lg border border-white/10 bg-slate-900 px-3 text-white outline-none"
                                             value={singleSeatForm.section_id}
                                             onChange={(event) => setSingleSeatForm({ ...singleSeatForm, section_id: event.target.value })}
                                         >
-                                            <option value="">Chưa gán khu vực</option>
+                                            <option>Chưa gán khu vực</option>
                                             {sections.map((section) => (
                                                 <option key={section.id} value={section.id}>
                                                     {section.code} · {section.name}
@@ -2283,7 +2288,7 @@ export default function AdminVenues() {
                                 <CardContent className="space-y-3">
                                     <div className="grid grid-cols-2 gap-3">
                                         <select
-                                            className="h-11 rounded-lg border border-white/10 bg-space-700/50 px-3 text-white outline-none"
+                                            className="h-11 rounded-lg border border-white/10 bg-slate-900 px-3 text-white outline-none"
                                             value={bulkSeatForm.section_id}
                                             onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, section_id: event.target.value })}
                                         >
@@ -2295,7 +2300,7 @@ export default function AdminVenues() {
                                             ))}
                                         </select>
                                         <select
-                                            className="h-11 rounded-lg border border-white/10 bg-space-700/50 px-3 text-white outline-none"
+                                            className="h-11 rounded-lg border border-white/10 bg-slate-900 px-3 text-white outline-none"
                                             value={bulkSeatForm.pattern}
                                             onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, pattern: event.target.value as 'straight' | 'arc' | 'zigzag' })}
                                         >
@@ -2343,7 +2348,7 @@ export default function AdminVenues() {
                                 <CardContent className="space-y-3">
                                     <Input placeholder="Tên vùng đa giác" value={polygonForm.label} onChange={(event) => setPolygonForm({ ...polygonForm, label: event.target.value })} />
                                     <select
-                                        className="h-11 rounded-lg border border-white/10 bg-space-700/50 px-3 text-white outline-none"
+                                        className="h-11 rounded-lg border border-white/10 bg-slate-900 px-3 text-white outline-none"
                                         value={polygonForm.section_id}
                                         onChange={(event) => setPolygonForm({ ...polygonForm, section_id: event.target.value })}
                                     >

@@ -25,6 +25,7 @@ import AdminAnalytics from './pages/admin/Analytics'
 import AdminUsers from './pages/admin/Users'
 import AdminSettings from './pages/admin/Settings'
 import AdminGames from './pages/admin/Games'
+import { LoadingProvider } from '@/context/LoadingContext'
 
 function RequireAdmin({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isAdmin } = useAuth()
@@ -98,11 +99,13 @@ function AppRoutes() {
 
 function App() {
   return (
+    <LoadingProvider>
     <AuthProvider>
       <GameProvider>
         <AppRoutes />
       </GameProvider>
     </AuthProvider>
+  </LoadingProvider>
   )
 }
 

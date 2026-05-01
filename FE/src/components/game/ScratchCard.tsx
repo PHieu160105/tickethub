@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button'
 import type { GamePlayResponse } from '@/types'
 
 interface ScratchCardProps {
-  onPlay: () => Promise<GamePlayResponse | null>
+  onPlay: () => Promise<GamePlayResponse | null> | void
   playsLeft: number
 }
 

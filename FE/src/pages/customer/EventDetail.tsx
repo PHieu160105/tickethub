@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Footer } from '@/components/layout/Footer'
 import { Navbar } from '@/components/layout/Navbar'
 import { Button } from '@/components/ui/Button'
+import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { LuckyWheel } from '@/components/game/LuckyWheel'
 import { ScratchCard } from '@/components/game/ScratchCard'
 import { eventsApi } from '@/features/events/api/eventsApi'
@@ -181,12 +182,7 @@ export default function EventDetail() {
   }
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white">
-        <Navbar />
-        <main className="max-w-7xl mx-auto px-4 py-24 text-center text-slate-300">Loading event details...</main>
-      </div>
-    )
+    return <GlobalLoader />
   }
 
   if (error || !event) {
@@ -221,7 +217,6 @@ export default function EventDetail() {
             <p className="text-slate-300 mt-4 max-w-2xl line-clamp-3">{event.description}</p>
             <div className="mt-6">
               <Link to={event.queue_enabled ? `/queue?eventKey=${event.slug || event.id}` : `/event/${event.slug || event.id}/seats`}>
-                <Button size="lg">{event.queue_enabled ? 'Join Queue' : 'Find Tickets'}</Button>
               </Link>
             </div>
           </div>
@@ -257,7 +252,7 @@ export default function EventDetail() {
           {activeTab === 'info' ? (
             <>
               <div className="rounded-xl border border-white/10 bg-slate-900/70 p-6">
-                <h2 className="text-xl font-bold mb-4">About This Event</h2>
+                <h2 className="text-xl font-bold mb-4">Giới thiệu sự kiện</h2>
                 <p className="text-slate-300 leading-relaxed">{event.description}</p>
               </div>
 

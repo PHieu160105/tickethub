@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { InteractiveSeatCanvas } from '@/components/admin/InteractiveSeatCanvas'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
+import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { adminApi, eventApi, extractApiErrorMessage, seatmapApi } from '@/lib/api'
 import type { EventDetail, Seat, SeatMapPolygon, SeatMapResponse, SeatMapSeat, SeatZone, SeatMatrixResponse } from '@/types'
 
@@ -72,7 +73,7 @@ export default function AdminSeatPlanner() {
     const [zones, setZones] = useState<SeatZone[]>([])
     const [loading, setLoading] = useState(true)
     const [busySingle, setBusySingle] = useState(false)
-    const [busyBulk, setBusyBulk] = useState(false)
+    const [busyBulk] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [message, setMessage] = useState<string | null>(null)
     const [selectedZoneId, setSelectedZoneId] = useState<number | null>(null)
@@ -1167,6 +1168,10 @@ export default function AdminSeatPlanner() {
                 </Card>
             </div>
         )
+    }
+
+    if (loading) {
+        return <GlobalLoader />
     }
 
     return (
