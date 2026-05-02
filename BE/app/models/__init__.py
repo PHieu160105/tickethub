@@ -3,6 +3,7 @@
 from app.models.base import Base
 from app.models.event import Event, SeatZone
 from app.models.game import GameAuditLog, GameConfig, GameDailyLog, PrizePool, UserDailyPlay, WonDiscount
+from app.models.help import HelpMessage, HelpThread
 from app.models.order import Order, OrderItem, Ticket, TicketCancellation
 from app.models.queue import QueueEntry
 from app.models.review import EventReview
@@ -18,6 +19,8 @@ __all__ = [
     "PrizePool",
     "UserDailyPlay",
     "WonDiscount",
+    "HelpThread",
+    "HelpMessage",
     "GameDailyLog",
     "GameAuditLog",
     "Seat",

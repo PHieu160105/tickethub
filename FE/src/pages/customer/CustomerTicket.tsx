@@ -3,14 +3,12 @@ import { useNavigate } from 'react-router-dom'
 
 import { CustomerSidebar } from '@/components/layout/CustomerSidebar'
 import { Navbar } from '@/components/layout/Navbar'
+//import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { TicketCard } from '@/components/ui/TicketCard'
 import { useAuth } from '@/context/AuthContext'
 import { useCancelTicket, useMyTickets } from '@/features/booking/hooks/useBooking'
 import type { TicketItem } from '@/types'
 import { Globe, Mail, MonitorPlay, Ticket } from 'lucide-react'
-
-const FALLBACK_IMAGE =
-  'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80'
 
 type TicketTab = 'upcoming' | 'past' | 'cancelled'
 
@@ -30,7 +28,7 @@ function toCardStatus(ticket: TicketItem): 'confirmed' | 'pending' | 'cancelled'
 
 const CustomerTicket: React.FC = () => {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const [activeTab, setActiveTab] = useState<TicketTab>('upcoming')
   const [pendingCancelTicketId, setPendingCancelTicketId] = useState<number | null>(null)
 
@@ -40,6 +38,10 @@ const CustomerTicket: React.FC = () => {
   useEffect(() => {
     void refetch()
   }, [refetch])
+
+  // if (isLoading) {
+  //   return <GlobalLoader />
+  // }
 
   const filteredTickets = useMemo(() => {
     const now = Date.now()
@@ -55,15 +57,16 @@ const CustomerTicket: React.FC = () => {
   }, [tickets, activeTab])
 
   const onSidebarNavigate = (tab: string) => {
-    if (tab === 'tickets') {
-      navigate('/tickets')
-      return
+    if (tab === 'tickets') return navigate('/tickets')
+    if (tab === 'profile') return navigate('/profile')
+    if (tab === 'favourites') return navigate('/favourites') 
+    if (tab === 'payments') return navigate('/payments')  
+    if (tab === "settings") return navigate('/settings') 
+    if (tab === 'help') return navigate('/help')  
+    if (tab === 'logout') {
+      logout()
+      return navigate('/')
     }
-    if (tab === 'profile') {
-      navigate('/profile')
-      return
-    }
-    navigate('/')
   }
 
   const onViewDetails = (ticket: TicketItem) => {
@@ -102,8 +105,8 @@ const CustomerTicket: React.FC = () => {
         <main className="flex-1 p-8 lg:p-12">
           <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
             <div>
-              <h1 className="text-5xl font-black text-white font-headline tracking-tighter">My Tickets</h1>
-              <p className="text-slate-400 mt-2 max-w-lg">Access your boarding passes to the most exclusive experiences in the galaxy.</p>
+              <h1 className="text-5xl font-black text-white font-headline tracking-tighter">Vé của tôi</h1>
+              <p className="text-slate-400 mt-2 max-w-lg">Chúc bạn có trải nghiệm tuyệt vời vơi TicketRush</p>
             </div>
 
             <div className="flex p-1 bg-slate-900 border border-white/5 rounded-full backdrop-blur-sm">
@@ -141,7 +144,7 @@ const CustomerTicket: React.FC = () => {
                     ticketNumber={ticket.ticket_code}
                     date={formatDate(ticket.event_date)}
                     location={`${ticket.venue} | ${ticket.seat_label}`}
-                    imageUrl={FALLBACK_IMAGE}
+                    imageUrl={ticket.event_cover_image_url}
                     status={toCardStatus(ticket)}
                     onViewDetails={() => onViewDetails(ticket)}
                     onDownload={() => onDownload(ticket)}

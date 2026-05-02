@@ -1,4 +1,5 @@
 import React from 'react';
+import { Calendar, MapPin, Download } from "lucide-react"
 
 interface TicketCardProps {
   eventTitle: string;
@@ -79,7 +80,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
               {status === 'confirmed' ? 'Confirmed' : status}
             </span>
             <span className="text-on-surface-variant text-xs font-label">
-              TICKET #{ticketNumber}
+              #{ticketNumber}
             </span>
           </div>
           <h2
@@ -112,20 +113,17 @@ export const TicketCard: React.FC<TicketCardProps> = ({
                 </div>
               ))
             ) : (
-              <>
+              <div className='flex-col'>
                 <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-primary text-base">
-                    calendar_today
-                  </span>
+                  <Calendar className="text-primary w-4 h-4" />
                   <span>{date}</span>
                 </div>
+
                 <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-primary text-base">
-                    location_on
-                  </span>
+                  <MapPin className="text-primary w-4 h-4" />
                   <span>{location}</span>
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -135,17 +133,20 @@ export const TicketCard: React.FC<TicketCardProps> = ({
             onClick={onViewDetails}
             className={`bg-primary-container text-on-primary-container rounded-xl font-bold uppercase tracking-widest transition-all active:scale-95 ${
               isFeatured
-                ? 'px-10 py-4 text-sm hover:shadow-[0_0_20px_rgba(252,83,109,0.5)]'
+                ? 'px-8 py-3 text-sm hover:shadow-[0_0_20px_rgba(252,83,109,0.5)]'
                 : 'flex-1 py-3 text-xs hover:shadow-[0_0_15px_rgba(252,83,109,0.4)]'
             }`}
           >
-            {isFeatured ? 'Claim Voyager Perks' : 'View Details'}
+            {isFeatured ? 'Claim Voyager Perks' : 'Chi tiết'}
           </button>
           <button
             onClick={onDownload}
-            className="p-3 border border-white/10 rounded-xl hover:bg-white/5 transition-all"
+            className="flex items-center gap-2 p-2 border border-white/10 rounded-xl hover:bg-white/5 transition-all"
           >
-            <span className="material-symbols-outlined text-white">download</span>
+            <span className="material-symbols-outlined text-white">
+              Tải xuống
+              </span>
+            <Download className="text-white w-4 h-4"/>
           </button>
         </div>
       </div>

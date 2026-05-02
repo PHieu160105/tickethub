@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Footer } from '@/components/layout/Footer'
 import { Navbar } from '@/components/layout/Navbar'
 import { Button } from '@/components/ui/Button'
+import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { CustomerSeatMap } from '@/components/customer/CustomerSeatMap'
 import { SeatMapLegend } from '@/components/customer/SeatMapLegend'
 import { SeatSelectionSummary } from '@/components/customer/SeatSelectionSummary'
@@ -219,12 +220,7 @@ export default function SeatSelection() {
   }
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white">
-        <Navbar />
-        <main className="mx-auto max-w-7xl px-4 py-24 text-center text-slate-300">Loading seat map...</main>
-      </div>
-    )
+    return <GlobalLoader />
   }
 
   if (error || !seatMap) {

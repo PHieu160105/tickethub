@@ -4,6 +4,7 @@ import { CustomerLayout } from './components/layout/CustomerLayout'
 import { AdminLayout } from './components/layout/AdminLayout'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { GameProvider } from './context/GameContext'
+import { ThemeProvider } from './context/ThemeContext'
 import Home from './pages/customer/Home'
 import EventDetail from './pages/customer/EventDetail'
 import Login from './pages/customer/Login'
@@ -16,6 +17,10 @@ import SeatSelection from './pages/customer/SeatSelection'
 import ErrorPage from './pages/customer/Error'
 import VirtualQueue from './pages/customer/VirtualQueue'
 import Register from './pages/customer/Register'
+import Favourites from './pages/customer/Favourites'
+import Payments from './pages/customer/Payments'
+import Help from './pages/customer/Help'
+import CustomerSettings from './pages/customer/Setting'
 import AdminDashboard from './pages/admin/Dashboard'
 import AdminEvents from './pages/admin/Events'
 import AdminVenues from './pages/admin/Venues'
@@ -25,6 +30,8 @@ import AdminAnalytics from './pages/admin/Analytics'
 import AdminUsers from './pages/admin/Users'
 import AdminSettings from './pages/admin/Settings'
 import AdminGames from './pages/admin/Games'
+import AdminHelp from './pages/admin/Help'
+import { LoadingProvider } from '@/context/LoadingContext'
 
 function RequireAdmin({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isAdmin } = useAuth()
@@ -68,6 +75,10 @@ function AppRoutes() {
           <Route path="confirmation" element={<Confirmation />} />
           <Route path="profile" element={<CustomerProfile />} />
           <Route path="tickets" element={<CustomerTicket />} />
+          <Route path="favourites" element={<Favourites />} />
+          <Route path="payments" element={<Payments />} />
+          <Route path="help" element={<Help />} />
+          <Route path="settings" element={<CustomerSettings />} />
           <Route path="search" element={<Search />} />
           <Route path="event/:eventKey/seats" element={<SeatSelection />} />
           <Route path="*" element={<ErrorPage />} />
@@ -89,6 +100,7 @@ function AppRoutes() {
           <Route path="analytics" element={<AdminAnalytics />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="games" element={<AdminGames />} />
+          <Route path="help" element={<AdminHelp />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
       </Routes>
@@ -98,11 +110,15 @@ function AppRoutes() {
 
 function App() {
   return (
-    <AuthProvider>
-      <GameProvider>
-        <AppRoutes />
-      </GameProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <LoadingProvider>
+        <AuthProvider>
+          <GameProvider>
+            <AppRoutes />
+          </GameProvider>
+        </AuthProvider>
+      </LoadingProvider>
+    </ThemeProvider>
   )
 }
 

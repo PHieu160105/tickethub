@@ -7,9 +7,10 @@ from app.core.db import AsyncSessionLocal
 from app.core.security import TokenDecodeError, decode_access_token
 from app.models.enums import UserRole
 from app.models.event import Event
+from app.models.help import HelpThread
 from app.models.user import User
 from app.services.dashboard_service import get_dashboard_summary
-from app.ws.connection_manager import admin_ws_manager, seat_ws_manager
+from app.ws.connection_manager import admin_ws_manager, help_ws_manager, seat_ws_manager
 
 router = APIRouter(tags=["websocket"])
 
@@ -88,3 +89,34 @@ async def admin_dashboard_ws(websocket: WebSocket, token: str | None = None) -> 
             await websocket.receive_text()
     except WebSocketDisconnect:
         await admin_ws_manager.disconnect(user.id, websocket)
+
+
+@router.websocket("/ws/help/{thread_id}")
+async def help_chat_ws(websocket: WebSocket, thread_id: int, token: str | None = None) -> None:
+    """Realtime room for one help thread."""
+
+    if not token:
+        await websocket.close(code=1008, reason="Auth token is required")
+        return
+    user = await _resolve_ws_user(token)
+    if not user:
+        await websocket.close(code=1008, reason="Invalid auth token")
+        return
+
+    async with AsyncSessionLocal() as session:
+        thread = await session.scalar(select(HelpThread).where(HelpThread.id == thread_id))
+    if not thread:
+        await websocket.close(code=1008, reason="Thread not found")
+        return
+    if user.role != UserRole.ADMIN and thread.customer_id != user.id:
+        await websocket.close(code=1008, reason="Forbidden")
+        return
+
+    connected = await help_ws_manager.connect(thread_id, user.id, websocket)
+    if not connected:
+        return
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        await help_ws_manager.disconnect(thread_id, user.id, websocket)

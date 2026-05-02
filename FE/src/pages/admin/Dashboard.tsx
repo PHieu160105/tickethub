@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
 import type { DashboardSummary, OccupancyItem, RevenuePoint } from '@/types'
 import { Activity, CalendarDays, DollarSign, RefreshCcw, Ticket, Users, BarChart3 } from 'lucide-react'
@@ -66,7 +67,7 @@ export default function AdminDashboard() {
   }, [])
 
   if (loading) {
-    return <div className="text-sm text-gray-300">Đang tải dashboard...</div>
+    return <GlobalLoader />
   }
 
   return (

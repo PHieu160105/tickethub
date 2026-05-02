@@ -39,6 +39,9 @@ import type {
   VenueSummary,
   SeatMapResponse,
   SeatZone,
+  HelpMessage,
+  HelpThread,
+  SearchSuggestionItem,
 } from '../types'
 
 const apiBaseURL = API_BASE_URL
@@ -516,5 +519,34 @@ export const adminApi = {
   async deleteEventSeat(eventKey: string | number, seatId: number) {
     const response = await api.delete<ApiMessage>(`/admin/events/${eventKey}/seats/${seatId}`)
     return response.data
+  },
+}
+
+export const helpApi = {
+  async createOrGetMyThread() {
+    return withRetry(() => api.post<HelpThread>('/help/threads/me'))
+  },
+  async myMessages() {
+    return withRetry(() => api.get<HelpMessage[]>('/help/threads/me/messages'))
+  },
+  async sendMyMessage(content: string) {
+    const response = await api.post<HelpMessage>('/help/threads/me/messages', { content })
+    return response.data
+  },
+  async adminThreads() {
+    return withRetry(() => api.get<HelpThread[]>('/help/admin/threads'))
+  },
+  async adminMessages(threadId: number) {
+    return withRetry(() => api.get<HelpMessage[]>(`/help/admin/threads/${threadId}/messages`))
+  },
+  async adminSendMessage(threadId: number, content: string) {
+    const response = await api.post<HelpMessage>(`/help/admin/threads/${threadId}/messages`, { content })
+    return response.data
+  },
+}
+
+export const searchApi = {
+  async suggest(q: string, scope = 'global') {
+    return withRetry(() => api.get<SearchSuggestionItem[]>('/search/suggest', { params: { q, scope } }))
   },
 }

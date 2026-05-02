@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button'
 import type { GamePlayResponse } from '@/types'
 
 interface ScratchCardProps {
-  onPlay: () => Promise<GamePlayResponse | null>
+  onPlay: () => Promise<GamePlayResponse | null> | void
   playsLeft: number
 }
 
@@ -13,16 +13,15 @@ export function ScratchCard({ onPlay, playsLeft }: ScratchCardProps) {
   const [result, setResult] = useState<GamePlayResponse | null>(null)
   const [readyToScratch, setReadyToScratch] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [revealed, setRevealed] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx || !readyToScratch) return
     const radius = 16
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-    // bo góc
     ctx.beginPath()
     ctx.moveTo(radius, 0)
     ctx.lineTo(canvas.width - radius, 0)
@@ -34,19 +33,16 @@ export function ScratchCard({ onPlay, playsLeft }: ScratchCardProps) {
     ctx.lineTo(0, radius)
     ctx.quadraticCurveTo(0, 0, radius, 0)
     ctx.closePath()
-
-    // gradient
     const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height)
     gradient.addColorStop(0, '#64748b')
     gradient.addColorStop(1, '#334155')
-
     ctx.fillStyle = gradient
     ctx.fill()
     ctx.fillStyle = '#e2e8f0'
     ctx.font = 'bold 18px sans-serif'
     ctx.textAlign = 'center'
-    ctx.fillText('🎟 Cào để nhận thưởng', canvas.width / 2, canvas.height / 2)
-  }, [result])
+    ctx.fillText('Cào để nhận thưởng', canvas.width / 2, canvas.height / 2)
+  }, [readyToScratch, result])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -60,16 +56,28 @@ export function ScratchCard({ onPlay, playsLeft }: ScratchCardProps) {
       const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius)
       gradient.addColorStop(0, 'rgba(0,0,0,1)')
       gradient.addColorStop(1, 'rgba(0,0,0,0)')
-
       ctx.globalCompositeOperation = 'destination-out'
       ctx.fillStyle = gradient
       ctx.beginPath()
       ctx.arc(x, y, radius, 0, Math.PI * 2)
       ctx.fill()
     }
-
-    const onDown = () => { pressed = true }
-    const onUp = () => { pressed = false }
+    const onDown = () => {
+      pressed = true
+    }
+    const onUp = () => {
+      pressed = false
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+      let transparentCount = 0
+      for (let i = 3; i < pixels.length; i += 4) {
+        if (pixels[i] < 20) transparentCount += 1
+      }
+      const ratio = transparentCount / (canvas.width * canvas.height)
+      if (ratio >= 0.35) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        setRevealed(true)
+      }
+    }
     const onMove = (e: MouseEvent) => {
       if (!pressed) return
       const rect = canvas.getBoundingClientRect()
@@ -93,17 +101,18 @@ export function ScratchCard({ onPlay, playsLeft }: ScratchCardProps) {
     if (response) {
       setResult(response)
       setReadyToScratch(true)
+      setRevealed(false)
     }
   }
 
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
-        <p className="text-xs text-slate-400 mb-2">Kết quả sẽ hiện dưới lớp cào (server-authoritative)</p>
+        <p className="text-xs text-slate-400 mb-2">Cào hết thẻ để xem kết quả.</p>
         <div className="relative w-[320px] max-w-full">
           <div className="absolute inset-0 flex items-center justify-center text-center px-4">
             <p className="text-sm text-white font-semibold">
-              {result ? `${result.tier_name}${result.discount_code ? ` - ${result.discount_code}` : ''}` : 'Bấm chơi để nhận kết quả'}
+              {result && revealed ? `${result.tier_name}${result.discount_code ? ` - ${result.discount_code}` : ''}` : 'Bấm chơi để bắt đầu cào'}
             </p>
           </div>
           <canvas ref={canvasRef} width={320} height={150} className="relative rounded-lg border border-white/20" />
@@ -115,4 +124,3 @@ export function ScratchCard({ onPlay, playsLeft }: ScratchCardProps) {
     </div>
   )
 }
-

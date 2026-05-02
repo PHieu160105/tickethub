@@ -4,7 +4,7 @@ import type { GamePlayResponse, GameStatusResponse } from '@/types'
 
 interface LuckyWheelProps {
   status: GameStatusResponse | null
-  onPlay: () => Promise<GamePlayResponse | null>
+  onPlay: () => Promise<GamePlayResponse | null> | void
   playsLeft: number
 }
 
@@ -27,21 +27,6 @@ export function LuckyWheel({ status, onPlay, playsLeft }: LuckyWheelProps) {
   ]
   const idleSpeed = 0.15 // độ/frame (có thể chỉnh)
   const rafRef = useRef<number | null>(null)
-  const segmentAngle = segments.length > 0 ? 360 / segments.length : 360
-
-  // 🎯 build gradient giống Admin
-  const gradient = useMemo(() => {
-    let cursor = 0
-    return segments
-      .map((_, idx) => {
-        const next = cursor + segmentAngle
-        const color = colors[idx % colors.length]
-        const part = `${color} ${cursor.toFixed(2)}deg ${next.toFixed(2)}deg`
-        cursor = next
-        return part
-      })
-      .join(',')
-  }, [segments, segmentAngle])
 
   const segmentAngles = useMemo(() => {
     const totalWeight = segments.reduce((a, s) => a + (s.weight ?? 0), 0)
@@ -84,9 +69,10 @@ export function LuckyWheel({ status, onPlay, playsLeft }: LuckyWheelProps) {
     const nextRotation = rotation + 360 * 6 + targetAngle
 
     setRotation(nextRotation)
-    setResult(response)
-
-    setTimeout(() => setSpinning(false), 4200)
+    setTimeout(() => {
+      setResult(response)
+      setSpinning(false)
+    }, 4200)
   }
 
   useEffect(() => {
@@ -125,7 +111,6 @@ export function LuckyWheel({ status, onPlay, playsLeft }: LuckyWheelProps) {
           <g clipPath="url(#circleClip)">
             {(() => {
               const totalWeight = segments.reduce((a, s) => a + (s.weight ?? 0), 0)
-              const totalRemaining = segments.reduce((a, s) => a + (s.remaining_qty ?? 0), 0)
 
               let cumulative = 0
 

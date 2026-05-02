@@ -9,33 +9,35 @@ interface CustomerSidebarProps {
   userName?: string;
   membershipLevel?: string;
   onNavigate?: (tab: string) => void;
+  className?: string;
 }
 
 export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
   activeTab,
   userName = 'Alex Voyager',
-  membershipLevel = 'Stellar Member',
+  membershipLevel = '',
   onNavigate,
+  className,
 }) => {
   // Cấu hình Menu chính (Account)
   const menuItems = [
-    { id: 'tickets', icon: Ticket, label: 'My Tickets' },
-    { id: 'profile', icon: User, label: 'My Profile' },
-    { id: 'favorites', icon: Heart, label: 'Watchlist' },
-    { id: 'payments', icon: CreditCard, label: 'Payment Methods' },
+    { id: 'tickets', icon: Ticket, label: 'Vé của tôi' },
+    { id: 'profile', icon: User, label: 'Hồ sơ' },
+    { id: 'favourites', icon: Heart, label: 'Yêu thích' },
+    { id: 'payments', icon: CreditCard, label: 'Phương thức thanh toán' },
   ];
 
   // Cấu hình Menu hỗ trợ (Support)
   const supportItems = [
-    { id: 'settings', icon: Settings, label: 'Settings' },
-    { id: 'help', icon: HelpCircle, label: 'Help Center' },
-    { id: 'logout', icon: LogOut, label: 'Sign Out' },
+    { id: 'settings', icon: Settings, label: 'Cài đặt' },
+    { id: 'help', icon: HelpCircle, label: 'Trung tâm hỗ trợ' },
+    { id: 'logout', icon: LogOut, label: 'Đăng xuất' },
   ];
 
   const isActive = (id: string) => activeTab === id;
 
   return (
-    <aside className="w-72 h-[calc(100vh-80px)] bg-slate-900/50 border-r border-white/5 p-6 flex flex-col gap-8 sticky top-[80px] overflow-y-auto">
+    <aside className={`w-72 h-[calc(100vh-80px)] bg-slate-900/50 border-r border-white/5 p-6 flex flex-col gap-8 sticky top-[80px] overflow-y-auto ${className ?? ''}`}>
       
       {/* User Profile Section */}
       <div className="flex flex-col items-center text-center pb-6 border-b border-white/5">
@@ -50,14 +52,14 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
           </div>
         </div>
         
-        <h3 className="text-white font-bold text-lg font-headline">{userName}</h3>
-        <p className="text-amber-400 text-xs font-bold uppercase tracking-widest mt-1">{membershipLevel}</p>
+        <h3 className="text-on-background font-bold text-lg font-headline">{userName}</h3>
+        <p className="text-amber-400 text-xs font-bold uppercase tracking-widest mt-1">Khách hàng</p>
       </div>
 
       {/* Main Navigation */}
       <div className="space-y-2">
         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 px-2">
-          Account
+          Tài khoản
         </p>
         {menuItems.map((item) => (
           <button
@@ -66,11 +68,11 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
               isActive(item.id)
                 ? 'bg-gradient-to-r from-red-500/20 to-red-500/5 text-red-400 border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]'
-                : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                : 'text-slate-400 hover:bg-white/5 hover:text-on-background'
             }`}
           >
-            <item.icon className={`w-5 h-5 transition-colors ${isActive(item.id) ? 'text-red-400' : 'text-slate-500 group-hover:text-white'}`} />
-            <span className={`font-semibold text-sm ${isActive(item.id) ? 'text-red-400' : 'text-slate-300 group-hover:text-white'}`}>
+            <item.icon className={`w-5 h-5 transition-colors ${isActive(item.id) ? 'text-red-400' : 'text-slate-500 group-hover:text-on-background'}`} />
+            <span className={`font-semibold text-sm ${isActive(item.id) ? 'text-red-400' : 'text-slate-300 group-hover:text-on-background'}`}>
               {item.label}
             </span>
           </button>
@@ -80,16 +82,22 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
       {/* Support Navigation */}
       <div className="space-y-2 mt-auto">
         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 px-2">
-          Support
+          Hỗ trợ
         </p>
         {supportItems.map((item) => (
           <button
             key={item.id}
             onClick={() => onNavigate?.(item.id)}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all"
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+              isActive(item.id)
+                ? 'bg-gradient-to-r from-red-500/20 to-red-500/5 text-red-400 border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]'
+                : 'text-slate-400 hover:bg-white/5 hover:text-on-background'
+            }`}
           >
-            <item.icon className="w-5 h-5 text-slate-500 group-hover:text-white" />
-            <span className="font-semibold text-sm">{item.label}</span>
+            <item.icon className={`w-5 h-5 transition-colors ${isActive(item.id) ? 'text-red-400' : 'text-slate-500 group-hover:text-on-background'}`} />
+            <span className={`font-semibold text-sm ${isActive(item.id) ? 'text-red-400' : 'text-slate-300 group-hover:text-on-background'}`}>
+              {item.label}
+            </span>
           </button>
         ))}
       </div>

@@ -12,11 +12,15 @@ import {
   Shield,
   Save,
   Upload,
-  Palette
+  Palette,
+  Moon,
+  Sun
 } from 'lucide-react';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function AdminSettings() {
   const [activeTab, setActiveTab] = useState<'general' | 'notification' | 'payment' | 'appearance'>('general');
+  const { theme, setTheme } = useTheme();
 
   return (
     <div className="space-y-6">
@@ -316,15 +320,45 @@ export default function AdminSettings() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-4">Chế độ hiển thị</label>
+                  <label className="block text-sm font-medium text-on-surface-variant mb-4">Chế độ hiển thị</label>
                   <div className="grid grid-cols-2 gap-4">
-                    <button className="p-4 rounded-lg bg-brand-red/10 border border-brand-red/30 text-white">
-                      <p className="font-medium">Dark Mode</p>
-                      <p className="text-xs text-gray-400 mt-1">Đang sử dụng</p>
+                    <button
+                      onClick={() => setTheme('dark')}
+                      className={`relative p-4 rounded-lg border transition-all ${
+                        theme === 'dark'
+                          ? 'bg-brand-red/10 border-brand-red/30 text-on-background'
+                          : 'bg-white/5 border-white/10 text-on-surface-variant hover:text-on-background'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Moon className="h-5 w-5" />
+                        <p className="font-medium">Dark Mode</p>
+                      </div>
+                      {theme === 'dark' && (
+                        <p className="text-xs text-on-surface-variant">Đang sử dụng</p>
+                      )}
+                      {theme !== 'dark' && (
+                        <p className="text-xs text-slate-500">Nhấn để bật</p>
+                      )}
                     </button>
-                    <button className="p-4 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white">
-                      <p className="font-medium">Light Mode</p>
-                      <p className="text-xs text-gray-500 mt-1">Sắp ra mắt</p>
+                    <button
+                      onClick={() => setTheme('light')}
+                      className={`relative p-4 rounded-lg border transition-all ${
+                        theme === 'light'
+                          ? 'bg-brand-red/10 border-brand-red/30 text-on-background'
+                          : 'bg-white/5 border-white/10 text-on-surface-variant hover:text-on-background'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sun className="h-5 w-5" />
+                        <p className="font-medium">Light Mode</p>
+                      </div>
+                      {theme === 'light' && (
+                        <p className="text-xs text-on-surface-variant">Đang sử dụng</p>
+                      )}
+                      {theme !== 'light' && (
+                        <p className="text-xs text-slate-500">Nhấn để bật</p>
+                      )}
                     </button>
                   </div>
                 </div>

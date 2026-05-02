@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
+import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
 import type { AdminUserItem } from '@/types'
 import { Calendar, Mail, Search, Ticket, UserRound, Filter } from 'lucide-react'
@@ -100,6 +101,10 @@ export default function AdminUsers() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const totalTickets = users.reduce((sum, user) => sum + user.total_tickets, 0)
+
+  if (loading) {
+    return <GlobalLoader />
+  }
 
   return (
     <div className="space-y-6">

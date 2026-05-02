@@ -113,3 +113,46 @@ class AdminWebSocketManager:
 
 seat_ws_manager = SeatWebSocketManager()
 admin_ws_manager = AdminWebSocketManager()
+
+
+class HelpWebSocketManager:
+    """Broadcast help chat messages to subscribers of a thread."""
+
+    def __init__(self) -> None:
+        self._rooms: dict[int, set[WebSocket]] = defaultdict(set)
+        self._user_connections: dict[int, set[WebSocket]] = defaultdict(set)
+        self._lock = asyncio.Lock()
+
+    async def connect(self, thread_id: int, user_id: int, websocket: WebSocket) -> bool:
+        async with self._lock:
+            if len(self._user_connections[user_id]) >= MAX_CONNECTIONS_PER_USER:
+                await websocket.close(code=4004, reason="Too many connections")
+                return False
+        await websocket.accept()
+        async with self._lock:
+            self._rooms[thread_id].add(websocket)
+            self._user_connections[user_id].add(websocket)
+        return True
+
+    async def disconnect(self, thread_id: int, user_id: int, websocket: WebSocket) -> None:
+        async with self._lock:
+            self._rooms[thread_id].discard(websocket)
+            self._user_connections[user_id].discard(websocket)
+
+    async def broadcast_message(self, thread_id: int, payload: dict[str, Any]) -> None:
+        dead_connections: list[WebSocket] = []
+        for websocket in list(self._rooms.get(thread_id, set())):
+            try:
+                await websocket.send_json({"type": "help_message", "thread_id": thread_id, "payload": payload})
+            except Exception:
+                dead_connections.append(websocket)
+
+        if dead_connections:
+            async with self._lock:
+                for conn in dead_connections:
+                    self._rooms[thread_id].discard(conn)
+                for user_connections in self._user_connections.values():
+                    user_connections.difference_update(dead_connections)
+
+
+help_ws_manager = HelpWebSocketManager()

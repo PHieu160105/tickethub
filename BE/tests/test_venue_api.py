@@ -590,6 +590,83 @@ async def test_create_event_from_venue_layout_clones_template_seats(db_session, 
 
 
 @pytest.mark.asyncio
+async def test_create_event_with_venue_id_only_uses_venue(db_session, admin_user):
+    """Event creation should validate venue_id even when no layout is provided."""
+
+    venue = Venue(
+        name="Venue Only Arena",
+        venue_type="arena",
+        created_by_user_id=admin_user.id,
+    )
+    db_session.add(venue)
+    await db_session.commit()
+    await db_session.refresh(venue)
+
+    payload = EventCreateRequest(
+        title="Venue Only Event",
+        description="Event created with venue_id but without a venue layout",
+        category="Concert",
+        venue=venue.name,
+        start_at=datetime.now(UTC) + timedelta(days=1),
+        end_at=datetime.now(UTC) + timedelta(days=1, hours=2),
+        venue_id=venue.id,
+        zones=[
+            {
+                "code": "GEN",
+                "name": "General",
+                "row_count": 2,
+                "seats_per_row": 2,
+                "price": 100,
+                "color": "#00ff00",
+            }
+        ],
+    )
+
+    event = await create_event_with_matrix(db_session, admin_user.id, payload)
+    await db_session.commit()
+    await db_session.refresh(event)
+
+    assert event.venue_id == venue.id
+    assert event.venue_layout_id is None
+
+    event_seats = list(
+        await db_session.scalars(
+            select(Seat).where(Seat.event_id == event.id).order_by(Seat.seat_label.asc())
+        )
+    )
+    assert len(event_seats) == 4
+    assert all(seat.zone_id is not None for seat in event_seats)
+
+
+@pytest.mark.asyncio
+async def test_create_event_with_invalid_venue_id_fails(db_session, admin_user):
+    """Invalid venue_id should be rejected when creating an event."""
+
+    payload = EventCreateRequest(
+        title="Invalid Venue Event",
+        description="Event with a non-existing venue_id should fail",
+        category="Concert",
+        venue="Ghost Venue",
+        start_at=datetime.now(UTC) + timedelta(days=1),
+        end_at=datetime.now(UTC) + timedelta(days=1, hours=2),
+        venue_id=999999,
+        zones=[
+            {
+                "code": "GEN",
+                "name": "General",
+                "row_count": 1,
+                "seats_per_row": 1,
+                "price": 10,
+                "color": "#000000",
+            }
+        ],
+    )
+
+    with pytest.raises(Exception):
+        await create_event_with_matrix(db_session, admin_user.id, payload)
+
+
+@pytest.mark.asyncio
 async def test_create_and_list_polygons(db_session, admin_user):
     """Test saving polygon zones for a venue layout."""
     from app.api.deps import get_current_active_admin, get_db_session

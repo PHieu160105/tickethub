@@ -5,7 +5,7 @@ import math
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_admin
@@ -727,14 +727,38 @@ async def create_venue_seat_bulk(
         )
     }
     seats_to_add = _generate_bulk_layout_seats(payload, layout.id, section.id if section else None, existing_labels)
-    session.add_all(seats_to_add)
+
+    seat_rows = [
+        {
+            "event_id": seat.event_id,
+            "zone_id": seat.zone_id,
+            "row_index": seat.row_index,
+            "row_label": seat.row_label,
+            "seat_number": seat.seat_number,
+            "seat_label": seat.seat_label,
+            "price": seat.price,
+            "status": seat.status.value,
+            "is_admin_locked": seat.is_admin_locked,
+            "x_coord": seat.x_coord,
+            "y_coord": seat.y_coord,
+            "rotation": seat.rotation,
+            "section_id": seat.section_id,
+            "venue_layout_id": seat.venue_layout_id,
+        }
+        for seat in seats_to_add
+    ]
+    result = await session.execute(insert(Seat).returning(Seat.id), seat_rows)
+    created_ids = [row[0] for row in result]
     await session.commit()
-    for seat in seats_to_add:
-        await session.refresh(seat)
+
+    created_seats = []
+    for seat, seat_id in zip(seats_to_add, created_ids):
+        seat.id = seat_id
+        created_seats.append(_seat_response_from_model(seat, section.name if section else None))
 
     return VenueSeatBulkCreateResponse(
-        created_count=len(seats_to_add),
-        seats=[_seat_response_from_model(seat, section.name if section else None) for seat in seats_to_add],
+        created_count=len(created_seats),
+        seats=created_seats,
     )
 
 

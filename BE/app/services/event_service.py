@@ -64,21 +64,27 @@ async def _resolve_event_layout(
     venue_id: int | None,
     venue_layout_id: int | None,
 ) -> tuple[Venue | None, VenueLayout | None]:
-    if venue_layout_id is None:
-        return None, None
+    if venue_layout_id is not None:
+        layout = await session.scalar(select(VenueLayout).where(VenueLayout.id == venue_layout_id))
+        if not layout:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue layout not found")
 
-    layout = await session.scalar(select(VenueLayout).where(VenueLayout.id == venue_layout_id))
-    if not layout:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue layout not found")
+        venue = await session.scalar(select(Venue).where(Venue.id == layout.venue_id))
+        if not venue:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
 
-    venue = await session.scalar(select(Venue).where(Venue.id == layout.venue_id))
-    if not venue:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+        if venue_id is not None and layout.venue_id != venue_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="venue_layout_id does not belong to venue_id")
 
-    if venue_id is not None and layout.venue_id != venue_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="venue_layout_id does not belong to venue_id")
+        return venue, layout
 
-    return venue, layout
+    if venue_id is not None:
+        venue = await session.scalar(select(Venue).where(Venue.id == venue_id))
+        if not venue:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+        return venue, None
+
+    return None, None
 
 
 async def _build_layout_seats_for_event(

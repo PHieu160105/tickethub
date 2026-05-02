@@ -5,30 +5,38 @@
   --color-primary-container: #fc536d;
   --color-on-primary: #67001c;
   --color-on-primary-container: #5b0017;
-  
+
   --color-secondary: #f0c03e;
   --color-secondary-container: #ba9000;
   --color-on-secondary: #3e2e00;
   --color-on-secondary-container: #3c2c00;
-  
+
   --color-tertiary: #a9c8fc;
   --color-tertiary-container: #7392c3;
   --color-on-tertiary: #09305c;
   --color-on-tertiary-container: #002a55;
-  
+
   --color-error: #ffb4ab;
   --color-error-container: #93000a;
   --color-on-error: #690005;
   --color-on-error-container: #ffdad6;
-  
-  --color-background: #0d112a;
-  --color-on-background: #dee0ff;
-  
-  --color-surface: #0d112a;
-  --color-on-surface: #dee0ff;
-  --color-surface-variant: #2f334e;
-  --color-on-surface-variant: #e2bebf;
-  
+
+  /* Light mode colors */
+  --color-background-light: #f8fafc;
+  --color-on-background-light: #0f172a;
+  --color-surface-light: #ffffff;
+  --color-on-surface-light: #0f172a;
+  --color-surface-variant-light: #f1f5f9;
+  --color-on-surface-variant-light: #334155;
+
+  /* Dark mode colors (default) */
+  --color-background-dark: #0d112a;
+  --color-on-background-dark: #dee0ff;
+  --color-surface-dark: #0d112a;
+  --color-on-surface-dark: #dee0ff;
+  --color-surface-variant-dark: #2f334e;
+  --color-on-surface-variant-dark: #e2bebf;
+
   --color-surface-dim: #0d112a;
   --color-surface-bright: #343752;
   --color-surface-container-lowest: #080c25;
@@ -36,29 +44,29 @@
   --color-surface-container: #1a1e37;
   --color-surface-container-high: #242842;
   --color-surface-container-highest: #2f334e;
-  
+
   --color-outline: #a9898a;
   --color-outline-variant: #5a4042;
-  
+
   --color-inverse-surface: #dee0ff;
   --color-inverse-on-surface: #2b2f49;
   --color-inverse-primary: #b71d3f;
-  
+
   --color-primary-fixed: #ffdadb;
   --color-primary-fixed-dim: #ffb2b7;
   --color-on-primary-fixed: #40000e;
   --color-on-primary-fixed-variant: #91002b;
-  
+
   --color-secondary-fixed: #ffdf95;
   --color-secondary-fixed-dim: #f0c03e;
   --color-on-secondary-fixed: #251a00;
   --color-on-secondary-fixed-variant: #594400;
-  
+
   --color-tertiary-fixed: #d5e3ff;
   --color-tertiary-fixed-dim: #a9c8fc;
   --color-on-tertiary-fixed: #001b3c;
   --color-on-tertiary-fixed-variant: #274774;
-  
+
   --color-surface-tint: #ffb2b7;
 
   /* Fonts */
@@ -74,7 +82,7 @@
 
   /* Custom animations */
   --animate-float: float 6s ease-in-out infinite;
-  
+
   @keyframes float {
     0% { transform: translateY(0px) rotate(0deg); }
     50% { transform: translateY(-20px) rotate(5deg); }
@@ -84,10 +92,40 @@
 
 @layer base {
   body {
-    @apply font-body bg-background text-on-background min-h-screen;
-    background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+    @apply font-body min-h-screen;
+    background-color: var(--color-background);
+    color: var(--color-on-background);
   }
-  
+
+  /* Dark mode (default) */
+  :root {
+    --color-background: #0d112a;
+    --color-on-background: #dee0ff;
+    --color-surface: #0d112a;
+    --color-on-surface: #dee0ff;
+    --color-surface-variant: #2f334e;
+    --color-on-surface-variant: #e2bebf;
+  }
+
+  /* Light mode */
+  .dark {
+    --color-background: #0d112a;
+    --color-on-background: #dee0ff;
+    --color-surface: #0d112a;
+    --color-on-surface: #dee0ff;
+    --color-surface-variant: #2f334e;
+    --color-on-surface-variant: #e2bebf;
+  }
+
+  :root:not(.dark) {
+    --color-background: #f8fafc;
+    --color-on-background: #0f172a;
+    --color-surface: #ffffff;
+    --color-on-surface: #0f172a;
+    --color-surface-variant: #f1f5f9;
+    --color-on-surface-variant: #334155;
+  }
+
   .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   }

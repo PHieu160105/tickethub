@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { SearchAutocompleteInput } from '@/components/ui/SearchAutocompleteInput'
 import { Search, Menu, X, Ticket, LogOut } from 'lucide-react'
 import { NavLink, Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
@@ -24,6 +25,7 @@ export function Logo() {
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [searchValue, setSearchValue] = useState('')
   const { user, isAuthenticated, logout } = useAuth()
   const navigate = useNavigate()
 
@@ -86,7 +88,14 @@ export function Navbar() {
           {/* Search Bar */}
           <div className="relative w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input placeholder="Tìm kiếm sự kiện..." className="pl-10 h-10" />
+            <SearchAutocompleteInput
+              value={searchValue}
+              onChange={setSearchValue}
+              onSelect={(item) => navigate(`/event/${item.value}`)}
+              placeholder="Tìm kiếm sự kiện..."
+              scope="events"
+              className="pl-10"
+            />
           </div>
         </div>
 
@@ -189,7 +198,17 @@ export function Navbar() {
             
             {/* Mobile Search */}
             <div className="pt-3 border-t border-white/10">
-              <Input placeholder="Tìm kiếm..." className="w-full" />
+              <SearchAutocompleteInput
+                value={searchValue}
+                onChange={setSearchValue}
+                onSelect={(item) => {
+                  navigate(`/event/${item.value}`)
+                  closeMobileMenu()
+                }}
+                placeholder="Tìm kiếm..."
+                scope="events"
+                className="w-full"
+              />
             </div>
             
             {/* Mobile Auth Buttons */}

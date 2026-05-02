@@ -5,6 +5,7 @@ import { Footer } from '@/components/layout/Footer'
 import { Navbar } from '@/components/layout/Navbar'
 import { Button } from '@/components/ui/Button'
 import { EventCard } from '@/components/ui/EventCard'
+//import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { Input } from '@/components/ui/Input'
 import { useEvents } from '@/features/events/hooks/useEvents'
 import { Calendar, ChevronLeft, ChevronRight, DollarSign, MapPin, Search as SearchIcon, SlidersHorizontal, X } from 'lucide-react'
@@ -98,20 +99,24 @@ export default function Search() {
     setUrlParams({}, { replace: true })
   }
 
+  // if (isLoading) {
+  //   return <GlobalLoader />
+  // }
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <Navbar />
 
       <main className="max-w-screen-2xl mx-auto px-6 py-12">
         <div className="mb-16 max-w-3xl mx-auto text-center">
-          <h1 className="text-4xl md:text-5xl font-headline font-black tracking-tighter mb-6">FIND YOUR RUSH</h1>
+          <h1 className="text-4xl md:text-5xl font-headline font-black tracking-tighter mb-6">Tìm sự kiện</h1>
           <div className="relative group">
             <div className="absolute -inset-1 bg-gradient-to-r from-primary to-secondary rounded-xl blur opacity-25 group-hover:opacity-40 transition duration-1000" />
             <div className="relative flex items-center bg-slate-900/80 rounded-xl p-2 border border-white/10">
               <SearchIcon className="ml-4 text-primary w-5 h-5" />
               <Input
                 className="bg-transparent border-none focus:ring-0 w-full px-4 py-3 text-lg font-body placeholder:text-slate-500"
-                placeholder="Search by artist, venue, or event..."
+                placeholder="Tìm kiếm tên sự kiện, địa điểm,..."
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 onKeyDown={(event) => {
@@ -126,10 +131,10 @@ export default function Search() {
                 </button>
               )}
               <Button
-                className="font-headline font-bold uppercase tracking-widest px-8 py-3 rounded-lg hover:scale-105 active:scale-95 transition-all"
+                className="tracking-widest uppercase px-8 py-3 rounded-lg hover:scale-105 active:scale-95 transition-all"
                 onClick={onSearchSubmit}
               >
-                Search
+                Tìm
               </Button>
             </div>
           </div>
@@ -139,14 +144,14 @@ export default function Search() {
           <aside className="w-full md:w-72 shrink-0 space-y-6">
             <div className="rounded-xl border border-white/10 p-5 bg-slate-900/70 space-y-5">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm uppercase tracking-widest text-slate-400">Filters</h3>
+                <h3 className="text-sm uppercase tracking-widest text-slate-400">Bộ lọc</h3>
                 <button className="text-xs text-primary hover:underline" onClick={resetFilters}>
-                  Reset
+                  Đặt lại
                 </button>
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-widest text-slate-400 mb-2">Category</label>
+                <label className="block text-xs uppercase tracking-widest text-slate-400 mb-2">Thể loại</label>
                 <select
                   value={selectedCategory}
                   onChange={(event) => {
@@ -162,14 +167,14 @@ export default function Search() {
                 >
                   {categories.map((category) => (
                     <option key={category} value={category}>
-                      {category === 'all' ? 'All categories' : category}
+                      {category === 'all' ? 'Tất cả' : category}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-widest text-slate-400 mb-2">Venue</label>
+                <label className="block text-xs uppercase tracking-widest text-slate-400 mb-2">Địa điểm</label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                   <select
@@ -182,7 +187,7 @@ export default function Search() {
                   >
                     {venues.map((venue) => (
                       <option key={venue} value={venue}>
-                        {venue === 'all' ? 'All venues' : venue}
+                        {venue === 'all' ? 'Tất cả' : venue}
                       </option>
                     ))}
                   </select>
@@ -190,7 +195,7 @@ export default function Search() {
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-widest text-slate-400 mb-2">Price Range</label>
+                <label className="block text-xs uppercase tracking-widest text-slate-400 mb-2">Khoảng giá</label>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm text-slate-300">
                     <DollarSign className="w-4 h-4 text-slate-500" />
@@ -207,7 +212,7 @@ export default function Search() {
                       setPriceRange([0, Number(event.target.value)])
                       setCurrentPage(1)
                     }}
-                    className="w-full"
+                    className="w-full accent-primary"
                   />
                 </div>
               </div>
@@ -312,13 +317,11 @@ export default function Search() {
 
             <div className="mt-8 text-slate-500 text-xs flex items-center gap-2 uppercase tracking-wider">
               <Calendar className="w-4 h-4" />
-              Times shown in your local timezone
+              Múi giờ Hà nội UTC+7
             </div>
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   )
 }

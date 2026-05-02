@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
+import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
 import type { EventCard, EventStatus, SeatZone, VenueLayoutItem, VenueSummary } from '@/types'
 import { Calendar, Edit, Filter, MapPin, Search, Trash2, Users, LayoutGrid, Palette, Plus, Check, Loader2, Wand2 } from 'lucide-react'
@@ -404,6 +405,10 @@ export default function AdminEvents() {
     }
   }
 
+  if (loading) {
+    return <GlobalLoader />
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -509,9 +514,9 @@ export default function AdminEvents() {
                     <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/events/${event.slug}/seating`)}>
                       <Wand2 className="h-4 w-4" /> Seat Planner
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => openZoneModal(event.slug)}>
+                    {/* <Button variant="ghost" size="sm" onClick={() => openZoneModal(event.slug)}>
                       <LayoutGrid className="h-4 w-4" /> Zone
-                    </Button>
+                    </Button> */}
                     <Button variant="ghost" size="sm" onClick={() => openEditModal(event)}>
                       <Edit className="h-4 w-4" /> Sửa
                     </Button>

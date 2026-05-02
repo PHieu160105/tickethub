@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Footer } from '@/components/layout/Footer'
 import { Navbar } from '@/components/layout/Navbar'
 import { Button } from '@/components/ui/Button'
+import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { LuckyWheel } from '@/components/game/LuckyWheel'
 import { ScratchCard } from '@/components/game/ScratchCard'
 import { eventsApi } from '@/features/events/api/eventsApi'
@@ -13,6 +14,8 @@ import { useGame } from '@/context/GameContext'
 import { extractApiErrorMessage, gameApi } from '@/lib/api'
 import type { EventReview, GamePlayResponse } from '@/types'
 import { Calendar, Clock, MapPin, Star, Users } from 'lucide-react'
+import { Heart } from 'lucide-react'
+import { isFavourite, toggleFavourite } from '@/lib/favourites'
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80'
@@ -31,7 +34,7 @@ function formatDate(date: string) {
 export default function EventDetail() {
   const { eventKey } = useParams<{ eventKey: string }>()
   const navigate = useNavigate()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const { event, isLoading, error } = useEventDetail(eventKey)
   const { status: gameStatus, playsLeft, error: gameError, refreshStatus } = useGame()
   const [activeTab, setActiveTab] = useState<'info' | 'reviews' | 'game'>('info')
@@ -44,12 +47,13 @@ export default function EventDetail() {
   const [content, setContent] = useState('')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [gameMessage, setGameMessage] = useState<string>('')
+  const [gameNotice, setGameNotice] = useState<string>('')
   const [showConfetti, setShowConfetti] = useState(false)
   const [gameModal, setGameModal] = useState<{
     open: boolean
     type: 'wheel' | 'scratch' | null
   }>({ open: false, type: null })
+  const [fav, setFav] = useState(false)
 
   async function fetchReviews(nextOffset = 0, append = false) {
     if (!eventKey) return
@@ -71,6 +75,10 @@ export default function EventDetail() {
       void fetchReviews(0, false)
     }
   }, [eventKey])
+  useEffect(() => {
+    if (!event) return
+    setFav(isFavourite(user?.id, event.slug || event.id))
+  }, [event?.id, event?.slug, user?.id])
 
   useEffect(() => {
     if (!event) return
@@ -142,7 +150,7 @@ export default function EventDetail() {
       navigate('/login')
       return null
     }
-    setGameMessage('')
+    setGameNotice('')
     try {
       const sign = await gameApi.sign(event.id, gameType)
       const result = await gameApi.play({
@@ -153,11 +161,7 @@ export default function EventDetail() {
         signed_payload: sign.signed_payload,
       })
       const won = Boolean(result.discount_code)
-      setGameMessage(
-        result.discount_code
-          ? `Ban trung ${result.tier_name} (${result.discount_percent}%). Ma: ${result.discount_code}`
-          : result.message,
-      )
+      setGameNotice(result.discount_code ? `Bạn trúng ${result.tier_name} (${result.discount_percent}%)` : '')
       if (won) {
         setShowConfetti(true)
         const ctx = new AudioContext()
@@ -175,18 +179,13 @@ export default function EventDetail() {
       await refreshStatus(event.id)
       return result
     } catch (e) {
-      setGameMessage(extractApiErrorMessage(e, 'Khong the choi game luc nay'))
+      setGameNotice(extractApiErrorMessage(e, 'Không thể chơi game lúc này'))
       return null
     }
   }
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white">
-        <Navbar />
-        <main className="max-w-7xl mx-auto px-4 py-24 text-center text-slate-300">Loading event details...</main>
-      </div>
-    )
+    return <GlobalLoader />
   }
 
   if (error || !event) {
@@ -220,8 +219,19 @@ export default function EventDetail() {
             <h1 className="text-4xl md:text-6xl font-black leading-tight">{event.title}</h1>
             <p className="text-slate-300 mt-4 max-w-2xl line-clamp-3">{event.description}</p>
             <div className="mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!event) return
+                  toggleFavourite(user?.id, event)
+                  setFav((v) => !v)
+                }}
+                className="mr-3 inline-flex items-center gap-2 rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-sm"
+              >
+                <Heart className={`w-4 h-4 ${fav ? 'fill-primary text-primary' : ''}`} />
+                {fav ? 'Đã yêu thích' : 'Yêu thích'}
+              </button>
               <Link to={event.queue_enabled ? `/queue?eventKey=${event.slug || event.id}` : `/event/${event.slug || event.id}/seats`}>
-                <Button size="lg">{event.queue_enabled ? 'Join Queue' : 'Find Tickets'}</Button>
               </Link>
             </div>
           </div>
@@ -257,7 +267,7 @@ export default function EventDetail() {
           {activeTab === 'info' ? (
             <>
               <div className="rounded-xl border border-white/10 bg-slate-900/70 p-6">
-                <h2 className="text-xl font-bold mb-4">About This Event</h2>
+                <h2 className="text-xl font-bold mb-4">Giới thiệu sự kiện</h2>
                 <p className="text-slate-300 leading-relaxed">{event.description}</p>
               </div>
 
@@ -364,7 +374,7 @@ export default function EventDetail() {
               <LuckyWheel status={gameStatus} playsLeft={playsLeft.wheel} onPlay={() => setGameModal({ open: true, type: 'wheel' })} />
               <ScratchCard playsLeft={playsLeft.scratch} onPlay={() => setGameModal({ open: true, type: 'scratch' })} />
               {gameError && <p className="text-xs text-amber-300">{gameError}</p>}
-              {gameMessage && <p className="text-xs text-emerald-300">{gameMessage}</p>}
+              {gameNotice && <p className="text-xs text-emerald-300">{gameNotice}</p>}
               {showConfetti && (
                 <div className="pointer-events-none absolute inset-0 flex items-start justify-center text-2xl animate-pulse">
                   <span>🎉🎉🎉</span>
@@ -451,9 +461,9 @@ export default function EventDetail() {
               />
             )}
 
-            {gameMessage && (
+            {gameNotice && (
               <p className="text-sm text-emerald-300 mt-4 text-center">
-                {gameMessage}
+                {gameNotice}
               </p>
             )}
           </div>

@@ -132,7 +132,7 @@ class SeatResponse(BaseModel):
     """Serializable seat object for matrix rendering."""
 
     id: int
-    zone_id: int
+    zone_id: int | None = None
     row_index: int
     row_label: str
     seat_number: int
