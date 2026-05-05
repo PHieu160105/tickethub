@@ -19,6 +19,17 @@ class SeatZoneCreate(BaseModel):
     color: str = Field(default="#024ddf", max_length=20)
 
 
+class SeatZoneUpdate(BaseModel):
+    """Admin payload for editing one seat zone matrix."""
+
+    code: str = Field(min_length=1, max_length=30)
+    name: str = Field(min_length=1, max_length=100)
+    row_count: int = Field(ge=1, le=40)
+    seats_per_row: int = Field(ge=1, le=60)
+    price: Decimal = Field(gt=0)
+    color: str = Field(default="#024ddf", max_length=20)
+
+
 class EventCreateRequest(BaseModel):
     """Admin payload to create a brand-new event and seats."""
 

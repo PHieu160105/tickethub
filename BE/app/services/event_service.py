@@ -14,9 +14,7 @@ from app.models.event import Event, SeatZone
 from app.models.order import Order, OrderItem, Ticket
 from app.models.seat import Seat
 from app.models.user import User
-from app.models.venue import Section, Venue, VenueLayout
 from app.schemas.event import EventCreateRequest, SeatPurchaseInfoResponse, SeatResponse, SeatUserInfoResponse, SeatZoneCreate, SeatZoneResponse
-
 
 def slugify(text: str) -> str:
     """Generate URL-friendly slug from title."""
@@ -56,78 +54,6 @@ def _build_zone_seats(event_id: int, zone: SeatZone, payload: SeatZoneCreate) ->
                     status=SeatStatus.AVAILABLE,
                 )
             )
-    return seat_models
-
-
-async def _resolve_event_layout(
-    session: AsyncSession,
-    venue_id: int | None,
-    venue_layout_id: int | None,
-) -> tuple[Venue | None, VenueLayout | None]:
-    if venue_layout_id is not None:
-        layout = await session.scalar(select(VenueLayout).where(VenueLayout.id == venue_layout_id))
-        if not layout:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue layout not found")
-
-        venue = await session.scalar(select(Venue).where(Venue.id == layout.venue_id))
-        if not venue:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
-
-        if venue_id is not None and layout.venue_id != venue_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="venue_layout_id does not belong to venue_id")
-
-        return venue, layout
-
-    if venue_id is not None:
-        venue = await session.scalar(select(Venue).where(Venue.id == venue_id))
-        if not venue:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
-        return venue, None
-
-    return None, None
-
-
-async def _build_layout_seats_for_event(
-    session: AsyncSession,
-    event_id: int,
-    layout_id: int,
-) -> list[Seat]:
-    template_seats = list(
-        await session.scalars(
-            select(Seat)
-            .where(Seat.event_id.is_(None), Seat.venue_layout_id == layout_id)
-            .order_by(Seat.section_id.asc(), Seat.row_index.asc(), Seat.seat_number.asc(), Seat.seat_label.asc())
-        )
-    )
-    if not template_seats:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selected venue layout has no template seats")
-
-    section_ids = {seat.section_id for seat in template_seats if seat.section_id is not None}
-    section_price_map: dict[int, Decimal] = {}
-    if section_ids:
-        sections = list(await session.scalars(select(Section).where(Section.id.in_(section_ids))))
-        section_price_map = {section.id: section.price_base for section in sections}
-
-    seat_models: list[Seat] = []
-    for template in template_seats:
-        seat_models.append(
-            Seat(
-                event_id=event_id,
-                zone_id=None,
-                row_index=template.row_index,
-                row_label=template.row_label,
-                seat_number=template.seat_number,
-                seat_label=template.seat_label,
-                price=section_price_map.get(template.section_id, template.price),
-                status=SeatStatus.LOCKED if template.is_admin_locked else SeatStatus.AVAILABLE,
-                x_coord=template.x_coord,
-                y_coord=template.y_coord,
-                rotation=template.rotation,
-                section_id=template.section_id,
-                venue_layout_id=layout_id,
-                is_admin_locked=template.is_admin_locked,
-            )
-        )
     return seat_models
 
 
@@ -185,24 +111,23 @@ async def create_event_with_matrix(session: AsyncSession, admin_id: int, payload
     session.add(event)
     await session.flush()
 
-    seat_models: list[Seat]
-    if layout is not None:
-        seat_models = await _build_layout_seats_for_event(session, event.id, layout.id)
-    else:
-        seat_models = []
-        for zone_payload in payload.zones:
-            zone = SeatZone(
-                event_id=event.id,
-                code=zone_payload.code,
-                name=zone_payload.name,
-                row_count=zone_payload.row_count,
-                seats_per_row=zone_payload.seats_per_row,
-                price=zone_payload.price,
-                color=zone_payload.color,
-            )
-            session.add(zone)
-            await session.flush()
-            seat_models.extend(_build_zone_seats(event.id, zone, zone_payload))
+    zone_models: list[SeatZone] = []
+    seat_models: list[Seat] = []
+    for zone_payload in payload.zones:
+        zone = SeatZone(
+            event_id=event.id,
+            code=zone_payload.code,
+            name=zone_payload.name,
+            row_count=zone_payload.row_count,
+            seats_per_row=zone_payload.seats_per_row,
+            price=zone_payload.price,
+            color=zone_payload.color,
+        )
+        session.add(zone)
+        await session.flush()
+        zone_models.append(zone)
+
+        seat_models.extend(_build_zone_seats(event.id, zone, zone_payload))
 
     session.add_all(seat_models)
     await session.flush()

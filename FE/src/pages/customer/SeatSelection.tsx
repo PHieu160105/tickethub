@@ -1,223 +1,124 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { Footer } from '@/components/layout/Footer'
 import { Navbar } from '@/components/layout/Navbar'
 import { Button } from '@/components/ui/Button'
-import { GlobalLoader } from '@/components/ui/GlobalLoader'
-import { CustomerSeatMap } from '@/components/customer/CustomerSeatMap'
-import { SeatMapLegend } from '@/components/customer/SeatMapLegend'
-import { SeatSelectionSummary } from '@/components/customer/SeatSelectionSummary'
-import { useLockSeats } from '@/features/booking/hooks/useBooking'
+import { useLockSeats, useReleaseSeats } from '@/features/booking/hooks/useBooking'
 import { useEventSeats } from '@/features/events/hooks/useEvents'
 import { useAuth } from '@/context/AuthContext'
-import { extractApiErrorMessage, seatmapApi } from '@/lib/api'
-import { queueStorage } from '@/lib/storage'
-import type { SeatMapResponse, SeatMapSeat } from '@/types'
-import { AlertCircle, CheckCircle2, MapPin, Ticket } from 'lucide-react'
+import { useWebSocketHeartbeat } from '@/hooks/useWebSocketHeartbeat'
+import { authStorage, queueStorage } from '@/lib/storage'
+import { WS_BASE_URL } from '@/constants'
+import type { Seat, SeatZone } from '@/types'
+import { AlertCircle, CheckCircle2, Clock3, MapPin, Ticket } from 'lucide-react'
 
-const POLLING_INTERVAL_MS = 10_000
+function seatClass(seat: Seat, isPending: boolean) {
+  if (isPending) return 'bg-cyan-700 text-white border-cyan-400 cursor-wait'
+  if (seat.status === 'sold') return 'bg-slate-700 text-slate-500 cursor-not-allowed'
+  if (seat.status === 'locked' && !seat.is_locked_by_me) return 'bg-slate-700 text-slate-400 cursor-not-allowed'
+  if (seat.is_locked_by_me) return 'bg-emerald-700 text-white border-emerald-500'
+  return 'bg-slate-800 text-slate-200 hover:bg-slate-700 border-white/10'
+}
 
-function isSeatSelectable(seat: SeatMapSeat) {
-  if (seat.is_locked_by_me) return false
-  if (seat.status === 'sold') return false
-  if (seat.status === 'locked' && !seat.is_locked_by_me) return false
-  return true
+function groupSeatsByZone(seats: Seat[]) {
+  return seats.reduce<Record<number, Seat[]>>((accumulator, seat) => {
+    if (!accumulator[seat.zone_id]) {
+      accumulator[seat.zone_id] = []
+    }
+    accumulator[seat.zone_id].push(seat)
+    return accumulator
+  }, {})
 }
 
 export default function SeatSelection() {
   const { eventKey } = useParams<{ eventKey: string }>()
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
+
+  const { seats: matrix, isLoading, error, refetch } = useEventSeats(eventKey, { pollIntervalMs: 3000 })
   const { isLoading: isLocking, lockSeats } = useLockSeats()
-  const { seats: matrix } = useEventSeats(eventKey)
+  const { isLoading: isReleasing, releaseSeats } = useReleaseSeats()
 
-  const canvasRef = useRef<HTMLDivElement>(null)
-
-  const [seatMap, setSeatMap] = useState<SeatMapResponse | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [statusMessage, setStatusMessage] = useState('')
-  const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([])
-  const [viewport, setViewport] = useState({ scale: 1, offsetX: 0, offsetY: 0 })
-  const [isPanning, setIsPanning] = useState(false)
-  const [panStartCursor, setPanStartCursor] = useState<{ x: number; y: number } | null>(null)
-  const [panStartOffset, setPanStartOffset] = useState<{ x: number; y: number } | null>(null)
+  const [pendingSeatIds, setPendingSeatIds] = useState<number[]>([])
+  const pendingSeatIdsRef = useRef<Set<number>>(new Set())
+  const [statusMessage, setStatusMessage] = useState<string>('')
 
   const queueToken = eventKey ? queueStorage.getToken(eventKey) : null
+  const authToken = authStorage.getToken()
+  const wsUrl = eventKey && authToken ? `${WS_BASE_URL}/events/${eventKey}/seats?token=${encodeURIComponent(authToken)}` : null
 
-  async function loadSeatMap(options?: { silent?: boolean }) {
-    if (!eventKey) return
-    if (!options?.silent) {
-      setIsLoading(true)
-    }
-    try {
-      const response = await seatmapApi.get(eventKey)
-      setSeatMap(response)
-      setError(null)
-    } catch (errorValue) {
-      setError(extractApiErrorMessage(errorValue, 'Cannot load seat map'))
-    } finally {
-      if (!options?.silent) {
-        setIsLoading(false)
-      }
-    }
-  }
-
-  useEffect(() => {
-    void loadSeatMap()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventKey])
-
-  useEffect(() => {
-    if (!eventKey) return
-    const interval = window.setInterval(() => {
-      void loadSeatMap({ silent: true })
-    }, POLLING_INTERVAL_MS)
-    return () => window.clearInterval(interval)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventKey])
-
-  useEffect(() => {
-    if (!seatMap) return
-    setSelectedSeatIds((previous) =>
-      previous.filter((seatId) => {
-        const seat = seatMap.seats.find((item) => item.id === seatId)
-        return seat ? isSeatSelectable(seat) : false
-      }),
-    )
-  }, [seatMap])
-
-  useEffect(() => {
-    if (!isPanning || !panStartCursor || !panStartOffset) return
-
-    const handleWindowMouseMove = (event: globalThis.MouseEvent) => {
-      setViewport((previous) => ({
-        ...previous,
-        offsetX: panStartOffset.x + (event.clientX - panStartCursor.x),
-        offsetY: panStartOffset.y + (event.clientY - panStartCursor.y),
-      }))
-    }
-
-    const handleWindowMouseUp = () => {
-      setIsPanning(false)
-      setPanStartCursor(null)
-      setPanStartOffset(null)
-    }
-
-    window.addEventListener('mousemove', handleWindowMouseMove)
-    window.addEventListener('mouseup', handleWindowMouseUp)
-    return () => {
-      window.removeEventListener('mousemove', handleWindowMouseMove)
-      window.removeEventListener('mouseup', handleWindowMouseUp)
-    }
-  }, [isPanning, panStartCursor, panStartOffset])
-
-  const selectedSeats = useMemo(
-    () =>
-      (seatMap?.seats ?? [])
-        .filter((seat) => selectedSeatIds.includes(seat.id))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    [seatMap?.seats, selectedSeatIds],
-  )
+  const seatsByZone = useMemo(() => groupSeatsByZone(matrix?.seats ?? []), [matrix?.seats])
 
   const heldSeats = useMemo(
-    () => (seatMap?.seats ?? []).filter((seat) => seat.is_locked_by_me).sort((a, b) => a.label.localeCompare(b.label)),
-    [seatMap?.seats],
-  )
-  const zoneMap = useMemo(() => new Map((matrix?.zones ?? []).map((zone) => [zone.id, zone])), [matrix?.zones])
-  const seatColorMap = useMemo(
     () =>
-      new Map(
-        (matrix?.seats ?? [])
-          .map((seat) => [seat.id, zoneMap.get(seat.zone_id)?.color])
-          .filter((entry): entry is [number, string] => Boolean(entry[1])),
-      ),
-    [matrix?.seats, zoneMap],
+      (matrix?.seats ?? []).filter((seat) => seat.is_locked_by_me).sort((a, b) => a.seat_label.localeCompare(b.seat_label)),
+    [matrix?.seats],
   )
 
-  const subtotal = selectedSeats.reduce((sum, seat) => sum + Number(seat.price), 0)
-  const mappedSeatCount = (seatMap?.seats ?? []).filter((seat) => seat.x !== null && seat.y !== null).length
+  const subtotal = heldSeats.reduce((sum, seat) => sum + Number(seat.price), 0)
 
-  function handleSeatClick(seat: SeatMapSeat) {
-    if (!isSeatSelectable(seat)) return
-    setSelectedSeatIds((previous) => (
-      previous.includes(seat.id)
-        ? previous.filter((seatId) => seatId !== seat.id)
-        : [...previous, seat.id]
-    ))
-  }
+  const handleSeatClick = async (seat: Seat) => {
+    if (seat.status === 'sold') return
+    if (seat.status === 'locked' && !seat.is_locked_by_me) return
+    if (!matrix) return
+    if (pendingSeatIdsRef.current.has(seat.id)) return
 
-  function handleCanvasMouseDown(event: MouseEvent<HTMLDivElement>) {
-    if (event.button !== 0) return
-    if ((event.target as HTMLElement).closest('button')) return
-    event.preventDefault()
-    setIsPanning(true)
-    setPanStartCursor({ x: event.clientX, y: event.clientY })
-    setPanStartOffset({ x: viewport.offsetX, y: viewport.offsetY })
-  }
-
-  function handleCanvasMouseMove(_event: MouseEvent<HTMLDivElement>) {
-    // Customer map only needs drag-to-pan for now.
-  }
-
-  function handleCanvasWheel(event: WheelEvent<HTMLDivElement>) {
-    event.preventDefault()
-    setViewport((previous) => {
-      const nextScale = Math.max(0.75, Math.min(2.5, previous.scale + (event.deltaY < 0 ? 0.12 : -0.12)))
-      return {
-        ...previous,
-        scale: Number(nextScale.toFixed(2)),
-      }
-    })
-  }
-
-  function resetViewport() {
-    setViewport({ scale: 1, offsetX: 0, offsetY: 0 })
-  }
-
-  function navigateToCheckout() {
-    if (!seatMap) return
-    navigate(`/checkout?eventId=${seatMap.event_id}&eventKey=${seatMap.event_slug}`)
-  }
-
-  async function handleProceedToCheckout() {
-    if (!seatMap) return
     if (!isAuthenticated) {
       navigate('/login')
       return
     }
 
-    if (selectedSeatIds.length === 0) {
-      if (heldSeats.length > 0) {
-        navigateToCheckout()
+    pendingSeatIdsRef.current.add(seat.id)
+    setPendingSeatIds((previous) => [...previous, seat.id])
+    try {
+      if (seat.is_locked_by_me) {
+        const message = await releaseSeats(matrix.event_id, [seat.id])
+        setStatusMessage(message)
+      } else {
+        const response = await lockSeats(matrix.event_id, [seat.id], queueToken ?? undefined)
+        if (response.locked_seat_ids.includes(seat.id)) {
+          setStatusMessage(`${seat.seat_label} is held for your checkout.`)
+        } else {
+          setStatusMessage(`${seat.seat_label} was just taken by another customer.`)
+        }
       }
+      await refetch(false)
+    } catch (lockError) {
+      setStatusMessage(lockError instanceof Error ? lockError.message : 'Unable to update seat hold')
+    } finally {
+      pendingSeatIdsRef.current.delete(seat.id)
+      setPendingSeatIds((previous) => previous.filter((id) => id !== seat.id))
+    }
+  }
+
+  const handleCheckout = () => {
+    if (!matrix || heldSeats.length === 0) return
+    if (!isAuthenticated) {
+      navigate('/login')
       return
     }
 
-    try {
-      const response = await lockSeats(seatMap.event_id, selectedSeatIds, queueToken ?? undefined)
-      const lockedSeatIds = response.locked_seat_ids ?? []
-      const failedSeatIds = response.failed_seat_ids ?? []
-      setSelectedSeatIds([])
-      await loadSeatMap({ silent: true })
-
-      if (lockedSeatIds.length > 0) {
-        navigate(`/checkout?eventId=${seatMap.event_id}&eventKey=${seatMap.event_slug}`, {
-          state: { lockedSeatIds },
-        })
-        return
-      }
-
-      setStatusMessage(
-        failedSeatIds.length > 0
-          ? 'Some selected seats are no longer available. Please review the map and try again.'
-          : response.message,
-      )
-    } catch (errorValue) {
-      setStatusMessage(extractApiErrorMessage(errorValue, 'Unable to lock seats'))
-    }
+    navigate(`/checkout?eventId=${matrix.event_id}&eventKey=${matrix.event_slug}`, {
+      state: { lockedSeatIds: heldSeats.map((seat) => seat.id) },
+    })
   }
+
+  const handleSeatUpdates = useCallback(
+    (event: MessageEvent) => {
+      try {
+        const message = JSON.parse(event.data) as { type?: string }
+        if (message.type === 'seat_changes') {
+          void refetch(false)
+        }
+      } catch {
+        // Ignore non-JSON heartbeat responses.
+      }
+    },
+    [refetch],
+  )
+
+  useWebSocketHeartbeat({ url: wsUrl, onMessage: handleSeatUpdates })
 
   if (isLoading) {
     return <GlobalLoader />
@@ -272,28 +173,42 @@ export default function SeatSelection() {
             </Link>
           </div>
 
-          {mappedSeatCount === 0 ? (
-            <div className="rounded-3xl border border-dashed border-amber-500/30 bg-amber-500/10 p-8 text-center text-amber-100">
-              This event does not have mapped seat coordinates yet. Customer seat map cannot be rendered.
-            </div>
-          ) : (
-            <CustomerSeatMap
-              seatMap={seatMap}
-              selectedSeatIds={selectedSeatIds}
-              seatColorMap={seatColorMap}
-              viewport={viewport}
-              canvasRef={canvasRef}
-              isPanning={isPanning}
-              onSeatClick={handleSeatClick}
-              onMouseDown={handleCanvasMouseDown}
-              onMouseMove={handleCanvasMouseMove}
-              onWheel={handleCanvasWheel}
-              onZoomIn={() => setViewport((previous) => ({ ...previous, scale: Math.min(2.5, Number((previous.scale + 0.12).toFixed(2))) }))}
-              onZoomOut={() => setViewport((previous) => ({ ...previous, scale: Math.max(0.75, Number((previous.scale - 0.12).toFixed(2))) }))}
-              onResetView={resetViewport}
-              footer={<span>{seatMap.seat_count} total seats</span>}
-            />
-          )}
+          <div className="space-y-6">
+            {matrix.zones.map((zone: SeatZone) => {
+              const zoneSeats = seatsByZone[zone.id] ?? []
+              return (
+                <div key={zone.id} className="rounded-lg border border-white/10 bg-slate-950/40 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="font-semibold">{zone.name}</h3>
+                      <p className="text-xs text-slate-400">
+                        {zone.code} | ${Number(zone.price).toFixed(2)}
+                      </p>
+                    </div>
+                    <span className="text-xs text-slate-400">{zoneSeats.length} seats</span>
+                  </div>
+
+                  <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                    {zoneSeats.map((seat) => {
+                      const isPending = pendingSeatIds.includes(seat.id)
+                      return (
+                        <button
+                          key={seat.id}
+                          type="button"
+                          onClick={() => void handleSeatClick(seat)}
+                          className={`text-xs px-2 py-1.5 rounded border transition-colors ${seatClass(seat, isPending)}`}
+                          disabled={isPending || seat.status === 'sold' || (seat.status === 'locked' && !seat.is_locked_by_me)}
+                          title={`${seat.seat_label} - $${Number(seat.price).toFixed(2)}`}
+                        >
+                          {seat.seat_label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </section>
 
         <aside className="space-y-4">
@@ -302,8 +217,27 @@ export default function SeatSelection() {
               <MapPin className="h-4 w-4" />
               {seatMap.venue_name}
             </div>
-            <div className="mt-4">
-              <SeatMapLegend zones={matrix?.zones ?? []} />
+
+            <div className="max-h-56 overflow-auto space-y-2">
+              {heldSeats.length === 0 ? (
+                <p className="text-sm text-slate-400">No held seats yet.</p>
+              ) : (
+                heldSeats.map((seat) => (
+                  <div key={seat.id} className="flex items-center justify-between rounded-lg bg-slate-800/60 px-3 py-2">
+                    <div>
+                      <p className="text-sm font-medium">{seat.seat_label}</p>
+                      <p className="text-xs text-slate-400">${Number(seat.price).toFixed(2)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-xs text-primary hover:underline"
+                      onClick={() => void handleSeatClick(seat)}
+                    >
+                      Release
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -321,6 +255,11 @@ export default function SeatSelection() {
               </Button>
             </div>
 
+            <Button className="w-full" onClick={handleCheckout} disabled={heldSeats.length === 0} isLoading={isLocking || isReleasing}>
+              <Ticket className="w-4 h-4" />
+              Continue To Checkout
+            </Button>
+
             {!isAuthenticated && (
               <p className="mt-4 flex items-center gap-2 text-xs text-amber-300">
                 <AlertCircle className="h-4 w-4" />
@@ -334,6 +273,15 @@ export default function SeatSelection() {
                 {statusMessage}
               </p>
             )}
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4 text-xs text-slate-400 space-y-2">
+            <p>Legend:</p>
+            <p>Available: dark button</p>
+            <p>Held by other users: gray</p>
+            <p>Sold: dimmed</p>
+            <p>Held by you: green</p>
+            <p>Updating: blue</p>
           </div>
         </aside>
       </main>

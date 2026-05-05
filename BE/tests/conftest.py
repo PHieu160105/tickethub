@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import sqlalchemy as sa
@@ -22,6 +23,13 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """Create isolated sqlite database per test."""
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", future=True)
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def attach_ticket_rush_schema(dbapi_connection, _) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("ATTACH DATABASE ':memory:' AS ticket_rush")
+        cursor.close()
+
     session_maker = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     async with engine.begin() as conn:

@@ -52,6 +52,14 @@ export const api = axios.create({
 })
 
 type RetryableRequest<T> = () => Promise<{ data: T }>
+type ApiValidationError = {
+  loc?: Array<string | number>
+  msg?: string
+}
+type ApiErrorBody = {
+  detail?: string | ApiValidationError[] | Record<string, unknown>
+  message?: string
+}
 
 function isRetryableError(error: unknown): boolean {
   if (!axios.isAxiosError(error)) return false
@@ -83,10 +91,21 @@ export { withRetry }
 export function extractApiErrorMessage(error: unknown, fallback: string): string {
   if (!axios.isAxiosError(error)) return fallback
 
-  const typedError = error as AxiosError<{ detail?: string; message?: string }>
-  const detailMessage = typedError.response?.data?.detail || typedError.response?.data?.message
+  const typedError = error as AxiosError<ApiErrorBody>
+  const detail = typedError.response?.data?.detail
+  const message = typedError.response?.data?.message
 
-  if (detailMessage) return detailMessage
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        const field = item.loc?.filter((part) => part !== 'body').join('.')
+        return field ? `${field}: ${item.msg ?? 'Invalid value'}` : item.msg ?? 'Invalid value'
+      })
+      .join('; ')
+  }
+  if (message) return message
+
   if (typedError.code === 'ECONNABORTED') return 'Request timed out. Please retry.'
   if (typedError.code === 'ERR_NETWORK') return 'Network issue detected. Please check your connection and retry.'
 

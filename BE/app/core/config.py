@@ -42,12 +42,11 @@ class Settings(BaseSettings):
     @property
     def allowed_origins(self) -> list[str]:
         """CORS origins as a list."""
-
         raw = self.allowed_origins_raw.strip()
         if not raw:
             return ["http://localhost:5173"]
 
-        # Support both JSON array format and comma-separated format.
+        # Accept JSON array format from env, e.g. ["http://localhost:5173","http://127.0.0.1:5173"].
         if raw.startswith("["):
             try:
                 parsed = json.loads(raw)
@@ -56,6 +55,7 @@ class Settings(BaseSettings):
             except json.JSONDecodeError:
                 pass
 
+        # Fallback to comma-separated string format.
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
     @field_validator("debug", mode="before")

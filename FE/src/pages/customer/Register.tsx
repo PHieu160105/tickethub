@@ -27,6 +27,7 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
   const { register } = useAuth()
 
   const calculateAge = (dateOfBirth: string) => {
@@ -48,14 +49,20 @@ export default function Register() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMessage('')
     
     if (!formData.agreeToTerms) {
-      alert('Please agree to the Terms & Conditions')
+      setErrorMessage('Please agree to the Terms & Conditions.')
       return
     }
 
     if (formData.password !== formData.confirmPassword) {
-      alert('Passwords do not match')
+      setErrorMessage('Passwords do not match.')
+      return
+    }
+
+    if (formData.password.length < 8) {
+      setErrorMessage('Password must be at least 8 characters.')
       return
     }
 
@@ -68,7 +75,7 @@ export default function Register() {
       // Force reload to update navbar immediately
       window.location.href = '/'
     } catch (error) {
-      console.error('Registration failed:', error)
+      setErrorMessage(error instanceof Error ? error.message : 'Registration failed. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -240,6 +247,7 @@ export default function Register() {
                         value={formData.password}
                         onChange={handleChange}
                         required
+                        minLength={8}
                       />
                       <button
                         type="button"
@@ -266,6 +274,7 @@ export default function Register() {
                         value={formData.confirmPassword}
                         onChange={handleChange}
                         required
+                        minLength={8}
                       />
                       <button
                         type="button"
@@ -296,6 +305,12 @@ export default function Register() {
                     {' '}and the celestial processing of my personal data.
                   </label>
                 </div>
+
+                {errorMessage && (
+                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                    {errorMessage}
+                  </div>
+                )}
 
                 {/* Submit Button */}
                 <Button

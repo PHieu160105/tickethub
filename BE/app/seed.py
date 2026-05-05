@@ -19,32 +19,37 @@ async def seed_demo_data(session: AsyncSession) -> None:
     # Always ensure demo credentials exist using real domain names accepted by email validator.
     admin = await session.scalar(select(User).where(User.email == "admin@ticketrush.com"))
     if not admin:
-        session.add(
-            User(
-                full_name="TicketRush Admin",
-                email="admin@ticketrush.com",
-                password_hash=hash_password("Admin@123"),
-                role=UserRole.ADMIN,
-                gender=Gender.OTHER,
-                age=30,
-            )
+        admin = User(
+            full_name="TicketRush Admin",
+            email="admin@ticketrush.com",
+            role=UserRole.ADMIN,
+            gender=Gender.OTHER,
+            age=30,
         )
+        session.add(admin)
+    admin.full_name = "TicketRush Admin"
+    admin.password_hash = hash_password("Admin@123")
+    admin.role = UserRole.ADMIN
+    admin.gender = Gender.OTHER
+    admin.age = 30
 
     customer = await session.scalar(select(User).where(User.email == "customer@ticketrush.com"))
     if not customer:
-        session.add(
-            User(
-                full_name="Demo Customer",
-                email="customer@ticketrush.com",
-                password_hash=hash_password("Customer@123"),
-                role=UserRole.CUSTOMER,
-                gender=Gender.FEMALE,
-                age=24,
-            )
+        customer = User(
+            full_name="Demo Customer",
+            email="customer@ticketrush.com",
+            role=UserRole.CUSTOMER,
+            gender=Gender.FEMALE,
+            age=24,
         )
+        session.add(customer)
+    customer.full_name = "Demo Customer"
+    customer.password_hash = hash_password("Customer@123")
+    customer.role = UserRole.CUSTOMER
+    customer.gender = Gender.FEMALE
+    customer.age = 24
 
-    if not admin or not customer:
-        await session.commit()
+    await session.commit()
 
     existing_events = await session.scalar(select(func.count(Event.id)))
     if int(existing_events or 0) > 0:

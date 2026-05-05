@@ -23,7 +23,7 @@ from app.services.booking_service import cancel_ticket, checkout_locked_seats, f
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 
-@router.post("/lock", response_model=LockSeatsResponse, dependencies=[Depends(rate_limit("bookings-lock", times=5, seconds=60))])
+@router.post("/lock", response_model=LockSeatsResponse, dependencies=[Depends(rate_limit("bookings-lock", times=60, seconds=60))])
 async def lock_event_seats(
     payload: LockSeatsRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -40,7 +40,7 @@ async def lock_event_seats(
     )
 
 
-@router.post("/release", response_model=APIMessage, dependencies=[Depends(rate_limit("bookings-release", times=12, seconds=60))])
+@router.post("/release", response_model=APIMessage, dependencies=[Depends(rate_limit("bookings-release", times=60, seconds=60))])
 async def release_event_seats(
     payload: ReleaseSeatsRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -57,7 +57,7 @@ async def release_event_seats(
     return APIMessage(detail=f"Released {released_count} seats")
 
 
-@router.post("/checkout", response_model=CheckoutResponse, dependencies=[Depends(rate_limit("bookings-checkout", times=5, seconds=60))])
+@router.post("/checkout", response_model=CheckoutResponse, dependencies=[Depends(rate_limit("bookings-checkout", times=10, seconds=60))])
 async def checkout(
     payload: CheckoutRequest,
     session: AsyncSession = Depends(get_db_session),

@@ -2,7 +2,7 @@
  * Custom hook for events data fetching
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { EventCard, EventDetail, SeatMatrixResponse } from '../../../types'
 import { eventsApi } from '../api/eventsApi'
 
@@ -82,32 +82,48 @@ interface UseEventSeatsState {
   error: string | null
 }
 
-export function useEventSeats(eventKey?: string) {
+export function useEventSeats(eventKey?: string, options?: { pollIntervalMs?: number }) {
   const [state, setState] = useState<UseEventSeatsState>({
     seats: null,
     isLoading: false,
     error: null,
   })
+  const hasLoadedRef = useRef(false)
+  const pollIntervalMs = options?.pollIntervalMs ?? 0
 
-  const fetchSeats = useCallback(async () => {
+  const fetchSeats = useCallback(async (showLoading = true) => {
     if (!eventKey) return
 
-    setState((prev) => ({ ...prev, isLoading: true, error: null }))
+    if (showLoading) {
+      setState((prev) => ({ ...prev, isLoading: true, error: null }))
+    }
     try {
       const seats = await eventsApi.seats(eventKey)
+      hasLoadedRef.current = true
       setState({ seats, isLoading: false, error: null })
     } catch (error) {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch seats',
+        error: hasLoadedRef.current ? prev.error : error instanceof Error ? error.message : 'Failed to fetch seats',
       }))
     }
   }, [eventKey])
 
   useEffect(() => {
-    fetchSeats()
+    hasLoadedRef.current = false
+    void fetchSeats(true)
   }, [fetchSeats])
+
+  useEffect(() => {
+    if (!eventKey || pollIntervalMs <= 0) return
+
+    const intervalId = window.setInterval(() => {
+      void fetchSeats(false)
+    }, pollIntervalMs)
+
+    return () => window.clearInterval(intervalId)
+  }, [eventKey, fetchSeats, pollIntervalMs])
 
   return { ...state, refetch: fetchSeats }
 }

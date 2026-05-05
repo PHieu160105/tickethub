@@ -6,9 +6,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
-import type { EventCard, EventStatus, SeatZone, VenueLayoutItem, VenueSummary } from '@/types'
-import { Calendar, Edit, Filter, MapPin, Search, Trash2, Users, LayoutGrid, Palette, Plus, Check, Loader2, Wand2 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import type { EventCard, EventStatus, SeatZone } from '@/types'
+import { Calendar, Edit, Filter, MapPin, Search, Trash2, Users, LayoutGrid, Palette, Plus, Check, Loader2 } from 'lucide-react'
 import { Listbox } from '@headlessui/react';
 
 interface EventFormState {
@@ -816,7 +815,6 @@ export default function AdminEvents() {
                   placeholder="#024ddf"
                   className="flex-1"
                 />
-                
               </div>
             </div>
           </div>
@@ -834,6 +832,8 @@ export default function AdminEvents() {
     </div>
   )
 }
+
+
 
 
 
