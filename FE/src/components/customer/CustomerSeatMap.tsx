@@ -1,4 +1,5 @@
 import type { MouseEventHandler, ReactNode, RefObject, WheelEventHandler } from 'react'
+import { useState } from 'react'
 import { Maximize2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
@@ -9,11 +10,11 @@ function isSeatBlocked(seat: SeatMapSeat) {
 }
 
 function seatClassName(seat: SeatMapSeat, isSelected: boolean) {
-  if (seat.status === 'sold') return 'bg-slate-700 border-slate-500 text-slate-300'
-  if (seat.status === 'locked' && !seat.is_locked_by_me) return 'bg-amber-900/70 border-amber-500 text-amber-200'
-  if (seat.is_locked_by_me) return 'bg-emerald-700 border-emerald-400 text-white'
-  if (isSelected) return 'bg-slate-800 border-white/20 text-white'
-  return 'bg-slate-800 border-white/20 text-white'
+  if (seat.status === 'sold') return 'bg-slate-700 border-slate-500'
+  if (seat.status === 'locked' && !seat.is_locked_by_me) return 'bg-amber-900/70 border-amber-500'
+  if (seat.is_locked_by_me) return 'bg-emerald-700 border-emerald-400'
+  if (isSelected) return 'bg-slate-800 border-white/20'
+  return 'bg-slate-800 border-white/20'
 }
 
 function seatInlineStyle(sectionColor?: string, isSelected = false) {
@@ -28,6 +29,14 @@ function polygonPoints(points: SeatMapPolygon['points']) {
   return points.map((point) => `${point.x},${point.y}`).join(' ')
 }
 
+function computeCentroid(points: SeatMapPolygon['points']) {
+  if (points.length === 0) return { x: 50, y: 50 }
+  return {
+    x: points.reduce((s, p) => s + p.x, 0) / points.length,
+    y: points.reduce((s, p) => s + p.y, 0) / points.length,
+  }
+}
+
 interface CustomerSeatMapProps {
   seatMap: SeatMapResponse
   selectedSeatIds: number[]
@@ -36,6 +45,7 @@ interface CustomerSeatMapProps {
   canvasRef: RefObject<HTMLDivElement | null>
   isPanning: boolean
   footer?: ReactNode
+  seatSize?: number
   onSeatClick: (seat: SeatMapSeat) => void
   onMouseDown: MouseEventHandler<HTMLDivElement>
   onMouseMove: MouseEventHandler<HTMLDivElement>
@@ -53,6 +63,7 @@ export function CustomerSeatMap({
   canvasRef,
   isPanning,
   footer,
+  seatSize = 1.8,
   onSeatClick,
   onMouseDown,
   onMouseMove,
@@ -66,6 +77,7 @@ export function CustomerSeatMap({
   const aspectRatio = `${seatMap.background?.width ?? 1000} / ${seatMap.background?.height ?? 600}`
   const backgroundSource = seatMap.background?.source
   const isInlineSvg = Boolean(backgroundSource && backgroundSource.includes('<svg'))
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null)
 
   return (
     <div className="space-y-4">
@@ -146,10 +158,26 @@ export function CustomerSeatMap({
                 )
               })}
             </svg>
+            {seatMap.polygons.map((polygon) => {
+              const section = seatMap.sections.find((item) => item.id === polygon.section_id)
+              const centroid = computeCentroid(polygon.points)
+              if (!polygon.section_name && !polygon.label) return null
+              return (
+                <div
+                  key={`clabel-${polygon.id}`}
+                  className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded px-2 py-0.5 text-[9px] font-bold whitespace-nowrap"
+                  style={{ left: `${centroid.x}%`, top: `${centroid.y}%`, backgroundColor: section?.color ? `${section.color}cc` : 'rgba(0,0,0,0.6)', color: '#fff' }}
+                >
+                  {polygon.section_name ?? polygon.label}
+                </div>
+              )
+            })}
 
             {visibleSeats.map((seat) => {
               const isSelected = selectedSeatIds.includes(seat.id)
               const seatColor = seatColorMap?.get(seat.id) ?? seatMap.sections.find((item) => item.id === seat.section_id)?.color
+              const priceLabel = Number(seat.price).toLocaleString('vi-VN')
+              const tooltipContent = `${seat.label} · ${seat.section_name ?? 'General'} · ${priceLabel}đ`
               return (
                 <button
                   key={seat.id}
@@ -159,20 +187,29 @@ export function CustomerSeatMap({
                     if (isSeatBlocked(seat)) return
                     onSeatClick(seat)
                   }}
+                  onMouseEnter={(e) => setTooltip({ x: e.clientX, y: e.clientY, content: tooltipContent })}
+                  onMouseLeave={() => setTooltip(null)}
                   disabled={isSeatBlocked(seat)}
-                  className={`absolute z-10 flex h-8 min-w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border px-2 text-[10px] font-bold transition ${seatClassName(seat, isSelected)}`}
+                  className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border transition ${seatClassName(seat, isSelected)}`}
                   style={{
                     left: `${seat.x}%`,
                     top: `${seat.y}%`,
                     transform: `translate(-50%, -50%) rotate(${seat.rotation}deg)`,
+                    width: `${seatSize}%`,
+                    aspectRatio: '1',
                     ...seatInlineStyle(seatColor, isSelected),
                   }}
-                  title={`${seat.label} · ${seat.section_name ?? 'General'} · $${Number(seat.price).toFixed(2)}`}
-                >
-                  {seat.label}
-                </button>
+                />
               )
             })}
+            {tooltip && (
+              <div
+                className="pointer-events-none fixed z-[9999] max-w-[220px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 shadow-2xl"
+                style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}
+              >
+                {tooltip.content}
+              </div>
+            )}
           </div>
         </div>
 

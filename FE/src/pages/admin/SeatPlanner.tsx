@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from 'react'
 import { Copy, FileUp, Hand, MapPin, MousePointer2, Plus, Redo2, RefreshCw, Save, Shapes, Ticket, Trash2, Undo2, Wand2 } from 'lucide-react'
+
+function computeCentroid(points: { x: number; y: number }[]) {
+    if (points.length === 0) return { x: 50, y: 50 }
+    return {
+        x: points.reduce((s, p) => s + p.x, 0) / points.length,
+        y: points.reduce((s, p) => s + p.y, 0) / points.length,
+    }
+}
 import { useParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/Button'
@@ -22,7 +30,7 @@ const DEFAULT_SINGLE_FORM = {
 
 const DEFAULT_BULK_FORM = {
     zone_id: '',
-    pattern: 'straight' as 'straight' | 'arc',
+    pattern: 'straight' as 'straight' | 'arc' | 'zigzag',
     rows: '4',
     cols: '6',
     gap_x: '4',
@@ -66,6 +74,7 @@ export default function AdminSeatPlanner() {
     const savedPolygonsRef = useRef<SeatMapPolygon[]>([])
     const tempSeatIdRef = useRef(-1)
     const tempPolygonIdRef = useRef(-1)
+    const suppressNextCanvasClickRef = useRef(false)
 
     const [eventDetail, setEventDetail] = useState<EventDetail | null>(null)
     const [matrix, setMatrix] = useState<SeatMatrixResponse | null>(null)
@@ -106,6 +115,9 @@ export default function AdminSeatPlanner() {
     const [historyPast, setHistoryPast] = useState<Array<{ seatMapSeats: SeatMapSeat[]; matrixSeats: Seat[]; polygons: SeatMapPolygon[]; deletedSeatIds: number[]; deletedPolygonIds: number[]; selectedSeatIds: number[] }>>([])
     const [historyFuture, setHistoryFuture] = useState<Array<{ seatMapSeats: SeatMapSeat[]; matrixSeats: Seat[]; polygons: SeatMapPolygon[]; deletedSeatIds: number[]; deletedPolygonIds: number[]; selectedSeatIds: number[] }>>([])
     const [plannerBackground, setPlannerBackground] = useState<string | null>(null)
+    const [seatSize, setSeatSize] = useState(1.5)
+    const [snapToGrid, setSnapToGrid] = useState(false)
+    const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null)
 
     const currentZone = useMemo(
         () => zones.find((zone) => zone.id === selectedZoneId) ?? zones[0] ?? null,
@@ -317,12 +329,18 @@ export default function AdminSeatPlanner() {
         })
     }, [selectedSeat, selectedSeatIds.length, matrix?.seats])
 
+    function applySnap(value: number) {
+        if (!snapToGrid) return value
+        return Math.round(value / 5) * 5
+    }
+
     function handleCanvasClick(event: MouseEvent<HTMLDivElement>) {
-        if (draggingSeatId !== null || draggingPolygonBody) return
+        if (draggingSeatId !== null || draggingPolygonBody || draggingPolygonPointIndex !== null) return
+        if (suppressNextCanvasClickRef.current) { suppressNextCanvasClickRef.current = false; return }
         const rect = event.currentTarget.getBoundingClientRect()
         if (rect.width <= 0 || rect.height <= 0) return
-        const x = Math.max(0, Math.min(100, (((event.clientX - rect.left - viewport.offsetX) / viewport.scale) / rect.width) * 100))
-        const y = Math.max(0, Math.min(100, (((event.clientY - rect.top - viewport.offsetY) / viewport.scale) / rect.height) * 100))
+        const x = applySnap(Math.max(0, Math.min(100, (((event.clientX - rect.left - viewport.offsetX) / viewport.scale) / rect.width) * 100)))
+        const y = applySnap(Math.max(0, Math.min(100, (((event.clientY - rect.top - viewport.offsetY) / viewport.scale) / rect.height) * 100)))
         if (plannerTool === 'polygon') {
             setDraftPolygonPoints((previous) => [...previous, { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) }])
             return
@@ -618,6 +636,13 @@ export default function AdminSeatPlanner() {
             for (let row = 0; row < rows; row += 1) {
                 for (let col = 0; col < cols; col += 1) {
                     tryPushSeat(row, col, startX + col * gapX, startY + row * gapY)
+                }
+            }
+        } else if (bulkForm.pattern === 'zigzag') {
+            for (let row = 0; row < rows; row += 1) {
+                const offset = row % 2 === 1 ? gapX / 2 : 0
+                for (let col = 0; col < cols; col += 1) {
+                    tryPushSeat(row, col, startX + offset + col * gapX, startY + row * gapY)
                 }
             }
         } else {
@@ -1219,6 +1244,8 @@ export default function AdminSeatPlanner() {
                             onZoomIn={() => zoomCanvas(1.1)}
                             onZoomOut={() => zoomCanvas(0.9)}
                             cursorClassName={plannerTool === 'pan' ? 'cursor-grab' : plannerTool === 'select' ? 'cursor-pointer' : 'cursor-crosshair'}
+                            gridSize={snapToGrid ? '5% 5%' : '10% 10%'}
+                            aspectRatio={seatMap.background?.width && seatMap.background.height ? seatMap.background.width / seatMap.background.height : undefined}
                             toolbar={
                                 <div className="flex flex-wrap items-center gap-2 text-white">
                                     <Button size="icon" variant={plannerTool === 'single' ? 'primary' : 'outline'} onClick={() => { setSelectedSeatIds([]); setEditingSeatId(null); setPlannerTool('single') }} title="Thêm một ghế">
@@ -1236,12 +1263,23 @@ export default function AdminSeatPlanner() {
                                     <Button size="icon" variant={plannerTool === 'pan' ? 'primary' : 'outline'} onClick={() => setPlannerTool('pan')} title="Kéo sơ đồ">
                                         <Hand className="h-4 w-4" />
                                     </Button>
+                                    <Button variant={snapToGrid ? 'primary' : 'outline'} onClick={() => setSnapToGrid((v) => !v)}>
+                                        Bám lưới {snapToGrid ? 'Bật' : 'Tắt'}
+                                    </Button>
                                     <Button size="icon" variant="outline" onClick={handleUndo} disabled={historyPast.length === 0} title="Hoàn tác">
                                         <Undo2 className="h-4 w-4" />
                                     </Button>
                                     <Button size="icon" variant="outline" onClick={handleRedo} disabled={historyFuture.length === 0} title="Làm lại">
                                         <Redo2 className="h-4 w-4" />
                                     </Button>
+                                    <Button variant="ghost" onClick={() => setViewport({ scale: 1, offsetX: 0, offsetY: 0 })}>
+                                        Đặt lại góc nhìn
+                                    </Button>
+                                    {plannerTool === 'polygon' && (
+                                        <Button variant="ghost" onClick={() => (editingPolygonId ? cancelPolygonEditing() : setDraftPolygonPoints([]))}>
+                                            {editingPolygonId ? 'Thoát chỉnh polygon' : 'Xóa điểm nháp'}
+                                        </Button>
+                                    )}
                                     <Button variant={plannerDirty ? 'primary' : 'outline'} onClick={() => void handleSavePlannerChanges()} disabled={!plannerDirty || busySingle}>
                                         <Save className="h-4 w-4" /> Lưu thay đổi
                                     </Button>
@@ -1268,6 +1306,11 @@ export default function AdminSeatPlanner() {
                                             }}
                                         />
                                     </label>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-300">Ghế:</span>
+                                        <input type="range" min="0.5" max="4" step="0.1" value={seatSize} onChange={(e) => setSeatSize(Number(e.target.value))} className="w-20 accent-brand-red" />
+                                        <span className="text-xs text-slate-300 w-8">{seatSize}%</span>
+                                    </div>
                                 </div>
                             }
                             footerLeft={null}
@@ -1280,19 +1323,36 @@ export default function AdminSeatPlanner() {
                                         <img src={plannerBackground} alt="Seat planner background" className="absolute inset-0 h-full w-full object-contain opacity-80 pointer-events-none" />
                                     )
                                 )}
-                            {seatMap.polygons.map((polygon) => (
-                                <svg key={polygon.id} className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                    <polygon
-                                        points={(editingPolygonId === polygon.id ? polygonPoints(draftPolygonPoints) : polygonPoints(polygon.points))}
-                                        onMouseDown={(event) => handlePolygonMouseDown(event, polygon)}
-                                        onClick={(event) => event.stopPropagation()}
-                                        fill={editingPolygonId === polygon.id ? 'rgba(56, 189, 248, 0.18)' : 'rgba(252, 211, 77, 0.16)'}
-                                        stroke={editingPolygonId === polygon.id ? 'rgba(56, 189, 248, 0.95)' : 'rgba(252, 211, 77, 0.9)'}
-                                        strokeWidth={editingPolygonId === polygon.id ? '0.5' : '0.35'}
-                                        className={editingPolygonId === polygon.id ? 'cursor-move' : 'cursor-pointer'}
-                                    />
-                                </svg>
-                            ))}
+                            {seatMap.polygons.map((polygon) => {
+                                const polySection = seatMap.sections.find((s) => s.id === polygon.section_id)
+                                const polyColor = polySection?.color ?? '#fbbf24'
+                                const polyPts = editingPolygonId === polygon.id ? draftPolygonPoints : polygon.points
+                                const centroid = computeCentroid(polyPts)
+                                return (
+                                    <>
+                                        <svg key={polygon.id} className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                            <polygon
+                                                points={polygonPoints(polyPts)}
+                                                onMouseDown={(event) => handlePolygonMouseDown(event, polygon)}
+                                                onClick={(event) => event.stopPropagation()}
+                                                fill={editingPolygonId === polygon.id ? 'rgba(56, 189, 248, 0.18)' : `${polyColor}33`}
+                                                stroke={editingPolygonId === polygon.id ? 'rgba(56, 189, 248, 0.95)' : `${polyColor}dd`}
+                                                strokeWidth={editingPolygonId === polygon.id ? '0.5' : '0.35'}
+                                                className={editingPolygonId === polygon.id ? 'cursor-move' : 'cursor-pointer'}
+                                            />
+                                        </svg>
+                                        {(polygon.section_name ?? polygon.label) && (
+                                            <div
+                                                key={`clabel-${polygon.id}`}
+                                                className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded bg-black/60 px-2 py-0.5 text-[9px] font-semibold text-white whitespace-nowrap"
+                                                style={{ left: `${centroid.x}%`, top: `${centroid.y}%` }}
+                                            >
+                                                {polygon.section_name ?? polygon.label}
+                                            </div>
+                                        )}
+                                    </>
+                                )
+                            })}
 
                             {draftPolygonPoints.length >= 1 && (
                                 <svg className="absolute inset-0 h-full w-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -1313,6 +1373,8 @@ export default function AdminSeatPlanner() {
                                         event.preventDefault()
                                         event.stopPropagation()
                                         if (editingPolygonId !== null) {
+                                            pushHistorySnapshot()
+                                            suppressNextCanvasClickRef.current = true
                                             setDraggingPolygonPointIndex(index)
                                         }
                                     }}
@@ -1333,12 +1395,11 @@ export default function AdminSeatPlanner() {
                                         key={seat.id}
                                         type="button"
                                         onMouseDown={(event) => handleSeatPointerDown(event, seat)}
-                                        className={`absolute flex h-7 min-w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border px-2 text-[10px] font-semibold shadow-lg ${seatColor(seat)}`}
-                                        style={{ left: `${seatPositionMap.get(seat.id)?.x ?? seat.x}%`, top: `${seatPositionMap.get(seat.id)?.y ?? seat.y}%`, transform: `translate(-50%, -50%) rotate(${seat.rotation}deg)`, ...seatStyle(seat), boxShadow: selectedSeatIds.includes(seat.id) ? '0 0 0 3px rgba(59,130,246,0.35)' : undefined }}
-                                        title={`${seat.label} · ${seat.section_name ?? 'Chưa gán khu'} · ${seat.is_admin_locked ? 'Admin khóa' : Number(seat.price).toFixed(2)}`}
-                                    >
-                                        {seat.label}
-                                    </button>
+                                        onMouseEnter={(event) => setTooltip({ x: event.clientX, y: event.clientY, content: `${seat.label} · ${seat.section_name ?? 'Chưa gán khu'} · ${seat.is_admin_locked ? 'Admin khóa' : Number(seat.price).toLocaleString('vi-VN')}` })}
+                                        onMouseLeave={() => setTooltip(null)}
+                                        className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-lg ${seatColor(seat)}`}
+                                        style={{ left: `${seatPositionMap.get(seat.id)?.x ?? seat.x}%`, top: `${seatPositionMap.get(seat.id)?.y ?? seat.y}%`, transform: `translate(-50%, -50%) rotate(${seat.rotation}deg)`, width: `${seatSize}%`, aspectRatio: '1', ...seatStyle(seat), boxShadow: selectedSeatIds.includes(seat.id) ? '0 0 0 3px rgba(59,130,246,0.35)' : undefined }}
+                                    />
                                 ))}
 
                             {singleForm.x && singleForm.y && (
@@ -1360,6 +1421,14 @@ export default function AdminSeatPlanner() {
                                 />
                             )}
                         </InteractiveSeatCanvas>
+                        {tooltip && (
+                            <div
+                                className="pointer-events-none fixed z-[9999] max-w-xs rounded-lg border border-white/20 bg-slate-900 px-3 py-2 text-xs text-white shadow-2xl"
+                                style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}
+                            >
+                                {tooltip.content}
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -1534,9 +1603,10 @@ export default function AdminSeatPlanner() {
                                     <select
                                         className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 px-3 text-white outline-none"
                                         value={bulkForm.pattern}
-                                        onChange={(event) => setBulkForm({ ...bulkForm, pattern: event.target.value as 'straight' | 'arc' })}
+                                        onChange={(event) => setBulkForm({ ...bulkForm, pattern: event.target.value as 'straight' | 'arc' | 'zigzag' })}
                                     >
                                         <option value="straight">Hàng thẳng</option>
+                                        <option value="zigzag">Zigzag</option>
                                         <option value="arc">Cung tròn</option>
                                     </select>
                                 </div>

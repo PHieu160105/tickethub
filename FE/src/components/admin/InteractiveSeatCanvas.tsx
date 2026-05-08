@@ -19,6 +19,9 @@ interface InteractiveSeatCanvasProps {
     onMouseMove?: MouseEventHandler<HTMLDivElement>
     onWheel?: WheelEventHandler<HTMLDivElement>
     onClick?: MouseEventHandler<HTMLDivElement>
+    /** When provided, canvas height is driven by CSS aspect-ratio (preferred).
+     *  Falls back to heightClassName if omitted. */
+    aspectRatio?: number
     heightClassName?: string
     gridSize?: string
 }
@@ -38,6 +41,7 @@ export function InteractiveSeatCanvas({
     onMouseMove,
     onWheel,
     onClick,
+    aspectRatio,
     heightClassName = 'h-[680px]',
     gridSize = '10% 10%',
 }: InteractiveSeatCanvasProps) {
@@ -55,7 +59,12 @@ export function InteractiveSeatCanvas({
                 onMouseMove={onMouseMove}
                 onWheel={onWheel}
                 onClick={onClick}
-                className={cn('relative overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-inner', heightClassName, cursorClassName)}
+                className={cn(
+                    'relative overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-inner',
+                    aspectRatio ? '' : (heightClassName ?? 'h-[680px]'),
+                    cursorClassName,
+                )}
+                style={aspectRatio ? { aspectRatio: String(aspectRatio) } : undefined}
             >
                 <div className="absolute left-4 top-4 z-20 rounded-xl border border-slate-300 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-lg backdrop-blur">
                     <div>X: <span className="font-semibold text-slate-900">{cursor?.x.toFixed(2) ?? '--'}</span></div>

@@ -50,10 +50,8 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
           <NavLink
             key={href}
             to={href}
-            className={() => {
-              // Override isActive logic for exact matching
-              const isActuallyActive = isActiveLink(href, exact ?? false);
-              return cn(
+            className={() =>
+              cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
                 isActiveLink(href, exact ?? false)
                   ? 'bg-brand-red/10 text-brand-red border border-brand-red/20'

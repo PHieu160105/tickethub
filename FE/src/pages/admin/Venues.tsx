@@ -87,6 +87,13 @@ function isSvgMarkup(value: string | null) {
     return Boolean(value && value.slice(0, 500).toLowerCase().includes('<svg'))
 }
 
+function computeCentroid(points: { x: number; y: number }[]) {
+    if (points.length === 0) return { x: 50, y: 50 }
+    const x = points.reduce((sum, p) => sum + p.x, 0) / points.length
+    const y = points.reduce((sum, p) => sum + p.y, 0) / points.length
+    return { x, y }
+}
+
 function renderBackgroundPreview(source: string | null) {
     if (!source) {
         return <div className="text-sm text-slate-400">Chưa có dữ liệu background.</div>
@@ -171,6 +178,8 @@ export default function AdminVenues() {
     const [builderDirty, setBuilderDirty] = useState(false)
     const [pendingDeletedSeatIds, setPendingDeletedSeatIds] = useState<number[]>([])
     const [pendingDeletedPolygonIds, setPendingDeletedPolygonIds] = useState<number[]>([])
+    const [seatSize, setSeatSize] = useState(1.5)
+    const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null)
 
     const selectedLayout = useMemo(
         () => layouts.find((layout) => layout.id === selectedLayoutId) ?? null,
@@ -2021,6 +2030,7 @@ export default function AdminVenues() {
                                     onZoomOut={() => zoomCanvas(0.9)}
                                     cursorClassName={placementMode === 'polygon' ? 'cursor-cell' : placementMode === 'pan' ? 'cursor-grab' : 'cursor-crosshair'}
                                     gridSize={snapToGrid ? '5% 5%' : '10% 10%'}
+                                    aspectRatio={selectedVenue ? selectedVenue.width / selectedVenue.height : undefined}
                                     toolbar={
                                         <div className="flex flex-wrap items-center gap-2 text-white">
                                             <Button size="icon" variant={activeBuilderPanel === 'seat' ? 'primary' : 'outline'} onClick={() => { resetSeatForm(); setSelectedSeatIds([]); setActiveBuilderPanel('seat'); setPlacementMode('seat') }} title="Thêm một ghế">
@@ -2055,6 +2065,30 @@ export default function AdminVenues() {
                                                     {editingPolygonId ? 'Thoát chỉnh polygon' : 'Xóa điểm nháp'}
                                                 </Button>
                                             )}
+                                            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15" title="Nhập file nền SVG/ảnh">
+                                                <FileUp className="h-4 w-4" />
+                                                Đổi nền
+                                                <input
+                                                    type="file"
+                                                    accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp"
+                                                    className="hidden"
+                                                    onChange={(event) => { const file = event.target.files?.[0]; if (file) handleBackgroundFileChange(file) }}
+                                                />
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-slate-300">Ghế:</span>
+                                                <input
+                                                    type="range"
+                                                    min="0.5"
+                                                    max="4"
+                                                    step="0.1"
+                                                    value={seatSize}
+                                                    onChange={(event) => setSeatSize(Number(event.target.value))}
+                                                    className="w-20 accent-brand-red"
+                                                    title={`Kích thước ghế: ${seatSize}%`}
+                                                />
+                                                <span className="text-xs text-slate-300 w-8">{seatSize}%</span>
+                                            </div>
                                             <Button variant={builderDirty ? 'primary' : 'outline'} onClick={() => void handleSaveBuilderChanges()} disabled={!builderDirty || builderBusy}>
                                                 <Save className="h-4 w-4" /> Lưu thay đổi
                                             </Button>
@@ -2081,19 +2115,36 @@ export default function AdminVenues() {
                                             )
                                         )}
 
-                                        {venuePolygons.map((polygon) => (
-                                            <svg key={polygon.id} className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                                <polygon
-                                                    points={(editingPolygonId === polygon.id ? draftPolygonPoints : polygon.points).map((point) => `${point.x},${point.y}`).join(' ')}
-                                                    onMouseDown={(event) => handlePolygonMouseDown(event, polygon)}
-                                                    onClick={(event) => event.stopPropagation()}
-                                                    fill={editingPolygonId === polygon.id ? 'rgba(56, 189, 248, 0.18)' : 'rgba(252, 211, 77, 0.16)'}
-                                                    stroke={editingPolygonId === polygon.id ? 'rgba(56, 189, 248, 0.95)' : 'rgba(252, 211, 77, 0.9)'}
-                                                    strokeWidth={editingPolygonId === polygon.id ? '0.5' : '0.35'}
-                                                    className={editingPolygonId === polygon.id ? 'cursor-move' : 'cursor-pointer'}
-                                                />
-                                            </svg>
-                                        ))}
+                                        {venuePolygons.map((polygon) => {
+                                            const polySection = polygon.section_id ? sectionMap.get(polygon.section_id) : undefined
+                                            const polyColor = polySection?.color ?? '#fbbf24'
+                                            const polyPts = editingPolygonId === polygon.id ? draftPolygonPoints : polygon.points
+                                            const centroid = computeCentroid(polyPts)
+                                            return (
+                                                <>
+                                                    <svg key={polygon.id} className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                                        <polygon
+                                                            points={polyPts.map((point) => `${point.x},${point.y}`).join(' ')}
+                                                            onMouseDown={(event) => handlePolygonMouseDown(event, polygon)}
+                                                            onClick={(event) => event.stopPropagation()}
+                                                            fill={editingPolygonId === polygon.id ? 'rgba(56, 189, 248, 0.18)' : `${polyColor}33`}
+                                                            stroke={editingPolygonId === polygon.id ? 'rgba(56, 189, 248, 0.95)' : `${polyColor}dd`}
+                                                            strokeWidth={editingPolygonId === polygon.id ? '0.5' : '0.35'}
+                                                            className={editingPolygonId === polygon.id ? 'cursor-move' : 'cursor-pointer'}
+                                                        />
+                                                    </svg>
+                                                    {(polygon.section_name ?? polygon.label) && (
+                                                        <div
+                                                            key={`clabel-${polygon.id}`}
+                                                            className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded bg-black/60 px-2 py-0.5 text-[9px] font-semibold text-white whitespace-nowrap"
+                                                            style={{ left: `${centroid.x}%`, top: `${centroid.y}%` }}
+                                                        >
+                                                            {polygon.section_name ?? polygon.label}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )
+                                        })}
 
                                         {draftPolygonPoints.length >= 1 && (
                                             <svg className="absolute inset-0 h-full w-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -2147,18 +2198,19 @@ export default function AdminVenues() {
                                                 key={seat.id}
                                                 type="button"
                                                 onMouseDown={(event) => handleSeatPointerDown(event, seat)}
-                                                className={`absolute flex h-7 min-w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border px-2 text-[10px] font-semibold text-white shadow-lg transition-transform ${selectedSeatIds.includes(seat.id) || editingSeatId === seat.id ? 'ring-2 ring-brand-yellow/50' : ''} ${draggingSeatId === seat.id ? 'scale-110 cursor-grabbing' : 'cursor-grab'}`}
+                                                onMouseEnter={(event) => setTooltip({ x: event.clientX, y: event.clientY, content: `${seat.label} · ${seat.section_name ?? 'Chưa gán'}${seat.is_admin_locked ? ' · 🔒' : ''}` })}
+                                                onMouseLeave={() => setTooltip(null)}
+                                                className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-lg transition-transform ${selectedSeatIds.includes(seat.id) || editingSeatId === seat.id ? 'ring-2 ring-brand-yellow/50' : ''} ${draggingSeatId === seat.id ? 'scale-110 cursor-grabbing' : 'cursor-grab'}`}
                                                 style={{
                                                     left: `${seatPositionMap.get(seat.id)?.x ?? seat.x ?? 0}%`,
                                                     top: `${seatPositionMap.get(seat.id)?.y ?? seat.y ?? 0}%`,
                                                     transform: `translate(-50%, -50%) rotate(${seat.rotation}deg)`,
+                                                    width: `${seatSize}%`,
+                                                    aspectRatio: '1',
                                                     backgroundColor: seat.is_admin_locked ? '#be123ccc' : `${sectionMap.get(seat.section_id ?? -1)?.color ?? '#1e293b'}cc`,
                                                     borderColor: seat.is_admin_locked ? '#fb7185' : (sectionMap.get(seat.section_id ?? -1)?.color ?? 'rgba(255,255,255,0.2)'),
                                                 }}
-                                                title={`${seat.label} · ${seat.section_name ?? 'Chưa gán khu vực'}${seat.is_admin_locked ? ' · Admin khóa' : ''}`}
-                                            >
-                                                {seat.label}
-                                            </button>
+                                            />
                                         ))}
 
                                         <div
@@ -2167,6 +2219,14 @@ export default function AdminVenues() {
                                             title="Seat target"
                                         />
                                 </InteractiveSeatCanvas>
+                                {tooltip && (
+                                    <div
+                                        className="pointer-events-none fixed z-[9999] max-w-xs rounded-lg border border-white/20 bg-slate-900 px-3 py-2 text-xs text-white shadow-2xl"
+                                        style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}
+                                    >
+                                        {tooltip.content}
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
 

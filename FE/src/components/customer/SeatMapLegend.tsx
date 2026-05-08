@@ -3,7 +3,7 @@ import { CheckCircle2, Clock3, Lock } from 'lucide-react'
 import type { SeatZone } from '@/types'
 
 interface SeatMapLegendProps {
-  zones: SeatZone[]
+  zones?: SeatZone[]
 }
 
 const stateItems = [
@@ -30,7 +30,7 @@ const stateItems = [
   },
 ]
 
-export function SeatMapLegend({ zones }: SeatMapLegendProps) {
+export function SeatMapLegend({ zones = [] }: SeatMapLegendProps) {
   return (
     <div className="space-y-4">
       <div>
