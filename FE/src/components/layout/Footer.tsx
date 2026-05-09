@@ -1,17 +1,17 @@
-import { Container } from './Container';
+﻿import { Container } from './Container';
 import { CreditCard, Smartphone, } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const footerLinks = {
-  'Về chúng tôi': ['/about', '/careers', '/press', '/blog'],
-  'Hỗ trợ': ['/help-center', '/refund-policy', '/contact', '/faq'],
-  'Thể loại': ['/concerts', '/sports', '/theater', '/festivals'],
-  'Hợp tác': ['/organizer-portal', '/advertising', '/partners', '/api'],
+  'Vá» chÃºng tÃ´i': ['/about', '/careers', '/press', '/blog'],
+  'Há»— trá»£': ['/help-center', '/refund-policy', '/contact', '/faq'],
+  'Thá»ƒ loáº¡i': ['/concerts', '/sports', '/theater', '/festivals'],
+  'Há»£p tÃ¡c': ['/organizer-portal', '/advertising', '/partners', '/api'],
 };
 
 export function Footer() {
   return (
-    <footer className="bg-space-950 border-t border-white/10 mt-auto">
+    <footer className="customer-footer-bg border-t customer-border mt-auto">
       <Container className="py-12">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
           {/* Brand Column */}
@@ -20,13 +20,13 @@ export function Footer() {
               <span className="text-brand-red">Ticket</span>
               <span className="text-brand-yellow">Rush</span>
             </span>
-            <p className="mt-2 text-sm text-gray-400">
-              Nền tảng phân phối vé điện tử hàng đầu. Trải nghiệm sự kiện theo cách của bạn.
+            <p className="mt-2 text-sm customer-text-muted">
+              Ná»n táº£ng phÃ¢n phá»‘i vÃ© Ä‘iá»‡n tá»­ hÃ ng Ä‘áº§u. Tráº£i nghiá»‡m sá»± kiá»‡n theo cÃ¡ch cá»§a báº¡n.
             </p>
             {/* <div className="flex gap-3 mt-4">
               {[Instagram, Twitter, Youtube].map((Icon, i) => (
                 <a key={i} href="#" className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
-                  <Icon className="h-4 w-4 text-gray-400" />
+                  <Icon className="h-4 w-4 customer-text-muted" />
                 </a>
               ))}
             </div> */}
@@ -35,11 +35,11 @@ export function Footer() {
           {/* Links Columns */}
           {Object.entries(footerLinks).map(([title, links]) => (
             <div key={title}>
-              <h4 className="font-semibold text-white mb-3">{title}</h4>
+              <h4 className="font-semibold customer-text-header mb-3">{title}</h4>
               <ul className="space-y-2">
                 {links.map((link) => (
                   <li key={link}>
-                    <Link to={link} className="text-sm text-gray-400 hover:text-brand-yellow transition-colors">
+                    <Link to={link} className="text-sm customer-text-muted hover:text-brand-yellow transition-colors">
                       {link.split('/').pop()?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                     </Link>
                   </li>
@@ -50,13 +50,13 @@ export function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="mt-10 pt-6 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm text-gray-500">© 2026 TicketRush. All rights reserved.</p>
+        <div className="mt-10 pt-6 border-t customer-border flex flex-col md:flex-row justify-between items-center gap-4">
+          <p className="text-sm customer-text-muted">Â© 2026 TicketRush. All rights reserved.</p>
           <div className="flex items-center gap-4">
-            <span className="text-xs text-gray-500">Phương thức thanh toán:</span>
+            <span className="text-xs customer-text-muted">PhÆ°Æ¡ng thá»©c thanh toÃ¡n:</span>
             <div className="flex gap-2">
-              <CreditCard className="h-6 w-6 text-gray-400" />
-              <Smartphone className="h-6 w-6 text-gray-400" />
+              <CreditCard className="h-6 w-6 customer-text-muted" />
+              <Smartphone className="h-6 w-6 customer-text-muted" />
             </div>
           </div>
         </div>

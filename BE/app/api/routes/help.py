@@ -18,6 +18,17 @@ from app.ws.connection_manager import help_ws_manager
 router = APIRouter(prefix="/help", tags=["help"])
 
 
+async def _get_latest_customer_thread(session: AsyncSession, customer_id: int, *, with_customer: bool = False) -> HelpThread | None:
+    stmt = (
+        select(HelpThread)
+        .where(HelpThread.customer_id == customer_id)
+        .order_by(HelpThread.updated_at.desc(), HelpThread.id.desc())
+    )
+    if with_customer:
+        stmt = stmt.options(selectinload(HelpThread.customer))
+    return await session.scalar(stmt)
+
+
 def _message_to_response(row: HelpMessage) -> HelpMessageResponse:
     return HelpMessageResponse(
         id=row.id,
@@ -55,9 +66,7 @@ async def create_or_get_my_thread(
     if current_user.role != UserRole.CUSTOMER:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Customer role is required")
 
-    thread = await session.scalar(
-        select(HelpThread).options(selectinload(HelpThread.customer)).where(HelpThread.customer_id == current_user.id)
-    )
+    thread = await _get_latest_customer_thread(session, current_user.id, with_customer=True)
     if not thread:
         now = datetime.now(timezone.utc)
         thread = HelpThread(
@@ -84,7 +93,7 @@ async def get_my_messages(
 ) -> list[HelpMessageResponse]:
     if current_user.role != UserRole.CUSTOMER:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Customer role is required")
-    thread = await session.scalar(select(HelpThread).where(HelpThread.customer_id == current_user.id))
+    thread = await _get_latest_customer_thread(session, current_user.id)
     if not thread:
         return []
     rows = list(
@@ -107,7 +116,7 @@ async def send_my_message(
 ) -> HelpMessageResponse:
     if current_user.role != UserRole.CUSTOMER:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Customer role is required")
-    thread = await session.scalar(select(HelpThread).where(HelpThread.customer_id == current_user.id))
+    thread = await _get_latest_customer_thread(session, current_user.id)
     if not thread:
         now = datetime.now(timezone.utc)
         thread = HelpThread(
@@ -152,10 +161,20 @@ async def admin_list_threads(
         await session.scalars(
             select(HelpThread)
             .options(selectinload(HelpThread.customer))
-            .order_by(HelpThread.last_message_at.desc(), HelpThread.id.desc())
+            .order_by(HelpThread.customer_id.asc(), HelpThread.updated_at.desc(), HelpThread.id.desc())
         )
     )
-    return [_thread_to_response(row) for row in rows]
+    latest_by_customer: dict[int, HelpThread] = {}
+    for row in rows:
+        if row.customer_id not in latest_by_customer:
+            latest_by_customer[row.customer_id] = row
+
+    deduped_rows = sorted(
+        latest_by_customer.values(),
+        key=lambda item: (item.last_message_at, item.id),
+        reverse=True,
+    )
+    return [_thread_to_response(row) for row in deduped_rows]
 
 
 @router.get("/admin/threads/{thread_id}/messages", response_model=list[HelpMessageResponse])
@@ -167,8 +186,15 @@ async def admin_get_thread_messages(
     thread = await session.scalar(select(HelpThread).where(HelpThread.id == thread_id))
     if not thread:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+    canonical_thread = await _get_latest_customer_thread(session, thread.customer_id)
+    if not canonical_thread:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
     rows = list(
-        await session.scalars(select(HelpMessage).where(HelpMessage.thread_id == thread_id).order_by(HelpMessage.created_at.asc()))
+        await session.scalars(
+            select(HelpMessage)
+            .where(HelpMessage.thread_id == canonical_thread.id)
+            .order_by(HelpMessage.created_at.asc())
+        )
     )
     return [_message_to_response(row) for row in rows]
 
@@ -183,23 +209,26 @@ async def admin_send_message(
     thread = await session.scalar(select(HelpThread).where(HelpThread.id == thread_id))
     if not thread:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+    canonical_thread = await _get_latest_customer_thread(session, thread.customer_id)
+    if not canonical_thread:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
 
     now = datetime.now(timezone.utc)
     message = HelpMessage(
-        thread_id=thread.id,
+        thread_id=canonical_thread.id,
         sender_id=admin_user.id,
         sender_role=admin_user.role,
         content=payload.content.strip(),
         message_type="text",
         created_at=now,
     )
-    thread.last_message_at = now
-    thread.last_message_preview = payload.content.strip()[:255]
-    thread.unread_customer += 1
-    thread.unread_admin = 0
+    canonical_thread.last_message_at = now
+    canonical_thread.last_message_preview = payload.content.strip()[:255]
+    canonical_thread.unread_customer += 1
+    canonical_thread.unread_admin = 0
     session.add(message)
     await session.commit()
     await session.refresh(message)
     response = _message_to_response(message)
-    await help_ws_manager.broadcast_message(thread.id, response.model_dump(mode="json"))
+    await help_ws_manager.broadcast_message(canonical_thread.id, response.model_dump(mode="json"))
     return response

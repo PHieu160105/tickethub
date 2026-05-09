@@ -74,8 +74,8 @@ export default function AdminDashboard() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-display font-bold text-white">Tổng quan hệ thống</h2>
-          <p className="text-gray-400 mt-1">Dữ liệu realtime từ backend admin</p>
+          <h2 className="text-2xl font-display font-bold admin-text-header">Tổng quan hệ thống</h2>
+          <p className="admin-text-body mt-1">Dữ liệu realtime từ backend admin</p>
         </div>
         <Button variant="outline" onClick={() => void loadDashboardData(true)} isLoading={refreshing}>
           <RefreshCcw className="h-4 w-4" />
@@ -91,32 +91,32 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Tổng doanh thu</p>
+          <CardContent className="pt-2">
+            <p className="text-sm font-bold admin-text-body">Tổng doanh thu</p>
             <p className="text-xl font-bold text-green-400 mt-2">{formatCurrency(summary.total_revenue)}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Vé đã bán</p>
-            <p className="text-xl font-bold text-white mt-2">{summary.tickets_sold.toLocaleString()}</p>
+          <CardContent className="pt-2">
+            <p className="text-sm font-bold admin-text-body">Vé đã bán</p>
+            <p className="text-xl font-bold text-primary mt-2">{summary.tickets_sold.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Vé đã hủy</p>
+          <CardContent className="pt-2">
+            <p className="text-sm font-bold admin-text-body">Vé đã hủy</p>
             <p className="text-xl font-bold text-yellow-400 mt-2">{summary.cancelled_tickets.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Sự kiện đang mở</p>
+          <CardContent className="pt-2">
+            <p className="text-sm font-bold admin-text-body">Sự kiện đang mở</p>
             <p className="text-xl font-bold text-cyan-400 mt-2">{summary.active_events}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Người trong queue</p>
+          <CardContent className="pt-2">
+            <p className="text-sm font-bold admin-text-body">Người trong queue</p>
             <p className="text-xl font-bold text-brand-red mt-2">{summary.waiting_queue_users}</p>
           </CardContent>
         </Card>
@@ -132,19 +132,19 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             {revenue.length === 0 ? (
-              <p className="text-sm text-gray-400">Chưa có dữ liệu doanh thu.</p>
+              <p className="text-sm admin-text-body">Chưa có dữ liệu doanh thu.</p>
             ) : (
               <div className="space-y-3">
                 {revenue.map((point) => {
                   const width = maxRevenue > 0 ? Math.max((point.revenue / maxRevenue) * 100, 2) : 0
                   return (
                     <div key={point.date} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs text-gray-300">
+                      <div className="flex items-center justify-between text-xs admin-text-body">
                         <span>{point.date}</span>
                         <span>{formatCurrency(point.revenue)}</span>
                       </div>
                       <div className="h-2 rounded bg-white/10 overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-brand-red to-brand-yellow" style={{ width: `${width}%` }} />
+                        <div className="h-full" style={{background: `linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))`, width: `${width}%` }} />
                       </div>
                     </div>
                   )
@@ -163,14 +163,14 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent className="space-y-3">
             {occupancy.length === 0 ? (
-              <p className="text-sm text-gray-400">Chưa có dữ liệu occupancy.</p>
+              <p className="text-sm admin-text-body">Chưa có dữ liệu occupancy.</p>
             ) : (
               occupancy.map((item) => (
                 <div key={item.event_id} className="rounded-lg border border-white/10 p-3 bg-space-700/40">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium text-white">{item.event_title}</p>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-sm font-medium admin-text-body">{item.event_title}</p>
+                      <p className="text-xs admin-text-body mt-1">
                         {item.sold_seats}/{item.total_seats} đã bán, {item.locked_seats} đang giữ
                       </p>
                     </div>
@@ -180,8 +180,8 @@ export default function AdminDashboard() {
                   </div>
                   <div className="h-2 rounded bg-white/10 mt-2 overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-brand-red to-brand-yellow"
-                      style={{ width: `${Math.min(item.occupancy_rate, 100)}%` }}
+                      className="h-full"
+                      style={{background: `linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))`, width: `${Math.min(item.occupancy_rate, 100)}%` }}
                     />
                   </div>
                 </div>
@@ -193,25 +193,25 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
-          <CardContent className="pt-6 flex items-center gap-3">
+          <CardContent className="pt-3 flex items-center gap-3">
             <Ticket className="h-5 w-5 text-red-400" />
-            <Link to="/admin/tickets" className="text-sm text-gray-300 hover:text-white underline-offset-2 hover:underline">
+            <Link to="/admin/tickets" className="text-sm font-bold admin-text-body hover:text-white underline-offset-2 hover:underline">
               Đi tới Vé
             </Link>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6 flex items-center gap-3">
+          <CardContent className="pt-3 flex items-center gap-3">
             <BarChart3 className="h-5 w-5 text-green-400" />
-            <Link to="/admin/analytics" className="text-sm text-gray-300 hover:text-white underline-offset-2 hover:underline">
+            <Link to="/admin/analytics" className="text-sm font-bold admin-text-body hover:text-white underline-offset-2 hover:underline">
               Đi tới Thống kê
             </Link>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6 flex items-center gap-3">
+          <CardContent className="pt-3 flex items-center gap-3">
             <Users className="h-5 w-5 text-cyan-400" />
-            <Link to="/admin/users" className="text-sm text-gray-300 hover:text-white underline-offset-2 hover:underline">
+            <Link to="/admin/users" className="text-sm font-bold admin-text-body hover:text-white underline-offset-2 hover:underline">
               Đi tới Người dùng
             </Link>
           </CardContent>

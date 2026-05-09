@@ -16,11 +16,12 @@ export function GlobalLoader() {
   const [animation, setAnimation] = useState(null)
 
   useEffect(() => {
-    fetch('/loading.json')
+    const animationFile = theme === 'light' ? '/loadinglight.json' : '/loadingdark.json'
+    fetch(animationFile)
       .then((res) => res.json())
       .then(setAnimation)
       .catch(console.error)
-  }, [])
+  }, [theme])
 
   if (!animation) return null
 
@@ -29,6 +30,7 @@ export function GlobalLoader() {
       <div className="w-40 h-40">
         <Lottie animationData={animation} />
       </div>
+      <Logo/>
     </div>
   )
 }

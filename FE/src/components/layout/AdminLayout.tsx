@@ -24,7 +24,7 @@ export function AdminLayout({ title, actions }: AdminLayoutProps) {
   }, [drawerOpen])
 
   return (
-    <div className="flex h-screen bg-background text-on-background">
+    <div className="flex h-screen admin-bg-page admin-text-body">
       <div className="hidden md:block">
         <AdminSidebar />
       </div>
@@ -38,7 +38,7 @@ export function AdminLayout({ title, actions }: AdminLayoutProps) {
       )}
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="p-4 border-b border-white/10 flex items-center justify-between px-4 md:px-6 bg-surface-variant/50 backdrop-blur-sm gap-3">
+        <header className="p-4 border-b admin-border flex items-center justify-between px-4 md:px-6] backdrop-blur-sm gap-3">
           <div className="flex items-center gap-3">
             <button className="md:hidden p-2 rounded hover:bg-white/10" onClick={() => setDrawerOpen((v) => !v)} aria-label="Toggle admin menu">
               {drawerOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -59,7 +59,7 @@ export function AdminLayout({ title, actions }: AdminLayoutProps) {
           </div>
         </header>
 
-        <div className="relative flex-1 overflow-y-auto p-4 md:p-6 bg-background">
+        <div className="relative flex-1 overflow-y-auto p-4 md:p-6 admin-bg-page">
           <Container size="xl" className="relative z-10 animate-in fade-in duration-300">
             <Outlet />
           </Container>

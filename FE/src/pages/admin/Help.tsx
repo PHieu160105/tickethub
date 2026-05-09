@@ -53,32 +53,39 @@ export default function AdminHelp() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[70vh] lg:h-[80vh]">
-      <div className="rounded-xl border border-white/10 bg-slate-900/70 overflow-y-auto max-h-[280px] lg:max-h-none">
-        {threads.map((thread) => (
-          <button key={thread.id} onClick={() => setActiveThread(thread)} className={`w-full text-left p-4 border-b border-white/10 ${activeThread?.id === thread.id ? 'bg-white/10' : ''}`}>
-            <p className="text-sm font-semibold">{thread.customer_name}</p>
-            <p className="text-xs text-slate-400">{thread.customer_email}</p>
-            <p className="text-xs text-slate-500 mt-1 line-clamp-1">{thread.last_message_preview}</p>
-          </button>
-        ))}
+    <div className='space-y-6'>
+      <div>
+          <h2 className="text-2xl font-display font-bold admin-text-header">Trung tâm hỗ trợ</h2>
+          <p className="admin-text-body mt-1">Hỗ trợ khách hàng tận tâm</p>
       </div>
-      <div className="lg:col-span-2 rounded-xl border border-white/10 bg-slate-900/70 flex flex-col min-h-[420px]">
-        <div className="p-4 border-b border-white/10 text-sm font-semibold">{activeThread ? `Chat with ${activeThread.customer_name}` : 'Select a customer'}</div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {messages.map((message) => (
-            <div key={message.id} className={`flex ${message.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[88%] sm:max-w-[70%] px-3 py-2 rounded-lg ${message.sender_id === user?.id ? 'bg-primary text-white' : 'bg-slate-800 text-slate-100'}`}>
-                <p className="text-sm">{message.content}</p>
-              </div>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 min-h-[60vh] lg:h-[70vh]">
+        <div className="rounded-xl border admin-border admin-bg-help overflow-y-auto max-h-[280px] lg:max-h-none">
+          {threads.map((thread) => (
+            <button key={thread.id} onClick={() => setActiveThread(thread)} className={`w-full text-left p-4 border-b admin-border ${activeThread?.id === thread.id ? 'admin-bg-soft' : ''}`}>
+              <p className="text-sm font-semibold admin-text-header">{thread.customer_name}</p>
+              <p className="text-xs admin-text-muted">{thread.customer_email}</p>
+              <p className="text-xs admin-text-body mt-1 line-clamp-1">{thread.last_message_preview}</p>
+            </button>
           ))}
         </div>
-        <div className="p-3 border-t border-white/10 flex gap-2">
-          <input value={input} onChange={(e) => setInput(e.target.value)} className="flex-1 bg-slate-800 rounded px-3 py-2 text-sm" placeholder="Reply..." />
-          <button disabled={!canSend} onClick={() => void sendMessage()} className="px-4 py-2 rounded bg-primary disabled:opacity-40">
-            Send
-          </button>
+        <div className="lg:col-span-3 rounded-xl border admin-border admin-bg-help flex flex-col min-h-[420px]">
+          <div className="p-4 border-b admin-border text-sm font-semibold admin-text-header"
+                style={{background: `linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))`}}>{activeThread ? `Chat with ${activeThread.customer_name}` : 'Select a customer'}</div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.map((message) => (
+              <div key={message.id} className={`flex ${message.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[88%] sm:max-w-[70%] px-3 py-2 rounded-lg ${message.sender_id === user?.id ? 'bg-[var(--admin-bg-opt)] text-white' : 'admin-bg-soft admin-text-body'}`}>
+                  <p className="text-sm">{message.content}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="p-3 border-t admin-border flex gap-2">
+            <input value={input} onChange={(e) => setInput(e.target.value)} className="flex-1 admin-text-body rounded px-3 py-2 text-sm border admin-border" placeholder="Reply..." />
+            <button disabled={!canSend} onClick={() => void sendMessage()} className="px-4 py-2 rounded bg-[var(--admin-bg-opt)] disabled:opacity-40">
+              Gửi 
+            </button>
+          </div>
         </div>
       </div>
     </div>

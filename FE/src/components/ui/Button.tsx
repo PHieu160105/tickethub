@@ -4,14 +4,14 @@ import { forwardRef } from 'react';
 import { Loader2 } from 'lucide-react';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-space-900 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
+  'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--admin-bg-page)] disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
   {
     variants: {
       variant: {
         primary: 'bg-primary hover:bg-on-primary text-white shadow-lg shadow-brand-red/20 hover:shadow-brand-red/40',
         secondary: 'bg-secondary hover:bg-brand-yellow-hover text-space-900 font-semibold',
-        outline: 'border border-white/20 hover:bg-white/10 text-white backdrop-blur-sm',
-        ghost: 'hover:bg-white/10 text-white',
+        outline: 'border admin-border hover:bg-[var(--admin-btn-outline-bg-hover)] text-[var(--admin-btn-outline-text)] backdrop-blur-sm',
+        ghost: 'hover:bg-[var(--admin-btn-ghost-bg-hover)] text-[var(--admin-btn-ghost-text)]',
         danger: 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/20',
       },
       size: {

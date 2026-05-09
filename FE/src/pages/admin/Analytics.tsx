@@ -58,7 +58,7 @@ export default function AdminAnalytics() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-display font-bold text-white">Thống kê khán giả</h2>
+          <h2 className="text-2xl font-display font-bold admin-text-header">Thống kê khán giả</h2>
         </div>
         <Button variant="outline" onClick={() => void loadAnalyticsData(true)} isLoading={refreshing}>
           <RefreshCcw className="h-4 w-4" />
@@ -74,20 +74,20 @@ export default function AdminAnalytics() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Tổng khán giả</p>
-            <p className="text-2xl font-bold text-white mt-2">{totalAudience.toLocaleString()}</p>
+          <CardContent className="pt-3">
+            <p className="text-sm font-bold admin-text-body">Tổng khán giả</p>
+            <p className="text-2xl font-bold text-red-400 mt-2">{totalAudience.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Nhóm tuổi</p>
+          <CardContent className="pt-3">
+            <p className="text-sm font-bold admin-text-body">Nhóm tuổi</p>
             <p className="text-2xl font-bold text-brand-yellow mt-2">{ageEntries.length}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Nhóm giới tính</p>
+          <CardContent className="pt-3">
+            <p className="text-sm font-bold admin-text-body">Nhóm giới tính</p>
             <p className="text-2xl font-bold text-cyan-400 mt-2">{genderEntries.length}</p>
           </CardContent>
         </Card>
@@ -103,22 +103,22 @@ export default function AdminAnalytics() {
           </CardHeader>
           <CardContent className="space-y-3">
             {ageEntries.length === 0 ? (
-              <p className="text-sm text-gray-400">Chưa có dữ liệu độ tuổi.</p>
+              <p className="text-sm admin-text-body">Chưa có dữ liệu độ tuổi.</p>
             ) : (
               ageEntries.map(([ageRange, count]) => {
                 const percentage = totalAudience > 0 ? (count / totalAudience) * 100 : 0
                 return (
                   <div key={ageRange} className="space-y-1">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-white">{normalizeLabel(ageRange)}</span>
-                      <span className="text-gray-300">
+                      <span className="admin-text-body">{normalizeLabel(ageRange)}</span>
+                      <span className="text-green-500">
                         {count} ({percentage.toFixed(1)}%)
                       </span>
                     </div>
                     <div className="h-2 rounded bg-white/10 overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-brand-red to-brand-yellow"
-                        style={{ width: `${Math.min(percentage, 100)}%` }}
+                        className="h-full"
+                        style={{background: `linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))`, width: `${Math.min(percentage, 100)}%` }}
                       />
                     </div>
                   </div>
@@ -142,9 +142,9 @@ export default function AdminAnalytics() {
               genderEntries.map(([gender, count]) => {
                 const percentage = totalAudience > 0 ? (count / totalAudience) * 100 : 0
                 return (
-                  <div key={gender} className="rounded-lg border border-white/10 bg-space-700/40 p-3">
+                  <div key={gender} className="rounded-lg border border-gray bg-space-700/40 p-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-white">{normalizeLabel(gender)}</span>
+                      <span className="admin-text-body">{normalizeLabel(gender)}</span>
                       <Badge variant="info" size="sm">
                         {percentage.toFixed(1)}%
                       </Badge>
@@ -172,7 +172,7 @@ export default function AdminAnalytics() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/10 text-left text-gray-400">
+                  <tr className="border-b admin-text-body text-left">
                     <th className="pb-3 font-medium">Sự kiện</th>
                     <th className="pb-3 font-medium">Sold</th>
                     <th className="pb-3 font-medium">Locked</th>
@@ -183,11 +183,11 @@ export default function AdminAnalytics() {
                 <tbody>
                   {occupancy.map((item) => (
                     <tr key={item.event_id} className="border-b border-white/5">
-                      <td className="py-3 text-white">{item.event_title}</td>
-                      <td className="py-3 text-gray-300">{item.sold_seats}</td>
-                      <td className="py-3 text-gray-300">{item.locked_seats}</td>
-                      <td className="py-3 text-gray-300">{item.total_seats}</td>
-                      <td className="py-3 text-right text-brand-yellow">{item.occupancy_rate.toFixed(1)}%</td>
+                      <td className="py-3 admin-text-body">{item.event_title}</td>
+                      <td className="py-3 admin-text-body">{item.sold_seats}</td>
+                      <td className="py-3 admin-text-body">{item.locked_seats}</td>
+                      <td className="py-3 admin-text-body">{item.total_seats}</td>
+                      <td className="py-3 text-right text-yellow-600">{item.occupancy_rate.toFixed(1)}%</td>
                     </tr>
                   ))}
                 </tbody>

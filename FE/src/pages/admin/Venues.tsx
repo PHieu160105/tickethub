@@ -1583,12 +1583,13 @@ export default function AdminVenues() {
         <div className="space-y-6">
             <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                    <h1 className="text-3xl font-black text-white">Venue Studio</h1>
+                    <h1 className="text-3xl font-black admin-text-body">Venue Studio</h1>
                     <p className="text-slate-400 mt-1 max-w-2xl">
                         Thiết lập địa điểm theo từng bước: tạo địa điểm, tải nền sơ đồ, tạo bố cục, khai báo khu vực và dựng ghế.
                     </p>
                 </div>
                 <Button
+                    className='border border-bg-black'
                     variant="ghost"
                     size="sm"
                     onClick={() => {

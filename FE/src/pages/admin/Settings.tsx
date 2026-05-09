@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -26,7 +26,7 @@ export default function AdminSettings() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-display font-bold text-white">Cài đặt Hệ thống</h2>
+        <h2 className="text-2xl font-display font-bold admin-text-body">Cài đặt hệ thống</h2>
         <p className="text-gray-400 mt-1">Quản lý cấu hình và tùy chỉnh nền tảng</p>
       </div>
 
@@ -39,7 +39,7 @@ export default function AdminSettings() {
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'general'
                   ? 'bg-brand-red/10 text-brand-red border border-brand-red/20'
-                  : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                  : 'text-gray-500 hover:bg-[var(--admin-bg-opt)] hover:admin-text-body'
               }`}
             >
               <Settings className="h-5 w-5" />
@@ -50,7 +50,7 @@ export default function AdminSettings() {
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'notification'
                   ? 'bg-brand-red/10 text-brand-red border border-brand-red/20'
-                  : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                  : 'text-gray-500 hover:bg-[var(--admin-bg-opt)] hover:admin-text-body'
               }`}
             >
               <Bell className="h-5 w-5" />
@@ -61,7 +61,7 @@ export default function AdminSettings() {
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'payment'
                   ? 'bg-brand-red/10 text-brand-red border border-brand-red/20'
-                  : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                  : 'text-gray-500 hover:bg-[var(--admin-bg-opt)] hover:admin-text-body'
               }`}
             >
               <CreditCard className="h-5 w-5" />
@@ -72,7 +72,7 @@ export default function AdminSettings() {
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'appearance'
                   ? 'bg-brand-red/10 text-brand-red border border-brand-red/20'
-                  : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                  : 'text-gray-500 hover:bg-[var(--admin-bg-opt)] hover:admin-text-body'
               }`}
             >
               <Palette className="h-5 w-5" />
@@ -91,39 +91,39 @@ export default function AdminSettings() {
                   <Settings className="h-5 w-5 text-brand-red" />
                   Cài đặt chung
                 </CardTitle>
-                <CardDescription>Cấu hình thông tin cơ bản của hệ thống</CardDescription>
+                <CardDescription>Cấu hình chung hệ thống</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Tên hệ thống</label>
+                    <label className="block text-sm font-medium admin-text-body mb-2">Tên hệ thống</label>
                     <Input placeholder="TicketRush" defaultValue="TicketRush" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Email liên hệ</label>
+                    <label className="block text-sm font-medium admin-text-body mb-2">Email liện hệ</label>
                     <Input type="email" placeholder="contact@ticketrush.com" defaultValue="contact@ticketrush.com" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Số điện thoại</label>
+                    <label className="block text-sm font-medium admin-text-body mb-2">Số điện thoại</label>
                     <Input type="tel" placeholder="+84 123 456 789" defaultValue="+84 123 456 789" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Website</label>
+                    <label className="block text-sm font-medium admin-text-body mb-2">Website</label>
                     <Input type="url" placeholder="https://ticketrush.com" defaultValue="https://ticketrush.com" />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Địa chỉ</label>
-                  <Input placeholder="Nhập địa chỉ công ty" defaultValue="Hà Nội, Việt Nam" />
+                  <label className="block text-sm font-medium admin-text-body mb-2">Địa chỉ</label>
+                  <Input placeholder="Nhập địa chỉ" defaultValue="Hà Nội, Việt Nam" />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Mô tả</label>
+                  <label className="block text-sm font-medium admin-text-body mb-2">Mô tả</label>
                   <textarea
-                    className="w-full rounded-lg border bg-space-700/50 border-white/20 px-4 py-2.5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-red"
+                    className="w-full rounded-lg border bg-space-700/50 border-gray-500 px-4 py-2.5 admin-text-body placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-red"
                     rows={3}
-                    defaultValue="Nền tảng đặt vé sự kiện hàng đầu Việt Nam"
+                    defaultValue="Nền tảng đặt vé hàng đầu Việt Nam"
                   />
                 </div>
 
@@ -143,51 +143,51 @@ export default function AdminSettings() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Bell className="h-5 w-5 text-brand-red" />
-                  Cài đặt thông báo
+                  Cấu hình thông báo
                 </CardTitle>
                 <CardDescription>Quản lý các loại thông báo trên hệ thống</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-space-700/30 border border-white/10">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-space-700/30 border border-gray-500">
                     <div className="flex items-center gap-3">
-                      <Mail className="h-5 w-5 text-brand-yellow" />
+                      <Mail className="h-5 w-5 text-yellow" />
                       <div>
-                        <p className="text-white font-medium">Thông báo qua Email</p>
-                        <p className="text-xs text-gray-400">Gửi email khi có đơn hàng mới</p>
+                        <p className="admin-text-body font-medium">Thông báo qua Email</p>
+                        <p className="text-xs text-gray-500">Gửi email khi có đơn mới</p>
                       </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" defaultChecked className="sr-only peer" />
-                      <div className="w-11 h-6 bg-white/10 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-red rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-red"></div>
+                      <div className="w-11 h-6 bg-white/10 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                     </label>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-space-700/30 border border-white/10">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-space-700/30 border border-gray-500">
                     <div className="flex items-center gap-3">
                       <Bell className="h-5 w-5 text-green-400" />
                       <div>
-                        <p className="text-white font-medium">Thông báo Push</p>
+                        <p className="admin-text-body font-medium">Thông báo Push</p>
                         <p className="text-xs text-gray-400">Hiển thị thông báo trên trình duyệt</p>
                       </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" defaultChecked className="sr-only peer" />
-                      <div className="w-11 h-6 bg-white/10 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-red rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-red"></div>
+                      <div className="w-11 h-6 bg-white/10 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                     </label>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-space-700/30 border border-white/10">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-space-700/30 border border-gray-500">
                     <div className="flex items-center gap-3">
                       <Globe className="h-5 w-5 text-blue-400" />
                       <div>
-                        <p className="text-white font-medium">Thông báo SMS</p>
-                        <p className="text-xs text-gray-400">Gửi SMS xác nhận đơn hàng</p>
+                        <p className="admin-text-body font-medium">Thông báo SMS</p>
+                        <p className="text-xs text-gray-400">Gửi SMS xác nhận</p>
                       </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" className="sr-only peer" />
-                      <div className="w-11 h-6 bg-white/10 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-red rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-red"></div>
+                      <div className="w-11 h-6 bg-white/10 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                     </label>
                   </div>
                 </div>
@@ -214,56 +214,56 @@ export default function AdminSettings() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-space-700/30 border border-white/10">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-space-700/30 border border-gray-500">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
                         <CreditCard className="h-5 w-5 text-blue-400" />
                       </div>
                       <div>
-                        <p className="text-white font-medium">Thẻ tín dụng/Ghi nợ</p>
+                        <p className="admin-text-body font-medium">Thanh toán bằng Thẻ ghi nợ</p>
                         <p className="text-xs text-gray-400">Visa, Mastercard, JCB</p>
                       </div>
                     </div>
                     <Badge variant="success">Đã kích hoạt</Badge>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-space-700/30 border border-white/10">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-space-700/30 border border-gray-500">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-lg bg-green-500/20 flex items-center justify-center">
                         <Globe className="h-5 w-5 text-green-400" />
                       </div>
                       <div>
-                        <p className="text-white font-medium">Chuyển khoản ngân hàng</p>
+                        <p className="admin-text-body font-medium">Chuyển khoảng ngân hàng</p>
                         <p className="text-xs text-gray-400">Vietcombank, Techcombank, BIDV</p>
                       </div>
                     </div>
                     <Badge variant="success">Đã kích hoạt</Badge>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-space-700/30 border border-white/10">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-space-700/30 border border-gray-500">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
                         <Shield className="h-5 w-5 text-purple-400" />
                       </div>
                       <div>
-                        <p className="text-white font-medium">Ví điện tử</p>
+                        <p className="admin-text-body font-medium">Vé điện tử­</p>
                         <p className="text-xs text-gray-400">MoMo, ZaloPay, VNPay</p>
                       </div>
                     </div>
-                    <Badge variant="default">Chưa kích hoạt</Badge>
+                    <Badge variant="default">Ch kích hoạt</Badge>
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-white/10">
-                  <h4 className="text-sm font-medium text-white mb-4">Cấu hình API thanh toán</h4>
+                <div className="pt-4 border-t border-gray-500">
+                  <h4 className="text-sm font-medium admin-text-body mb-4">Cấu hình API thanh toán</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">API Key</label>
-                      <Input type="password" placeholder="••••••••••••••••" />
+                      <label className="block text-sm font-medium text-gray-500 mb-2">API Key</label>
+                      <Input type="password" placeholder="********" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Secret Key</label>
-                      <Input type="password" placeholder="••••••••••••••••" />
+                      <label className="block text-sm font-medium text-gray-500 mb-2">Secret Key</label>
+                      <Input type="password" placeholder="********" />
                     </div>
                   </div>
                 </div>
@@ -286,81 +286,73 @@ export default function AdminSettings() {
                   <Palette className="h-5 w-5 text-brand-red" />
                   Tùy chỉnh giao diện
                 </CardTitle>
-                <CardDescription>Tùy chỉnh màu sắc và theme của hệ thống</CardDescription>
+                <CardDescription>Tủy chỉnh màu sắc giao diện hệ thống</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-4">Màu chủ đạo</label>
-                  <div className="flex gap-3">
-                    {['#DC2626', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6'].map((color) => (
-                      <button
-                        key={color}
-                        className="h-10 w-10 rounded-lg border-2 border-white/20 hover:border-white transition-all"
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
-                  </div>
-                </div>
+                <div className="space-y-4">
+                  <label className="block text-sm font-bold text-slate-500 uppercase tracking-wider">
+                    Chế độ
+                  </label>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-4">Logo hệ thống</label>
-                  <div className="flex items-center gap-4 p-4 rounded-lg bg-space-700/30 border border-white/10 border-dashed">
-                    <div className="h-16 w-16 rounded-lg bg-gradient-to-br from-brand-red to-brand-yellow flex items-center justify-center">
-                      <span className="text-xl font-bold text-space-900">TR</span>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-white font-medium">TicketRush Logo</p>
-                      <p className="text-xs text-gray-400">PNG, JPG tối đa 2MB</p>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      <Upload className="h-4 w-4" />
-                      Tải lên
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-on-surface-variant mb-4">Chế độ hiển thị</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <button
                       onClick={() => setTheme('dark')}
-                      className={`relative p-4 rounded-lg border transition-all ${
+                      className={`relative p-6 rounded-xl border transition-all duration-200 ${
                         theme === 'dark'
-                          ? 'bg-brand-red/10 border-brand-red/30 text-on-background'
-                          : 'bg-white/5 border-white/10 text-on-surface-variant hover:text-on-background'
+                          ? 'bg-gradient-to-br from-red-500/20 to-red-500/5 border-red-500/30 shadow-[0_0_20px_rgba(239,68,68,0.15)]'
+                          : 'bg-surface-variant border-gray-500 hover:border-primary'
                       }`}
                     >
-                      <div className="flex items-center gap-2 mb-2">
-                        <Moon className="h-5 w-5" />
-                        <p className="font-medium">Dark Mode</p>
+                      <div className="flex items-center gap-3 mb-3">
+                        <Moon className={`w-6 h-6 ${theme === 'dark' ? 'text-red-400' : 'text-slate-500'}`} />
+                        <span className={`font-bold text-lg ${theme === 'dark' ? 'text-on-background' : 'text-on-surface-variant'}`}>
+                          Dark Mode
+                        </span>
                       </div>
+                      <p className={`text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-on-surface-variant'}`}>
+                        Chế độ ban đêm, bảo vệ mắt tốt
+                      </p>
                       {theme === 'dark' && (
-                        <p className="text-xs text-on-surface-variant">Đang sử dụng</p>
-                      )}
-                      {theme !== 'dark' && (
-                        <p className="text-xs text-slate-500">Nhấn để bật</p>
+                        <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
                       )}
                     </button>
+
                     <button
                       onClick={() => setTheme('light')}
-                      className={`relative p-4 rounded-lg border transition-all ${
+                      className={`relative p-6 rounded-xl border transition-all duration-200 ${
                         theme === 'light'
-                          ? 'bg-brand-red/10 border-brand-red/30 text-on-background'
-                          : 'bg-white/5 border-white/10 text-on-surface-variant hover:text-on-background'
+                          ? 'bg-gradient-to-br from-amber-500/20 to-amber-500/5 border-amber-500/30 shadow-[0_0_20px_rgba(251,191,36,0.15)]'
+                          : 'bg-surface-variant border-gray-500 hover:border-secondary'
                       }`}
                     >
-                      <div className="flex items-center gap-2 mb-2">
-                        <Sun className="h-5 w-5" />
-                        <p className="font-medium">Light Mode</p>
+                      <div className="flex items-center gap-3 mb-3">
+                        <Sun className={`w-6 h-6 ${theme === 'light' ? 'text-amber-400' : 'text-slate-500'}`} />
+                        <span className={`font-bold text-lg ${theme === 'light' ? 'text-on-background' : 'text-on-surface-variant'}`}>
+                          Light Mode
+                        </span>
                       </div>
+                      <p className={`text-sm ${theme === 'light' ? 'text-slate-300' : 'text-on-surface-variant'}`}>
+                        Chế độ ban ngày, độ sáng mặc đinhj
+                      </p>
                       {theme === 'light' && (
-                        <p className="text-xs text-on-surface-variant">Đang sử dụng</p>
-                      )}
-                      {theme !== 'light' && (
-                        <p className="text-xs text-slate-500">Nhấn để bật</p>
+                        <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
                       )}
                     </button>
                   </div>
+                </div>
+
+                <div className="rounded-lg bg-surface-variant border border-gray-500 p-4">
+                  <p className="text-sm text-on-surface-variant">
+                    Nền đang chọn: <span className="font-bold text-on-background">{theme === 'dark' ? 'Dark' : 'Light'}</span>
+                  </p>
                 </div>
 
                 <div className="flex justify-end">
@@ -377,3 +369,4 @@ export default function AdminSettings() {
     </div>
   );
 }
+

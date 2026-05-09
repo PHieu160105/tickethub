@@ -57,8 +57,8 @@ export function Navbar() {
       className={cn(
         'fixed top-0 left-0 right-0 z-50 transition-all duration-300',
         isScrolled
-          ? 'bg-slate-950/90 backdrop-blur-xl border-b border-white/10 shadow-[0_0_15px_rgba(233,69,96,0.2)]'
-          : 'bg-slate-950/70 backdrop-blur-md border-b border-white/5'
+          ? 'customer-nav-bg backdrop-blur-xl border-b customer-border shadow-[0_0_15px_rgba(233,69,96,0.2)]'
+          : 'customer-nav-bg backdrop-blur-md border-b customer-border'
       )}
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
@@ -75,8 +75,8 @@ export function Navbar() {
                   cn(
                     'px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                     isActive 
-                      ? 'bg-white/10 text-white' 
-                      : 'text-gray-300 hover:text-white hover:bg-white/5'
+                      ? 'customer-bg-soft customer-text-header' 
+                      : 'customer-text-muted hover:customer-text-header customer-bg-soft/0 hover:customer-bg-soft'
                   )
                 }
               >
@@ -87,7 +87,7 @@ export function Navbar() {
 
           {/* Search Bar */}
           <div className="relative w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 customer-text-muted" />
             <SearchAutocompleteInput
               value={searchValue}
               onChange={setSearchValue}
@@ -124,9 +124,9 @@ export function Navbar() {
                   <img
                     src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`}
                     alt={user.name}
-                    className="h-9 w-9 rounded-full bg-white/10 border-2 border-primary/50"
+                    className="h-9 w-9 rounded-full customer-bg-soft border-2 border-primary/50"
                   />
-                  <span className="text-sm font-medium text-white max-w-[120px] truncate">
+                  <span className="text-sm font-medium customer-text-header max-w-[120px] truncate">
                     {user.name}
                   </span>
                 </Link>
@@ -135,7 +135,7 @@ export function Navbar() {
                   variant="ghost" 
                   size="sm" 
                   onClick={handleLogout} 
-                  className="gap-2 text-gray-300 hover:text-white"
+                  className="gap-2 customer-text-muted hover:customer-text-header"
                 >
                   <LogOut className="h-4 w-4" />
                   Đăng xuất
@@ -165,7 +165,7 @@ export function Navbar() {
 
           {/* Mobile Menu Toggle */}
           <button
-            className="md:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
+            className="md:hidden p-2 rounded-lg hover:customer-bg-soft transition-colors"
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label="Toggle menu"
           >
@@ -176,7 +176,7 @@ export function Navbar() {
 
       {/* Mobile Menu */}
       {mobileOpen && (
-        <div className="md:hidden bg-slate-950/95 backdrop-blur-xl border-t border-white/10 animate-in slide-in-from-top-2">
+        <div className="md:hidden customer-nav-bg backdrop-blur-xl border-t customer-border animate-in slide-in-from-top-2">
           <div className="space-y-3 px-4 py-4">
             {navLinks.map((link) => (
               <NavLink
@@ -187,8 +187,8 @@ export function Navbar() {
                   cn(
                     'block rounded-lg px-4 py-3 text-base font-medium transition-colors',
                     isActive 
-                      ? 'bg-white/10 text-white' 
-                      : 'text-gray-300 hover:bg-white/5'
+                      ? 'customer-bg-soft customer-text-header' 
+                      : 'customer-text-muted hover:customer-bg-soft'
                   )
                 }
               >
@@ -197,7 +197,7 @@ export function Navbar() {
             ))}
             
             {/* Mobile Search */}
-            <div className="pt-3 border-t border-white/10">
+            <div className="pt-3 border-t customer-border">
               <SearchAutocompleteInput
                 value={searchValue}
                 onChange={setSearchValue}
@@ -213,7 +213,7 @@ export function Navbar() {
             
             {/* Mobile Auth Buttons */}
             {!isAuthenticated && (
-              <div className="pt-3 border-t border-white/10 flex flex-col gap-2">
+              <div className="pt-3 border-t customer-border flex flex-col gap-2">
                 <Button 
                   variant="ghost" 
                   onClick={() => { navigate('/login'); closeMobileMenu(); }}
@@ -233,7 +233,7 @@ export function Navbar() {
             
             {/* Mobile User Info (when logged in) */}
             {isAuthenticated && user && (
-              <div className="pt-3 border-t border-white/10">
+              <div className="pt-3 border-t customer-border">
                 <Link 
                   to="/profile" 
                   onClick={closeMobileMenu} 
@@ -242,17 +242,17 @@ export function Navbar() {
                   <img
                     src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`}
                     alt={user.name}
-                    className="h-12 w-12 rounded-full bg-white/10 border-2 border-primary/50"
+                    className="h-12 w-12 rounded-full customer-bg-soft border-2 border-primary/50"
                   />
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{user.name}</p>
-                    <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                    <p className="text-sm font-medium customer-text-header truncate">{user.name}</p>
+                    <p className="text-xs customer-text-muted truncate">{user.email}</p>
                   </div>
                 </Link>
                 <Button 
                   variant="ghost" 
                   onClick={handleLogout} 
-                  className="w-full justify-start gap-2 text-gray-300 hover:text-white"
+                  className="w-full justify-start gap-2 customer-text-muted hover:customer-text-header"
                 >
                   <LogOut className="h-4 w-4" />
                   Đăng xuất

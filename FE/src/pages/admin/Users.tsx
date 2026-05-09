@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -44,18 +44,18 @@ function RoleSelect({ roleFilter, setRoleFilter }: RoleSelectProps) {
     <Listbox value={roleFilter} onChange={(value) => setRoleFilter(value)}>
       <div className="relative">
         <Listbox.Button
-          className="w-full md:w-48 px-3 py-2 bg-space-800 text-white border border-gray-600 rounded-md shadow-sm text-left"
+          className="w-full md:w-48 px-3 py-2 admin-bg-listbox admin-text-header border admin-border rounded-md shadow-sm text-left"
         >
           {roles.find((r) => r.value === roleFilter)?.label}
         </Listbox.Button>
         <Listbox.Options
-          className="absolute z-50 mt-1 w-full md:w-48 bg-slate-900 text-white border border-white/20 rounded-md shadow-lg"
+          className="absolute z-50 mt-1 w-full md:w-48 admin-bg-listbox admin-text-header border admin-border rounded-md shadow-lg"
         >
           {roles.map((role) => (
             <Listbox.Option
               key={role.value}
               value={role.value}
-              className="px-3 py-2 cursor-pointer hover:bg-space-700"
+              className="px-3 py-2 cursor-pointer hover:admin-bg-soft"
             >
               {role.label}
             </Listbox.Option>
@@ -89,7 +89,7 @@ export default function AdminUsers() {
       setUsers(response.items)
       setTotal(response.total)
     } catch (errorValue) {
-      setError(extractApiErrorMessage(errorValue, 'Không thể tải danh sách users.'))
+      setError(extractApiErrorMessage(errorValue, 'KhÃ´ng thá»ƒ táº£i danh sÃ¡ch users.'))
     } finally {
       setLoading(false)
     }
@@ -109,7 +109,7 @@ export default function AdminUsers() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-display font-bold text-white">Quản lý người dùng</h2>
+        <h2 className="text-2xl font-display font-bold admin-text-header">Quản lý người dùng</h2>
       </div>
 
       {error && (
@@ -120,20 +120,20 @@ export default function AdminUsers() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Tổng users (filtered)</p>
-            <p className="text-2xl font-bold text-white mt-2">{total}</p>
+          <CardContent className="pt-3">
+            <p className="text-sm font-bold admin-text-body">Tổng số người dùng</p>
+            <p className="text-2xl font-bold text-cyan mt-2">{total}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Page</p>
-            <p className="text-2xl font-bold text-brand-yellow mt-2">{page}/{totalPages}</p>
+          <CardContent className="pt-3">
+            <p className="text-sm font-bold admin-text-body">Page</p>
+            <p className="text-2xl font-bold text-yellow mt-2">{page}/{totalPages}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-gray-400">Tickets (page)</p>
+          <CardContent className="pt-3">
+            <p className="text-sm font-bold admin-text-body">Tickets (page)</p>
             <p className="text-2xl font-bold text-green-400 mt-2">{totalTickets}</p>
           </CardContent>
         </Card>
@@ -143,7 +143,7 @@ export default function AdminUsers() {
         <CardContent className="pt-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 admin-text-body" />
               <Input
                 placeholder="Tìm theo tên hoặc email..."
                 className="pl-10"
@@ -155,7 +155,7 @@ export default function AdminUsers() {
               />
             </div>
             <div className="flex items-center gap-2 w-full md:w-auto">
-              <Filter className="h-4 w-4 text-gray-400" />
+              <Filter className="h-4 w-4 admin-text-body" />
               <div className="relative w-full">
                 <RoleSelect roleFilter={roleFilter} setRoleFilter={setRoleFilter} />
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
@@ -177,18 +177,18 @@ export default function AdminUsers() {
           {loading ? (
             <p className="text-sm text-gray-300">Đang tải users...</p>
           ) : users.length === 0 ? (
-            <p className="text-sm text-gray-400">Không có users phù hợp.</p>
+            <p className="text-sm text-gray-400">Không có user.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/10 text-left text-gray-400">
-                    <th className="pb-3 font-medium">User</th>
-                    <th className="pb-3 font-medium">Role</th>
-                    <th className="pb-3 font-medium">Gender/Age</th>
-                    <th className="pb-3 font-medium">Tickets</th>
-                    <th className="pb-3 font-medium">Registered</th>
-                    <th className="pb-3 font-medium text-right">Action</th>
+                  <tr className="border-b border-white/10 text-left admin-text-body">
+                    <th className="pb-3 font-medium">Người dùng (email)</th>
+                    <th className="pb-3 font-medium">Vai trò</th>
+                    <th className="pb-3 font-medium">Giới tính/Tuổi</th>
+                    <th className="pb-3 font-medium">Số vé</th>
+                    <th className="pb-3 font-medium">Đăng ký</th>
+                    <th className="pb-3 font-medium text-right">Chi tiết</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -196,16 +196,16 @@ export default function AdminUsers() {
                     <tr key={user.id} className="border-b border-white/5">
                       <td className="py-4">
                         <div>
-                          <p className="text-white font-medium">{user.full_name}</p>
-                          <p className="text-gray-400 text-xs">{user.email}</p>
+                          <p className="admin-text-body font-medium">{user.full_name}</p>
+                          <p className="text-gray-500 text-xs">{user.email}</p>
                         </div>
                       </td>
                       <td className="py-4">
                         <Badge variant={roleVariant(user.role)} size="sm">{user.role}</Badge>
                       </td>
-                      <td className="py-4 text-gray-300">{genderLabel(user.gender)} / {user.age}</td>
-                      <td className="py-4 text-gray-300">{user.total_tickets}</td>
-                      <td className="py-4 text-gray-400">{new Date(user.registered_at).toLocaleDateString('vi-VN')}</td>
+                      <td className="py-4 admin-text-body">{genderLabel(user.gender)} / {user.age}</td>
+                      <td className="py-4 admin-text-body">{user.total_tickets}</td>
+                      <td className="py-4 admin-text-body">{new Date(user.registered_at).toLocaleDateString('vi-VN')}</td>
                       <td className="py-4 text-right">
                         <Button variant="ghost" size="sm" onClick={() => setSelectedUser(user)}>Xem</Button>
                       </td>
@@ -227,11 +227,12 @@ export default function AdminUsers() {
         </CardContent>
       </Card>
 
-      <Modal isOpen={selectedUser !== null} onClose={() => setSelectedUser(null)} title="Chi tiết user" className="max-w-lg">
+      <Modal isOpen={selectedUser !== null} onClose={() => setSelectedUser(null)} title="Chi tiết người dùng" className="max-w-lg">
         {selectedUser ? (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-brand-red to-brand-yellow flex items-center justify-center text-space-900 font-bold">
+              <div className="h-12 w-12 rounded-full flex items-center justify-center text-space-900 font-bold"
+                  style={{background: `linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))`}}>
                 {selectedUser.full_name.charAt(0)}
               </div>
               <div>
@@ -242,7 +243,7 @@ export default function AdminUsers() {
             <div className="space-y-2 text-sm text-gray-300">
               <div className="flex items-center gap-2"><Mail className="h-4 w-4" /><span>{selectedUser.email}</span></div>
               <div className="flex items-center gap-2"><UserRound className="h-4 w-4" /><span>{genderLabel(selectedUser.gender)}, {selectedUser.age} tuổi</span></div>
-              <div className="flex items-center gap-2"><Ticket className="h-4 w-4" /><span>{selectedUser.total_tickets} tickets đã mua</span></div>
+              <div className="flex items-center gap-2"><Ticket className="h-4 w-4" /><span>{selectedUser.total_tickets} vé đã mua</span></div>
               <div className="flex items-center gap-2"><Calendar className="h-4 w-4" /><span>Registered {new Date(selectedUser.registered_at).toLocaleString('vi-VN')}</span></div>
             </div>
             <div className="pt-2 flex justify-end"><Button variant="ghost" onClick={() => setSelectedUser(null)}>Đóng</Button></div>

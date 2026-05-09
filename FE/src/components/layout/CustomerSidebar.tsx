@@ -37,28 +37,28 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
   const isActive = (id: string) => activeTab === id;
 
   return (
-    <aside className={`w-72 h-[calc(100vh-80px)] bg-slate-900/50 border-r border-white/5 p-6 flex flex-col gap-8 sticky top-[80px] overflow-y-auto ${className ?? ''}`}>
+    <aside className={`w-72 h-[calc(100vh-80px)] customer-bg-surface border-r customer-border p-6 flex flex-col gap-8 sticky top-[80px] overflow-y-auto ${className ?? ''}`}>
       
       {/* User Profile Section */}
-      <div className="flex flex-col items-center text-center pb-6 border-b border-white/5">
+      <div className="flex flex-col items-center text-center pb-6 border-b customer-border">
         <div className="relative mb-4 group">
-          <div className="w-24 h-24 rounded-2xl bg-slate-800 border-2 border-amber-400/30 overflow-hidden flex items-center justify-center relative shadow-[0_0_15px_rgba(251,191,36,0.15)]">
+          <div className="w-24 h-24 rounded-2xl customer-bg-surface-strong border-2 border-amber-400/30 overflow-hidden flex items-center justify-center relative shadow-[0_0_15px_rgba(251,191,36,0.15)]">
             {/* Avatar Placeholder */}
-            <User className="w-12 h-12 text-slate-500" />
+            <User className="w-12 h-12 customer-text-muted" />
             {/* Badge Star */}
-            <div className="absolute bottom-0 right-0 bg-amber-400 p-1.5 rounded-full border-4 border-slate-900">
+              <div className="absolute bottom-0 right-0 bg-amber-400 p-1.5 rounded-full border-4 customer-bg-surface-strong">
               <Star className="w-3 h-3 text-slate-900 fill-current" />
             </div>
           </div>
         </div>
         
-        <h3 className="text-on-background font-bold text-lg font-headline">{userName}</h3>
+        <h3 className="customer-text-header font-bold text-lg font-headline">{userName}</h3>
         <p className="text-amber-400 text-xs font-bold uppercase tracking-widest mt-1">Khách hàng</p>
       </div>
 
       {/* Main Navigation */}
       <div className="space-y-2">
-        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 px-2">
+        <p className="text-[10px] font-bold customer-text-muted uppercase tracking-[0.2em] mb-3 px-2">
           Tài khoản
         </p>
         {menuItems.map((item) => (
@@ -68,11 +68,11 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
               isActive(item.id)
                 ? 'bg-gradient-to-r from-red-500/20 to-red-500/5 text-red-400 border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]'
-                : 'text-slate-400 hover:bg-white/5 hover:text-on-background'
+                : 'customer-text-muted hover:customer-bg-soft hover:customer-text-header'
             }`}
           >
-            <item.icon className={`w-5 h-5 transition-colors ${isActive(item.id) ? 'text-red-400' : 'text-slate-500 group-hover:text-on-background'}`} />
-            <span className={`font-semibold text-sm ${isActive(item.id) ? 'text-red-400' : 'text-slate-300 group-hover:text-on-background'}`}>
+            <item.icon className={`w-5 h-5 transition-colors ${isActive(item.id) ? 'text-red-400' : 'customer-text-muted group-hover:customer-text-header'}`} />
+            <span className={`font-semibold text-sm ${isActive(item.id) ? 'text-red-400' : 'customer-text-body group-hover:customer-text-header'}`}>
               {item.label}
             </span>
           </button>
@@ -81,7 +81,7 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
 
       {/* Support Navigation */}
       <div className="space-y-2 mt-auto">
-        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 px-2">
+        <p className="text-[10px] font-bold customer-text-muted uppercase tracking-[0.2em] mb-3 px-2">
           Hỗ trợ
         </p>
         {supportItems.map((item) => (
@@ -91,11 +91,11 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
               isActive(item.id)
                 ? 'bg-gradient-to-r from-red-500/20 to-red-500/5 text-red-400 border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]'
-                : 'text-slate-400 hover:bg-white/5 hover:text-on-background'
+                : 'customer-text-muted hover:customer-bg-soft hover:customer-text-header'
             }`}
           >
-            <item.icon className={`w-5 h-5 transition-colors ${isActive(item.id) ? 'text-red-400' : 'text-slate-500 group-hover:text-on-background'}`} />
-            <span className={`font-semibold text-sm ${isActive(item.id) ? 'text-red-400' : 'text-slate-300 group-hover:text-on-background'}`}>
+            <item.icon className={`w-5 h-5 transition-colors ${isActive(item.id) ? 'text-red-400' : 'customer-text-muted group-hover:customer-text-header'}`} />
+            <span className={`font-semibold text-sm ${isActive(item.id) ? 'text-red-400' : 'customer-text-body group-hover:customer-text-header'}`}>
               {item.label}
             </span>
           </button>

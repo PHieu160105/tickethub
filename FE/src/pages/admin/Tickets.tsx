@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -50,13 +50,13 @@ function FilterListbox({ value, options, onChange, buttonClassName = 'w-full sm:
     <Listbox value={value} onChange={onChange}>
       <div className="relative">
         <Listbox.Button
-          className={`${buttonClassName} h-9 px-3 bg-space-800 text-white border border-white/20 rounded-md shadow-sm text-left text-sm`}
+          className={`${buttonClassName} h-9 px-3 admin-bg-listbox admin-text-header border admin-border rounded-md shadow-sm text-left text-sm`}
         >
           {selectedLabel}
         </Listbox.Button>
-        <Listbox.Options className={`absolute z-50 mt-1 ${buttonClassName} bg-slate-900 text-white border border-white/20 rounded-md shadow-lg`}>
+        <Listbox.Options className={`absolute z-50 mt-1 ${buttonClassName} admin-bg-listbox admin-text-header border admin-border rounded-md shadow-lg`}>
           {options.map((option) => (
-            <Listbox.Option key={option.value} value={option.value} className="px-3 py-2 cursor-pointer hover:bg-space-700 text-sm">
+            <Listbox.Option key={option.value} value={option.value} className="px-3 py-2 cursor-pointer hover:admin-bg-soft text-sm">
               {option.label}
             </Listbox.Option>
           ))}
@@ -113,7 +113,7 @@ export default function AdminTickets() {
     try {
       await Promise.all([loadStaticData(), loadSalesData()])
     } catch (errorValue) {
-      setError(extractApiErrorMessage(errorValue, 'Không thể tải dữ liệu vé và doanh thu.'))
+      setError(extractApiErrorMessage(errorValue, 'Không tải được dữ liệu vé và doanh thu.'))
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -145,8 +145,8 @@ export default function AdminTickets() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-display font-bold text-white">Vé và Doanh thu</h2>
-          <p className="text-gray-400 mt-1">Filter va phân trang server-side cho ticket sales</p>
+          <h2 className="text-2xl font-display font-bold admin-text-header">Vé và Doanh thu</h2>
+          <p className="text-gray-400 mt-1">Thông tin vé và doanh thu </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => void loadTicketsData(true)} isLoading={refreshing}>
@@ -168,10 +168,10 @@ export default function AdminTickets() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400 mb-1">Doanh thu tổng</p>
+                <p className="text-sm font-bold admin-text-body mb-1">Doanh thu tổng</p>
                 <p className="text-2xl font-bold text-green-400">{formatCurrency(totalRevenue)}</p>
               </div>
               <div className="h-12 w-12 rounded-lg bg-green-500/20 flex items-center justify-center">
@@ -183,10 +183,10 @@ export default function AdminTickets() {
         </Card>
 
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400 mb-1">Vé đã bán</p>
+                <p className="text-sm font-bold admin-text-body mb-1">Vé đã bán</p>
                 <p className="text-2xl font-bold text-brand-red">{totalTicketsSold.toLocaleString()}</p>
               </div>
               <div className="h-12 w-12 rounded-lg bg-brand-red/20 flex items-center justify-center"><Ticket className="h-6 w-6 text-brand-red" /></div>
@@ -196,10 +196,10 @@ export default function AdminTickets() {
         </Card>
 
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400 mb-1">Kết quả filter</p>
+                <p className="text-sm font-bold admin-text-body mb-1">Kết quả filter</p>
                 <p className="text-2xl font-bold text-brand-yellow">{totalSales}</p>
               </div>
               <div className="h-12 w-12 rounded-lg bg-brand-yellow/20 flex items-center justify-center"><Calendar className="h-6 w-6 text-brand-yellow" /></div>
@@ -213,7 +213,7 @@ export default function AdminTickets() {
         <CardHeader><CardTitle>Doanh thu theo sự kiện</CardTitle></CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-gray-300">Đang tải doanh thu...</p>
+            <p className="text-sm admin-text-body">Đang tải doanh thu...</p>
           ) : revenueByEvent.length === 0 ? (
             <p className="text-sm text-gray-400">Chưa có dữ liệu doanh thu theo sự kiện.</p>
           ) : (
@@ -223,11 +223,11 @@ export default function AdminTickets() {
                 return (
                   <div key={item.event_id} className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-white font-medium">{item.event_title}</span>
+                      <span className="admin-text-body font-medium">{item.event_title}</span>
                       <div className="flex items-center gap-4"><span className="text-gray-400">{item.tickets_sold} vé</span><span className="text-green-400 font-medium">{formatCurrency(item.revenue)}</span></div>
                     </div>
                     <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-brand-red to-brand-yellow rounded-full" style={{ width: `${Math.max(progress, 2)}%` }} />
+                      <div className="h-full rounded-full" style={{background: `linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))`, width: `${Math.max(progress, 2)}%` }} />
                     </div>
                   </div>
                 )
@@ -258,7 +258,7 @@ export default function AdminTickets() {
                   setStatusFilter(value)
                   setPage(1)
                 }}
-                buttonClassName="w-full sm:w-40"
+                buttonClassName="w-full sm:w-56"
               />
             </div>
           </CardTitle>
@@ -267,17 +267,17 @@ export default function AdminTickets() {
           {loading ? (
             <p className="text-sm text-gray-300">Đang tải giao dịch...</p>
           ) : ticketSales.length === 0 ? (
-            <p className="text-sm text-gray-400">Không có giao dịch phù hợp.</p>
+            <p className="text-sm text-gray-400">Không có giao dịch.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/10 text-left text-gray-400">
+                  <tr className="border-b border-white/10 text-left admin-text-body">
                     <th className="pb-3 font-medium">ID</th>
                     <th className="pb-3 font-medium">Sự kiện</th>
                     <th className="pb-3 font-medium">Khách hàng</th>
                     <th className="pb-3 font-medium">Ghế</th>
-                    <th className="pb-3 font-medium">Giá</th>
+                    <th className="pb-3 font-medium">Gía</th>
                     <th className="pb-3 font-medium">Thời gian</th>
                     <th className="pb-3 font-medium">Status</th>
                   </tr>
@@ -285,12 +285,12 @@ export default function AdminTickets() {
                 <tbody>
                   {ticketSales.map((sale) => (
                     <tr key={sale.id} className="border-b border-white/5">
-                      <td className="py-3 text-gray-400 font-mono text-xs">#{sale.id.toString().padStart(4, '0')}</td>
-                      <td className="py-3 text-white max-w-[220px] truncate">{sale.event_title}</td>
-                      <td className="py-3 text-gray-300">{sale.customer_name}</td>
-                      <td className="py-3 text-gray-300">{sale.zone_name} - {sale.seat_label}</td>
+                      <td className="py-3 admin-text-body font-mono text-xs">#{sale.id.toString().padStart(4, '0')}</td>
+                      <td className="py-3 admin-text-body max-w-[220px] truncate">{sale.event_title}</td>
+                      <td className="py-3 admin-text-body">{sale.customer_name}</td>
+                      <td className="py-3 admin-text-body">{sale.zone_name} - {sale.seat_label}</td>
                       <td className="py-3 text-green-400">{formatCurrency(sale.price)}</td>
-                      <td className="py-3 text-gray-400">{new Date(sale.purchased_at).toLocaleString('vi-VN')}</td>
+                      <td className="py-3 admin-text-body">{new Date(sale.purchased_at).toLocaleString('vi-VN')}</td>
                       <td className="py-3">{statusBadge(sale.order_status)}</td>
                     </tr>
                   ))}
