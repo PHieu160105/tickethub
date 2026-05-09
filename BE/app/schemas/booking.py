@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -65,17 +66,21 @@ class CheckoutResponse(BaseModel):
 class MyTicketResponse(BaseModel):
     """Customer ticket management payload."""
 
-    ticket_id: int
+    ticket_id: int | None = None
+    cancellation_id: int | None = None
     ticket_code: str
-    qr_payload: str
+    qr_payload: str | None = None
     event_id: int
     event_slug: str
     event_title: str
     event_date: datetime
+    event_cover_image_url: str | None = None
     venue: str
     seat_label: str
     zone_name: str
     price: Decimal
-    order_id: int
+    order_id: int | None = None
     seat_status: SeatStatus
-    issued_at: datetime
+    ticket_status: Literal['active', 'cancelled'] = 'active'
+    issued_at: datetime | None = None
+    canceled_at: datetime | None = None

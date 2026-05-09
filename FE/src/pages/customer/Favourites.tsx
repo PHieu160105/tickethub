@@ -41,24 +41,35 @@ export default function Favourites() {
   return (
     <>
       <Navbar />
-      <div className="pt-[80px] min-h-screen bg-background flex">
+      <div className="pt-[20px] min-h-screen bg-background flex">
         <div className="hidden lg:block">
-          <CustomerSidebar activeTab="favorites" userName={user?.full_name ?? 'Customer'} onNavigate={onSidebarNavigate} />
+          <CustomerSidebar
+            activeTab="favourites"
+            userName={user?.full_name ?? 'Customer'}
+            membershipLevel="Stellar Member"
+            onNavigate={onSidebarNavigate}
+          />
         </div>
         {drawerOpen && (
           <div className="fixed inset-0 z-50 lg:hidden">
             <button className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} />
-            <CustomerSidebar activeTab="favorites" userName={user?.full_name ?? 'Customer'} onNavigate={onSidebarNavigate} className="relative" />
+            <CustomerSidebar
+              activeTab="favourites"
+              userName={user?.full_name ?? 'Customer'}
+              membershipLevel="Stellar Member"
+              onNavigate={onSidebarNavigate}
+              className="relative"
+            />
           </div>
         )}
 
-        <main className="flex-1 p-6 lg:p-12">
+        <main className="flex-1 p-4 sm:p-6 lg:p-12 max-w-5xl mx-auto">
           <button className="lg:hidden mb-4 p-2 rounded bg-surface-container" onClick={() => setDrawerOpen((v) => !v)}>
             {drawerOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
-          <header className="mb-10">
-            <h1 className="text-5xl font-black text-on-background font-headline tracking-tighter">My Watchlist</h1>
-            <p className="text-on-surface-variant mt-2 max-w-lg">Saved on your current device.</p>
+          <header className="mb-6">
+            <h1 className="text-3xl sm:text-5xl font-black text-on-background font-headline tracking-tighter">Yêu thích</h1>
+            <p className="text-on-surface-variant mt-2 max-w-lg">Những sự kiện bạn yêu thích!</p>
           </header>
 
           {favourites.length === 0 ? (

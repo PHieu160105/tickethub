@@ -60,7 +60,7 @@ export const EventCard = forwardRef<HTMLAnchorElement, EventCardProps>(
         to={href || '#'}
         ref={ref}
         className={cn(
-          'glass-panel rounded-xl overflow-hidden group hover:translate-y-[-4px] transition-all duration-300 block',
+          'customer-bg-surface border-1 border-[var(--customer-bg-opp)] rounded-xl overflow-hidden group hover:translate-y-[-4px] transition-all duration-300 block',
           className
         )}
         {...props}
@@ -86,7 +86,7 @@ export const EventCard = forwardRef<HTMLAnchorElement, EventCardProps>(
           </p>
           <div className="flex items-center justify-between pt-4 border-t border-white/5">
             <span className="text-secondary font-headline font-bold">{price}</span>
-            <button className="bg-surface-container-highest hover:bg-primary hover:text-on-primary-container p-2 rounded-lg transition-colors">
+            <button className="bg-primary hover:bg-primary hover:opacity-50 text-white font-bold p-2 rounded-xl transition-colors">
               <span className="material-symbols-outlined text-sm">Chi tiết</span>
             </button>
           </div>

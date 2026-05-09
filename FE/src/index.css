@@ -171,7 +171,10 @@
     --customer-text-body: #e2e8f0;
     --customer-text-muted: #94a3b8;
     --customer-bg-page: #0b1020;
-    --customer-bg-surface: #0f172ab3;
+    --customer-bg-help: #24282e;
+    --customer-bg-opt: #e94560;
+    --customer-bg-opp: transparent;
+    --customer-bg-surface: #212b42b3;
     --customer-bg-surface-strong: #111827;
     --customer-bg-soft: #ffffff0d;
     --customer-border: #ffffff1a;
@@ -210,7 +213,10 @@
     --customer-text-header: #0f172a;
     --customer-text-body: #1e293b;
     --customer-text-muted: #64748b;
-    --customer-bg-page: #f8fafc;
+    --customer-bg-page: #f5f9fe;
+    --customer-bg-help: #64748b;
+    --customer-bg-opt: #f0c03e;
+    --customer-bg-opp: #c08000;
     --customer-bg-surface: #ffffffd9;
     --customer-bg-surface-strong: #ffffff;
     --customer-bg-soft: #0f172a0d;

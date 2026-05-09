@@ -57,11 +57,18 @@ export function Navbar() {
       className={cn(
         'fixed top-0 left-0 right-0 z-50 transition-all duration-300',
         isScrolled
-          ? 'customer-nav-bg backdrop-blur-xl border-b customer-border shadow-[0_0_15px_rgba(233,69,96,0.2)]'
+          ? 'customer-nav-bg backdrop-blur-xl border-b customer-border'
           : 'customer-nav-bg backdrop-blur-md border-b customer-border'
       )}
+      style={
+              isScrolled
+              ? {
+                boxShadow: `0 0 10px color-mix(in srgb, var(--customer-bg-opt) 30%, transparent)`
+              }
+              : {}
+            }
     >
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-1 py-3 sm:px-3">
         <Logo />
 
         {/* Desktop Navigation */}
@@ -75,7 +82,7 @@ export function Navbar() {
                   cn(
                     'px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                     isActive 
-                      ? 'customer-bg-soft customer-text-header' 
+                      ? 'customer-text-header border-b-3 border-[var(--customer-bg-opt)] text-[var(--customer-bg-opt)]' 
                       : 'customer-text-muted hover:customer-text-header customer-bg-soft/0 hover:customer-bg-soft'
                   )
                 }
@@ -86,7 +93,7 @@ export function Navbar() {
           </nav>
 
           {/* Search Bar */}
-          <div className="relative w-72">
+          <div className="relative w-90 border-1 border-gray-500 rounded-xl">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 customer-text-muted" />
             <SearchAutocompleteInput
               value={searchValue}

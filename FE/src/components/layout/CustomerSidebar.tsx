@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 
 interface CustomerSidebarProps {
-  activeTab: 'tickets' | 'profile' | 'favorites' | 'payments' | 'settings' | 'help';
+  activeTab: 'tickets' | 'profile' | 'favourites' | 'payments' | 'settings' | 'help';
   userName?: string;
   membershipLevel?: string;
   onNavigate?: (tab: string) => void;
@@ -46,7 +46,7 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
             {/* Avatar Placeholder */}
             <User className="w-12 h-12 customer-text-muted" />
             {/* Badge Star */}
-              <div className="absolute bottom-0 right-0 bg-amber-400 p-1.5 rounded-full border-4 customer-bg-surface-strong">
+              <div className="absolute bottom-0 right-0 bg-amber-400 p-1.5 rounded-full border-3 customer-bg-surface-strong">
               <Star className="w-3 h-3 text-slate-900 fill-current" />
             </div>
           </div>
@@ -67,12 +67,20 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
             onClick={() => onNavigate?.(item.id)}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
               isActive(item.id)
-                ? 'bg-gradient-to-r from-red-500/20 to-red-500/5 text-red-400 border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]'
+                ? 'text-[var(--customer-bg-opt)] border border-[var(--customer-bg-opt)]/20'
                 : 'customer-text-muted hover:customer-bg-soft hover:customer-text-header'
             }`}
+            style={
+              isActive(item.id)
+              ? {
+                background: `linear-gradient(to right, color-mix(in srgb, var(--customer-bg-opt) 20%, transparent), color-mix(in srgb, var(--customer-bg-opt) 40%, transparent))`,
+                boxShadow: `0 0 10px color-mix(in srgb, var(--customer-bg-opt) 30%, transparent)`
+              }
+              : {}
+            }
           >
-            <item.icon className={`w-5 h-5 transition-colors ${isActive(item.id) ? 'text-red-400' : 'customer-text-muted group-hover:customer-text-header'}`} />
-            <span className={`font-semibold text-sm ${isActive(item.id) ? 'text-red-400' : 'customer-text-body group-hover:customer-text-header'}`}>
+            <item.icon className={`w-5 h-5 transition-colors ${isActive(item.id) ? 'text-[var(--customer-bg-opt)]' : 'customer-text-muted group-hover:customer-text-header'}`} />
+            <span className={`font-semibold text-sm ${isActive(item.id) ? 'text-[var(--customer-bg-opt)]' : 'customer-text-body group-hover:customer-text-header'}`}>
               {item.label}
             </span>
           </button>
@@ -88,14 +96,22 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
           <button
             key={item.id}
             onClick={() => onNavigate?.(item.id)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
               isActive(item.id)
-                ? 'bg-gradient-to-r from-red-500/20 to-red-500/5 text-red-400 border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]'
+                ? 'text-[var(--customer-bg-opt)] border border-[var(--customer-bg-opt)]/20'
                 : 'customer-text-muted hover:customer-bg-soft hover:customer-text-header'
             }`}
+            style={
+              isActive(item.id)
+              ? {
+                background: `linear-gradient(to right, color-mix(in srgb, var(--customer-bg-opt) 20%, transparent), color-mix(in srgb, var(--customer-bg-opt) 40%, transparent))`,
+                boxShadow: `0 0 10px color-mix(in srgb, var(--customer-bg-opt) 30%, transparent)`
+              }
+              : {}
+            }
           >
-            <item.icon className={`w-5 h-5 transition-colors ${isActive(item.id) ? 'text-red-400' : 'customer-text-muted group-hover:customer-text-header'}`} />
-            <span className={`font-semibold text-sm ${isActive(item.id) ? 'text-red-400' : 'customer-text-body group-hover:customer-text-header'}`}>
+            <item.icon className={`w-5 h-5 transition-colors ${isActive(item.id) ? 'text-[var(--customer-bg-opt)]' : 'customer-text-muted group-hover:customer-text-header'}`} />
+            <span className={`font-semibold text-sm ${isActive(item.id) ? 'text-[var(--customer-bg-opt)]' : 'customer-text-body group-hover:customer-text-header'}`}>
               {item.label}
             </span>
           </button>

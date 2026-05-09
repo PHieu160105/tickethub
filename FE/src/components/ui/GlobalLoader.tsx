@@ -26,7 +26,7 @@ export function GlobalLoader() {
   if (!animation) return null
 
   return (
-    <div className={`fixed inset-0 z-[9999] flex items-center justify-center ${theme === 'light' ? 'bg-white' : 'bg-slate-950'}`}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="w-40 h-40">
         <Lottie animationData={animation} />
       </div>

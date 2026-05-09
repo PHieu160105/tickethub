@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Menu, X } from 'lucide-react'
+import { Menu, X, Save } from 'lucide-react'
 
 import { CustomerSidebar } from '@/components/layout/CustomerSidebar'
 import { Navbar } from '@/components/layout/Navbar'
@@ -79,7 +79,7 @@ export default function CustomerProfile() {
   return (
     <>
       <Navbar />
-      <div className="pt-[80px] min-h-screen bg-[#0B0F19] flex">
+      <div className="pt-[20px] min-h-screen flex">
         <div className="hidden lg:block">
           <CustomerSidebar
             activeTab="profile"
@@ -101,16 +101,16 @@ export default function CustomerProfile() {
           </div>
         )}
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-12 max-w-4xl mx-auto space-y-8">
+        <main className="flex-1 p-4 sm:p-6 lg:p-12 max-w-5xl mx-auto">
           <button className="lg:hidden mb-4 p-2 rounded bg-surface-container" onClick={() => setDrawerOpen((v) => !v)}>
             {drawerOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-black text-white font-headline tracking-tight">Hồ sơ Khách hàng</h1>
-            <p className="text-slate-400 mt-2">Quản lý thông tin tài khoản của bạn</p>
-          </div>
+          <header className="mb-6">
+            <h1 className="text-3xl sm:text-5xl font-black text-on-background font-headline tracking-tighter">Hồ sơ khách hàng</h1>
+            <p className="text-on-surface-variant mt-2 max-w-lg">Quản lý thông tin tài khoản của bạn.</p>
+          </header>
 
-          <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 sm:p-6 space-y-6">
+          <div className="rounded-2xl border border-[var(--customer-bg-opp)] customer-bg-surface p-4 sm:p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Họ tên </label>
@@ -120,7 +120,7 @@ export default function CustomerProfile() {
                     type="text"
                     value={fullName}
                     onChange={(event) => setFullName(event.target.value)}
-                    className="w-full bg-slate-800/60 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white outline-none focus:border-primary"
+                    className="w-full main-bg-page border border-gray-500 rounded-xl py-3 pl-12 pr-4 customer-text-body outline-none focus:border-[var(--customer-bg-opt)]"
                   />
                 </div>
               </div>
@@ -133,7 +133,7 @@ export default function CustomerProfile() {
                     type="email"
                     value={user?.email ?? ''}
                     readOnly
-                    className="w-full bg-slate-800/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-slate-400"
+                    className="w-full main-bg-page border border-gray-500 rounded-xl py-3 pl-12 pr-4 customer-text-body outline-none focus:border-[var(--customer-bg-opt)]"
                   />
                 </div>
               </div>
@@ -145,7 +145,7 @@ export default function CustomerProfile() {
                   <select
                     value={gender}
                     onChange={(event) => setGender(event.target.value as 'male' | 'female' | 'other')}
-                    className="w-full bg-slate-800 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white outline-none focus:border-primary appearance-none"
+                    className="admin-bg-listbox w-full main-bg-page border border-gray-500 rounded-xl py-3 pl-12 pr-4 customer-text-body outline-none focus:border-[var(--customer-bg-opt)] appearance-none"
                   >
                     <option value="male">Nam</option>
                     <option value="female">Nữ</option>
@@ -169,26 +169,27 @@ export default function CustomerProfile() {
                     max={100}
                     value={age}
                     onChange={(event) => setAge(Number(event.target.value) || 18)}
-                    className="w-full bg-slate-800/60 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white outline-none focus:border-primary"
+                    className="w-full main-bg-page border border-gray-500 rounded-xl py-3 pl-12 pr-4 customer-text-body outline-none focus:border-[var(--customer-bg-opt)]"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="rounded-lg bg-slate-800/40 border border-white/10 p-4 text-sm text-slate-300">
-              Thông tin hiện tại: {formatGenderLabel(gender)}, {age} tuổi (tức sinh năm {estimatedBirthYear})
+            <div className="rounded-lg bg-[var(--customer-bg-help)] border border-gray-500 p-4 text-sm text-white">
+              Thông tin hiện tại: {formatGenderLabel(gender)}, {age} tuổi - {estimatedBirthYear}
             </div>
 
-            {error ? <p className="text-sm text-amber-300">{error}</p> : null}
-            {message ? <p className="text-sm text-emerald-300">{message}</p> : null}
+            {error ? <p className="text-sm font-bold text-amber-300">{error}</p> : null}
+            {message ? <p className="text-sm font-bold text-green-500">{message}</p> : null}
 
             <button
               type="button"
               disabled={isSaving}
               onClick={() => void handleSave()}
-              className="bg-primary hover:bg-red-600 disabled:opacity-60 text-white font-bold py-3 px-8 rounded-xl transition-colors"
+              className="flex items-center gap-2 justify-end bg-primary hover:bg-primary hover:opacity-50 disabled:opacity-60 text-white font-bold py-3 px-8 rounded-xl transition-colors"
             >
-              {isSaving ? 'Saving...' : 'Save Changes'}
+              <Save className="h-4 w-4" />
+              {isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
             </button>
           </div>
         </main>

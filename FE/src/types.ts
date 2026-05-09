@@ -282,9 +282,10 @@ export interface CheckoutResponse {
 }
 
 export interface TicketItem {
-  ticket_id: number
+  ticket_id?: number
+  cancellation_id?: number
   ticket_code: string
-  qr_payload: string
+  qr_payload?: string
   event_id: number
   event_slug: string
   event_title: string
@@ -294,9 +295,11 @@ export interface TicketItem {
   seat_label: string
   zone_name: string
   price: number
-  order_id: number
+  order_id?: number
   seat_status: SeatStatus
-  issued_at: string
+  ticket_status: 'active' | 'cancelled'
+  issued_at?: string
+  canceled_at?: string
 }
 
 export interface DashboardSummary {

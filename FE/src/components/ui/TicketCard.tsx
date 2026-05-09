@@ -37,7 +37,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
 
   return (
     <div
-      className={`glass-panel rounded-full overflow-hidden flex flex-col md:flex-row relative group ${
+      className={`customer-bg-surface border-1 border-[var(--customer-bg-opp)] rounded-full overflow-hidden flex flex-col md:flex-row relative group ${
         isFeatured ? 'xl:col-span-2 border-primary-container/30' : ''
       }`}
     >
@@ -79,12 +79,9 @@ export const TicketCard: React.FC<TicketCardProps> = ({
             >
               {status === 'confirmed' ? 'Confirmed' : status}
             </span>
-            <span className="text-on-surface-variant text-xs font-label">
-              #{ticketNumber}
-            </span>
           </div>
           <h2
-            className={`font-black font-headline text-white leading-tight mb-2 uppercase tracking-tighter ${
+            className={`font-black font-headline customer-text-body leading-tight mb-2 uppercase tracking-tighter ${
               isFeatured ? 'text-4xl md:text-5xl' : 'text-2xl'
             }`}
           >
@@ -128,25 +125,35 @@ export const TicketCard: React.FC<TicketCardProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button
             onClick={onViewDetails}
-            className={`bg-primary-container text-on-primary-container rounded-xl font-bold uppercase tracking-widest transition-all active:scale-95 ${
+            className={`bg-[var(--customer-bg-opt)] text-on-primary-container rounded-xl font-bold hover:bg-[var(--customer-bg-opt)] hover:opacity-50 tracking-widest transition-all active:scale-95 ${
               isFeatured
-                ? 'px-8 py-3 text-sm hover:shadow-[0_0_20px_rgba(252,83,109,0.5)]'
-                : 'flex-1 py-3 text-xs hover:shadow-[0_0_15px_rgba(252,83,109,0.4)]'
+                ? 'px-8 py-3 text-sm'
+                : 'flex-1 py-3 text-xs'
             }`}
+            style={
+              isFeatured
+                ? {
+                    boxShadow: `0 0 20px color-mix(in srgb, var(--customer-bg-opt) 50%, transparent)`
+                  }
+                : {
+                    boxShadow: `0 0 15px color-mix(in srgb, var(--customer-bg-opt) 40%, transparent)`
+                  }
+            }
           >
-            {isFeatured ? 'Claim Voyager Perks' : 'Chi tiết'}
+            {isFeatured ? 'Claim Voyager Perks' : 'CHI TIẾT'}
           </button>
+
           <button
             onClick={onDownload}
-            className="flex items-center gap-2 p-2 border border-white/10 rounded-xl hover:bg-white/5 transition-all"
+            className="flex items-center gap-2 p-2 border border-[var(--customer-help)] rounded-xl hover:bg-[var(--customer-bg-help)] transition-all"
           >
-            <span className="material-symbols-outlined text-white">
+            <span className="material-symbols-outlined customer-text-body">
               Tải xuống
               </span>
-            <Download className="text-white w-4 h-4"/>
+            <Download className="customer-text-body w-4 h-4"/>
           </button>
         </div>
       </div>
