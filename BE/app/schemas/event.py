@@ -79,6 +79,7 @@ class EventCardResponse(BaseModel):
     end_at: datetime
     cover_image_url: str
     status: EventStatus
+    created_at: datetime
     queue_enabled: bool
     venue_id: int | None = None
     venue_layout_id: int | None = None

@@ -104,15 +104,15 @@ export default function Search() {
   // }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen text-white">
       <Navbar />
 
-      <main className="max-w-screen-2xl mx-auto px-6 py-12">
+      <main className="customer-bg-page max-w-screen-2xl mx-auto px-6 py-12">
         <div className="mb-16 max-w-3xl mx-auto text-center">
-          <h1 className="text-4xl md:text-5xl font-headline font-black tracking-tighter mb-6">Tìm sự kiện</h1>
+          <h1 className="text-4xl md:text-5xl font-headline font-black tracking-tighter mb-6 customer-text-header">Tìm sự kiện</h1>
           <div className="relative group">
             <div className="absolute -inset-1 bg-gradient-to-r from-primary to-secondary rounded-xl blur opacity-25 group-hover:opacity-40 transition duration-1000" />
-            <div className="relative flex items-center bg-slate-900/80 rounded-xl p-2 border border-white/10">
+            <div className="relative flex items-center customer-bg-surface rounded-xl p-2 border border-white/10">
               <SearchIcon className="ml-4 text-primary w-5 h-5" />
               <Input
                 className="bg-transparent border-none focus:ring-0 w-full px-4 py-3 text-lg font-body placeholder:text-slate-500"
@@ -131,7 +131,7 @@ export default function Search() {
                 </button>
               )}
               <Button
-                className="tracking-widest uppercase px-8 py-3 rounded-lg hover:scale-105 active:scale-95 transition-all"
+                className="tracking-widest uppercase px-8 py-3 rounded-xl hover:scale-105 active:scale-95 transition-all bg-[var(--customer-bg-opt)]"
                 onClick={onSearchSubmit}
               >
                 Tìm
@@ -142,16 +142,16 @@ export default function Search() {
 
         <div className="flex flex-col md:flex-row gap-10">
           <aside className="w-full md:w-72 shrink-0 space-y-6">
-            <div className="rounded-xl border border-white/10 p-5 bg-slate-900/70 space-y-5">
+            <div className="rounded-xl border border-[var(--customer-bg-opp)] p-5 customer-bg-surface space-y-5">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm uppercase tracking-widest text-slate-400">Bộ lọc</h3>
+                <h3 className="text-sm uppercase tracking-widest customer-text-body">Bộ lọc</h3>
                 <button className="text-xs text-primary hover:underline" onClick={resetFilters}>
                   Đặt lại
                 </button>
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-widest text-slate-400 mb-2">Thể loại</label>
+                <label className="block text-xs uppercase tracking-widest customer-text-body mb-2">Thể loại</label>
                 <select
                   value={selectedCategory}
                   onChange={(event) => {
@@ -174,7 +174,7 @@ export default function Search() {
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-widest text-slate-400 mb-2">Địa điểm</label>
+                <label className="block text-xs uppercase tracking-widest customer-text-body mb-2">Địa điểm</label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                   <select
@@ -195,10 +195,10 @@ export default function Search() {
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-widest text-slate-400 mb-2">Khoảng giá</label>
+                <label className="block text-xs uppercase tracking-widest customer-text-body mb-2">Khoảng giá</label>
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-slate-300">
-                    <DollarSign className="w-4 h-4 text-slate-500" />
+                  <div className="flex items-center gap-2 text-sm customer-text-body">
+                    <DollarSign className="w-4 h-4 text-green-500" />
                     <span>
                       ${priceRange[0]} - ${priceRange[1]}
                     </span>
@@ -212,7 +212,7 @@ export default function Search() {
                       setPriceRange([0, Number(event.target.value)])
                       setCurrentPage(1)
                     }}
-                    className="w-full accent-primary"
+                    className="w-full accent-[var(--customer-bg-opt)]"
                   />
                 </div>
               </div>
@@ -222,7 +222,7 @@ export default function Search() {
           <div className="flex-1">
             <div className="flex items-center justify-between mb-8 gap-4">
               <div className="flex items-baseline gap-3 flex-wrap">
-                <h2 className="text-2xl font-headline font-bold">Found {filteredResults.length} events</h2>
+                <h2 className="text-2xl font-headline font-bold customer-text-body">Đã tìm được {filteredResults.length} sự kiện</h2>
                 {searchQuery && <span className="text-sm text-slate-400 italic">for "{searchQuery}"</span>}
                 {activeFiltersCount > 0 && (
                   <span className="text-xs px-2 py-1 bg-primary/20 text-primary rounded-full">{activeFiltersCount} active filters</span>
@@ -247,7 +247,7 @@ export default function Search() {
             </div>
 
             {isLoading ? (
-              <div className="text-center py-20 text-slate-400">Loading events...</div>
+              <div className="text-center py-20 customer-text-body">Loading events...</div>
             ) : error ? (
               <div className="text-center py-20">
                 <p className="text-red-400 mb-4">{error}</p>
@@ -273,10 +273,10 @@ export default function Search() {
                 <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-slate-800 mb-6">
                   <SearchIcon className="w-10 h-10 text-slate-500" />
                 </div>
-                <h3 className="text-2xl font-headline font-bold mb-2">No events found</h3>
-                <p className="text-slate-400 mb-6">Try adjusting your filters or search query</p>
+                <h3 className="text-2xl font-headline font-bold mb-2">Không tìm thấy sự kiện</h3>
+                <p className="text-slate-400 mb-6">Thử sử dụng bộ lọc hoặc tìm kiếm lại</p>
                 <Button onClick={resetFilters} variant="primary">
-                  Clear All Filters
+                  Xóa tất cả lọc
                 </Button>
               </div>
             )}

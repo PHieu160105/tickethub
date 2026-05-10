@@ -63,7 +63,11 @@ export default function Home() {
                 />
               ))}
             </div>
-            <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent" />
+            <div className="absolute inset-0" 
+                 style={{
+                    background: `linear-gradient(to right, var(--customer-bg-surface), color-mix(in srgb, var(--customer-bg-surface) 80%, transparent), transparent)`
+                 }} 
+            />
           </>
         ) : (
           <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800" />
@@ -76,19 +80,19 @@ export default function Home() {
             <p className="text-amber-300">{error}</p>
           ) : heroEvent ? (
             <div className="max-w-5xl space-y-6">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/30 px-4 py-2 text-xs uppercase tracking-[0.2em]">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[var(--customer-bg-opp)] bg-black/30 px-4 py-2 text-xs uppercase tracking-[0.2em]">
                 <Sparkles className="h-4 w-4" />
                 Sự kiện nổi bật
               </div>
               <h1 className="text-4xl md:text-6xl font-black leading-tight">{heroEvent.title}</h1>
-              <p className="text-slate-300 max-w-2xl line-clamp-3">{heroEvent.description}</p>
-              <div className="flex flex-wrap gap-4 text-sm text-slate-200">
+              <p className="customer-text-body max-w-2xl line-clamp-3">{heroEvent.description}</p>
+              <div className="flex flex-wrap gap-4 text-sm customer-text-body">
                 <span className="inline-flex items-center gap-2">
-                  <CalendarDays className="h-4 w-4" />
+                  <CalendarDays className="h-4 w-4 text-cyan-500" />
                   {formatDate(heroEvent.start_at)}
                 </span>
                 <span className="inline-flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
+                  <MapPin className="h-4 w-4 text-red-500" />
                   {heroEvent.venue}
                 </span>
               </div>
@@ -142,9 +146,11 @@ export default function Home() {
       <section className="max-w-7xl mx-auto px-6 py-12 space-y-10">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-2xl font-bold">Sự kiện gần đây</h2>
-          <Link to="/search" className="text-sm text-slate-400 hover:text-on-background">
+          <div className="w-20 h-8 flex items-center justify-center customer-bg-surface border-1 border-[var(--customer-bg-opp)] customer-text-body hover:text-on-background rounded-xl">
+          <Link to="/search" className="text-sm font-bold">
             Xem tất cả
           </Link>
+          </div>
         </div>
 
         {isLoading ? (

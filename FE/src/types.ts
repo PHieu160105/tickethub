@@ -30,6 +30,7 @@ export interface EventCard {
   end_at: string
   cover_image_url: string
   status: EventStatus
+  created_at: string
   queue_enabled: boolean
   venue_id?: number | null
   venue_layout_id?: number | null
