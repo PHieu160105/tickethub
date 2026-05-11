@@ -9,7 +9,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
-from app.api.router import api_router, ws_router
+from app.api.router import api_router
+from app.api.routes import ws
 from app.core.config import get_settings
 from app.core.db import engine
 from app.models import Base
@@ -124,7 +125,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
-app.include_router(ws_router)
+app.include_router(ws.router)
 
 
 @app.exception_handler(ValueError)

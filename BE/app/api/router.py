@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.routes import admin, auth, bookings, events, help, queue, search, seatmap, venues, ws
+from app.api.routes import admin, auth, bookings, events, help, queue, search, seatmap, venues
 from app.api.routes.venues import layout_router, polygon_router, section_router, seat_router
 
 
@@ -20,6 +20,3 @@ api_router.include_router(section_router)
 api_router.include_router(seat_router)
 api_router.include_router(polygon_router)
 api_router.include_router(seatmap.router)
-
-ws_router = APIRouter()
-ws_router.include_router(ws.router)

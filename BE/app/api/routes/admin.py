@@ -39,6 +39,9 @@ from app.schemas.event import (
     SeatCreateResponse,
     SeatBulkCreateResponse,
     SeatUpdateRequest,
+    SeatZoneUpdate,
+    SeatZoneCreate,
+    SeatZoneResponse,
 )
 from app.services.dashboard_service import get_audience_distribution, get_dashboard_summary, get_revenue_series
 from app.services.event_service import (
