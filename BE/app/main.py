@@ -1,0 +1,403 @@
+"""TicketRush FastAPI application entrypoint."""
+
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+
+from app.api.router import api_router
+from app.api.routes import ws
+from app.core.config import get_settings
+from app.core.db import engine
+from app.models import Base
+from app.seed import seed_demo_data
+from app.workers.tasks import worker_orchestrator
+
+settings = get_settings()
+
+
+async def _ensure_cover_image_url_text_column() -> None:
+    """Migrate events.cover_image_url to TEXT for large data URLs."""
+
+    async with engine.begin() as conn:
+        column_type = await conn.scalar(
+            text(
+                """
+                SELECT data_type
+                FROM information_schema.columns
+                WHERE table_schema = 'ticket_rush'
+                  AND table_name = 'events'
+                  AND column_name = 'cover_image_url'
+                """
+            )
+        )
+
+        if column_type and column_type.lower() != "text":
+            await conn.execute(
+                text(
+                    """
+                    ALTER TABLE ticket_rush.events
+                    ALTER COLUMN cover_image_url TYPE TEXT
+                    """
+                )
+            )
+
+
+async def _ensure_seats_admin_lock_column() -> None:
+    """Add seats.is_admin_locked for older databases without a migration run."""
+
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS ticket_rush.seats
+                ADD COLUMN IF NOT EXISTS is_admin_locked BOOLEAN NOT NULL DEFAULT FALSE
+                """
+            )
+        )
+
+
+async def _ensure_template_seat_columns_are_nullable() -> None:
+    """Allow venue template seats to exist without binding to one event."""
+
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS ticket_rush.seats
+                ALTER COLUMN event_id DROP NOT NULL
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS ticket_rush.seats
+                ALTER COLUMN zone_id DROP NOT NULL
+                """
+            )
+        )
+
+
+async def _ensure_user_auth_columns() -> None:
+    """Add newer social-login user columns on older databases."""
+
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS ticket_rush.users
+                ADD COLUMN IF NOT EXISTS firebase_uid VARCHAR(255),
+                ADD COLUMN IF NOT EXISTS google_id VARCHAR(255),
+                ADD COLUMN IF NOT EXISTS facebook_id VARCHAR(255)
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_users_firebase_uid
+                ON ticket_rush.users (firebase_uid)
+                WHERE firebase_uid IS NOT NULL
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_id
+                ON ticket_rush.users (google_id)
+                WHERE google_id IS NOT NULL
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_users_facebook_id
+                ON ticket_rush.users (facebook_id)
+                WHERE facebook_id IS NOT NULL
+                """
+            )
+        )
+
+
+async def _ensure_show_refactor_schema() -> None:
+    """Backfill show-based schema on existing databases without manual migration."""
+
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS ticket_rush.events
+                ADD COLUMN IF NOT EXISTS start_date DATE,
+                ADD COLUMN IF NOT EXISTS end_date DATE
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                UPDATE ticket_rush.events
+                SET start_date = COALESCE(start_date, DATE(start_at), CURRENT_DATE),
+                    end_date = COALESCE(end_date, DATE(end_at), DATE(start_at), CURRENT_DATE)
+                WHERE start_date IS NULL OR end_date IS NULL
+                """
+            )
+        )
+
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS ticket_rush.seat_zones
+                ADD COLUMN IF NOT EXISTS show_id INTEGER
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS ticket_rush.seats
+                ADD COLUMN IF NOT EXISTS show_id INTEGER
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS ticket_rush.orders
+                ADD COLUMN IF NOT EXISTS show_id INTEGER
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS ticket_rush.queue_entries
+                ADD COLUMN IF NOT EXISTS show_id INTEGER
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS ticket_rush.ticket_cancellations
+                ADD COLUMN IF NOT EXISTS show_id INTEGER
+                """
+            )
+        )
+
+        await conn.execute(
+            text(
+                """
+                INSERT INTO ticket_rush.shows (
+                    event_id, title, description, venue, start_at, end_at, status,
+                    hold_minutes, queue_enabled, queue_release_batch, max_active_queue_tokens,
+                    created_by_user_id, venue_id, venue_layout_id, is_deleted, created_at, updated_at
+                )
+                SELECT
+                    e.id,
+                    e.title,
+                    e.description,
+                    COALESCE(e.venue, ''),
+                    COALESCE(e.start_at, timezone('utc', now())),
+                    COALESCE(e.end_at, COALESCE(e.start_at, timezone('utc', now())) + interval '2 hours'),
+                    e.status,
+                    COALESCE(e.hold_minutes, 10),
+                    COALESCE(e.queue_enabled, TRUE),
+                    COALESCE(e.queue_release_batch, 50),
+                    COALESCE(e.max_active_queue_tokens, 200),
+                    e.created_by_user_id,
+                    e.venue_id,
+                    e.venue_layout_id,
+                    COALESCE(e.is_deleted, FALSE),
+                    COALESCE(e.created_at, timezone('utc', now())),
+                    COALESCE(e.updated_at, timezone('utc', now()))
+                FROM ticket_rush.events e
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM ticket_rush.shows s WHERE s.event_id = e.id
+                )
+                """
+            )
+        )
+
+        await conn.execute(
+            text(
+                """
+                UPDATE ticket_rush.seat_zones z
+                SET show_id = s.id
+                FROM (
+                    SELECT DISTINCT ON (event_id) id, event_id
+                    FROM ticket_rush.shows
+                    ORDER BY event_id, id ASC
+                ) s
+                WHERE z.show_id IS NULL
+                  AND z.event_id IS NOT NULL
+                  AND s.event_id = z.event_id
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                UPDATE ticket_rush.seats seat
+                SET show_id = s.id
+                FROM (
+                    SELECT DISTINCT ON (event_id) id, event_id
+                    FROM ticket_rush.shows
+                    ORDER BY event_id, id ASC
+                ) s
+                WHERE seat.show_id IS NULL
+                  AND seat.event_id IS NOT NULL
+                  AND s.event_id = seat.event_id
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                UPDATE ticket_rush.orders o
+                SET show_id = s.id
+                FROM (
+                    SELECT DISTINCT ON (event_id) id, event_id
+                    FROM ticket_rush.shows
+                    ORDER BY event_id, id ASC
+                ) s
+                WHERE o.show_id IS NULL
+                  AND s.event_id = o.event_id
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                UPDATE ticket_rush.queue_entries q
+                SET show_id = s.id
+                FROM (
+                    SELECT DISTINCT ON (event_id) id, event_id
+                    FROM ticket_rush.shows
+                    ORDER BY event_id, id ASC
+                ) s
+                WHERE q.show_id IS NULL
+                  AND s.event_id = q.event_id
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                UPDATE ticket_rush.ticket_cancellations tc
+                SET show_id = s.id
+                FROM (
+                    SELECT DISTINCT ON (event_id) id, event_id
+                    FROM ticket_rush.shows
+                    ORDER BY event_id, id ASC
+                ) s
+                WHERE tc.show_id IS NULL
+                  AND tc.event_id IS NOT NULL
+                  AND s.event_id = tc.event_id
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS ticket_rush.seats
+                DROP CONSTRAINT IF EXISTS uq_seats_event_id_seat_label
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname = 'uq_seats_show_id_seat_label'
+                    ) THEN
+                        ALTER TABLE ticket_rush.seats
+                        ADD CONSTRAINT uq_seats_show_id_seat_label UNIQUE (show_id, seat_label);
+                    END IF;
+                END $$;
+                """
+            )
+        )
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Initialize schema/seed data and start background workers."""
+
+    async with engine.begin() as conn:
+        await conn.execute(text("CREATE SCHEMA IF NOT EXISTS ticket_rush"))
+        await conn.execute(text("ALTER TABLE IF EXISTS ticket_rush.events ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE"))
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all, checkfirst=True)
+    await _ensure_cover_image_url_text_column()
+    await _ensure_seats_admin_lock_column()
+    await _ensure_template_seat_columns_are_nullable()
+    await _ensure_user_auth_columns()
+    await _ensure_show_refactor_schema()
+
+    from app.core.db import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        await seed_demo_data(session)
+
+    await worker_orchestrator.start()
+
+    yield
+
+    await worker_orchestrator.stop()
+    await engine.dispose()
+
+
+app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)
+
+static_root = Path(__file__).resolve().parent / "static"
+static_root.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_root), name="static")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(api_router)
+app.include_router(ws.router)
+
+
+@app.exception_handler(ValueError)
+async def value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
+    """Return consistent validation-style payload for ValueError exceptions."""
+
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": str(exc)})
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(_: Request, __: Exception) -> JSONResponse:
+    """Return sanitized fallback payload for unexpected runtime errors."""
+
+    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Internal server error"})
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    """Liveness probe endpoint with DB connectivity check."""
+
+    from sqlalchemy import text
+
+    async with engine.begin() as conn:
+        await conn.execute(text("SELECT 1"))
+
+    return {"status": "ok", "db": "connected"}

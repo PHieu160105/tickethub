@@ -1,0 +1,48 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+.envrc
+
+# Node / frontend
+node_modules/
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# IDE / OS
+.vscode/
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker / local data
+postgres_data/
+redis_data/
+*.sqlite3
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+stitch/
+Functional Requirements.md
+report.md

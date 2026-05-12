@@ -1,73 +1,125 @@
-# React + TypeScript + Vite
+# TicketRush Frontend (React)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Frontend React cho TicketRush, bám theo bộ thiết kế trong thư mục `stitch`:
+- Home / Event discovery
+- Seat map booking realtime
+- Virtual queue waiting room
+- Admin dashboard realtime
+- Admin event management (seat matrix form)
+- My tickets + QR
 
-Currently, two official plugins are available:
+## 1) Stack
+- React 19 + TypeScript + Vite
+- React Router
+- Axios
+- WebSocket (native)
+- `qrcode.react`
+- CSS custom theme theo design system “Digital Concierge”
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 2) Cấu trúc thư mục
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```txt
+FE/
+├─ src/
+│  ├─ main.tsx                   # App bootstrap + router + auth provider
+│  ├─ App.tsx                    # Route map toàn app
+│  ├─ styles/
+│  │  └─ index.css               # Design tokens + responsive styles
+│  ├─ lib/
+│  │  ├─ api.ts                  # Axios client + API wrappers
+│  │  └─ storage.ts              # local/session storage helpers
+│  ├─ hooks/
+│  │  ├─ useAuth.tsx             # Auth context + login/register/logout
+│  │  └─ useWebSocketHeartbeat.ts# WS hook + ping keepalive
+│  ├─ components/
+│  │  ├─ TopNav.tsx
+│  │  ├─ Footer.tsx
+│  │  ├─ ProtectedRoute.tsx
+│  │  ├─ AdminSidebar.tsx
+│  │  ├─ EventCard.tsx
+│  │  └─ SeatLegend.tsx
+│  ├─ pages/
+│  │  ├─ HomePage.tsx
+│  │  ├─ LoginPage.tsx
+│  │  ├─ RegisterPage.tsx
+│  │  ├─ MyAccountPage.tsx
+│  │  ├─ QueuePage.tsx
+│  │  ├─ SeatBookingPage.tsx
+│  │  ├─ MyTicketsPage.tsx
+│  │  ├─ AdminDashboardPage.tsx
+│  │  └─ AdminEventsPage.tsx
+│  └─ types.ts                   # Shared TS interfaces
+├─ Dockerfile
+└─ package.json
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 3) Route map
+- `/` : landing + event search
+- `/login` : login
+- `/register` : register
+- `/my-account` : profile self-service page
+- `/events/:eventKey/queue` : waiting room
+- `/events/:eventKey/seats` : seat booking screen
+- `/my-tickets` : customer ticket management + QR
+- `/admin/dashboard` : admin realtime dashboard
+- `/admin/events` : admin create/manage events
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 4) Tính năng đã triển khai
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Customer
+- Tìm kiếm và xem danh sách sự kiện
+- Vào hàng chờ ảo khi event bật queue
+- Chọn ghế trực quan theo ma trận
+- Realtime seat updates qua WebSocket (không cần F5)
+- Lock/release ghế
+- Checkout xác nhận đơn hàng (không cần payment gateway thật)
+- Quản lý vé điện tử và QR
+- Cập nhật thông tin cá nhân ở My Account
+
+### Admin
+- Tạo sự kiện mới
+- Sửa/xóa sự kiện đã release
+- Cấu hình seat matrix theo zone (rows, seats/row, price, color)
+- Theo dõi dashboard realtime (summary + chart + occupancy + demographics)
+- Seat inspector: chọn nhiều ghế (kể cả ghế sold) để xem info người mua/đang giữ ghế
+- Join queue để monitor seat map nhưng không được confirm checkout
+
+## 5) Giao diện và design
+- Dùng palette + layering theo `stitch/DESIGN.md`
+- Không dùng divider cứng làm bố cục chính
+- Typography Inter + Manrope
+- Layout responsive mobile/desktop
+- Background gradient + glass nav để giữ “brand soul”
+- Có nút chuyển theme Light/Dark trực tiếp trên thanh điều hướng
+
+## 6) Chạy local
+
+```bash
+cd FE
+npm install
+npm run dev
 ```
+
+Mặc định chạy tại `http://localhost:5173`.
+
+## 7) Build & lint
+
+```bash
+cd FE
+npm run build
+npm run lint
+```
+
+Kết quả hiện tại: build và lint đều pass.
+
+## 8) Biến môi trường
+Dùng file `.env` ở root:
+- `VITE_API_BASE_URL`
+- `VITE_WS_BASE_URL`
+
+## 9) Gợi ý sử dụng nhanh
+1. Đăng nhập customer seed: `customer@ticketrush.com / Customer@123`
+2. Chọn event ở Home -> queue -> seat booking -> checkout
+3. Vào `My Tickets` để xem QR
+4. Đăng nhập admin seed: `admin@ticketrush.com / Admin@123`
+5. Mở `Admin Dashboard` và `Admin Events` để quản trị

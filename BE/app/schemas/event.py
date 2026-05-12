@@ -1,0 +1,303 @@
+"""Event, show, seat, and admin planning schemas."""
+
+from datetime import date, datetime, time
+from decimal import Decimal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.models.enums import EventStatus, Gender, SeatStatus
+
+
+class SeatZoneCreate(BaseModel):
+    """Seat zone matrix config payload for show creation."""
+
+    code: str = Field(min_length=1, max_length=30)
+    name: str = Field(min_length=1, max_length=100)
+    row_count: int = Field(ge=1, le=40)
+    seats_per_row: int = Field(ge=1, le=60)
+    price: Decimal = Field(gt=0)
+    color: str = Field(default="#024ddf", max_length=20)
+
+
+class SeatZoneUpdate(BaseModel):
+    """Admin payload for editing one show zone matrix."""
+
+    code: str = Field(min_length=1, max_length=30)
+    name: str = Field(min_length=1, max_length=100)
+    row_count: int = Field(ge=1, le=40)
+    seats_per_row: int = Field(ge=1, le=60)
+    price: Decimal = Field(gt=0)
+    color: str = Field(default="#024ddf", max_length=20)
+
+
+class EventCreateRequest(BaseModel):
+    """Admin payload to create a parent event."""
+
+    title: str = Field(min_length=3, max_length=255)
+    description: str = Field(min_length=10)
+    category: str = Field(min_length=2, max_length=80)
+    start_date: date
+    end_date: date
+    cover_image_url: str = ""
+    status: EventStatus = EventStatus.LIVE
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "EventCreateRequest":
+        if self.end_date < self.start_date:
+            raise ValueError("end_date must be on or after start_date")
+        return self
+
+
+class EventUpdateRequest(BaseModel):
+    """Admin payload to update event metadata only."""
+
+    title: str | None = Field(default=None, min_length=3, max_length=255)
+    description: str | None = Field(default=None, min_length=10)
+    category: str | None = Field(default=None, min_length=2, max_length=80)
+    start_date: date | None = None
+    end_date: date | None = None
+    cover_image_url: str | None = None
+    status: EventStatus | None = None
+
+
+class ShowCreateRequest(BaseModel):
+    """Admin payload to create a sellable show."""
+
+    title: str = Field(min_length=3, max_length=255)
+    description: str = Field(min_length=10)
+    venue: str = Field(min_length=3, max_length=200)
+    show_date: date
+    start_time: time
+    end_time: time
+    status: EventStatus = EventStatus.LIVE
+    hold_minutes: int = Field(default=10, ge=1, le=60)
+    queue_enabled: bool = True
+    queue_release_batch: int = Field(default=50, ge=1, le=500)
+    max_active_queue_tokens: int = Field(default=200, ge=1, le=5000)
+    venue_id: int | None = Field(default=None, ge=1)
+    venue_layout_id: int | None = Field(default=None, ge=1)
+    zones: list[SeatZoneCreate] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_show_source(self) -> "ShowCreateRequest":
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time must be later than start_time")
+        if self.venue_layout_id is not None:
+            if self.venue_id is None:
+                raise ValueError("venue_id is required when venue_layout_id is provided")
+            return self
+        if not self.zones:
+            raise ValueError("zones is required when venue_layout_id is not provided")
+        return self
+
+
+class ShowUpdateRequest(BaseModel):
+    """Admin payload to update one show."""
+
+    title: str | None = Field(default=None, min_length=3, max_length=255)
+    description: str | None = Field(default=None, min_length=10)
+    venue: str | None = Field(default=None, min_length=3, max_length=200)
+    show_date: date | None = None
+    start_time: time | None = None
+    end_time: time | None = None
+    status: EventStatus | None = None
+    hold_minutes: int | None = Field(default=None, ge=1, le=60)
+    queue_enabled: bool | None = None
+    queue_release_batch: int | None = Field(default=None, ge=1, le=500)
+    max_active_queue_tokens: int | None = Field(default=None, ge=1, le=5000)
+    venue_id: int | None = Field(default=None, ge=1)
+    venue_layout_id: int | None = Field(default=None, ge=1)
+
+
+class ShowSummaryResponse(BaseModel):
+    """Short show shape for event detail and admin lists."""
+
+    id: int
+    event_id: int
+    title: str
+    description: str
+    venue: str
+    start_at: datetime
+    end_at: datetime
+    status: EventStatus
+    queue_enabled: bool
+    venue_id: int | None = None
+    venue_layout_id: int | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EventCardResponse(BaseModel):
+    """Short event shape for listings."""
+
+    id: int
+    slug: str
+    title: str
+    description: str
+    category: str
+    venue: str
+    start_at: datetime
+    end_at: datetime
+    cover_image_url: str
+    status: EventStatus
+    created_at: datetime
+    queue_enabled: bool
+
+
+class EventDetailResponse(EventCardResponse):
+    """Detailed event payload with child shows."""
+
+    shows: list[ShowSummaryResponse]
+
+
+class ShowDetailResponse(ShowSummaryResponse):
+    """Detailed show payload for admin and booking clients."""
+
+    event_slug: str
+    event_title: str
+    hold_minutes: int
+    queue_release_batch: int
+    max_active_queue_tokens: int
+    zones: list["SeatZoneResponse"]
+
+
+class SeatZoneResponse(BaseModel):
+    """Read-only zone payload."""
+
+    id: int
+    code: str
+    name: str
+    row_count: int
+    seats_per_row: int
+    price: Decimal
+    color: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SeatUserInfoResponse(BaseModel):
+    """Basic user info shown to admin in seat inspector."""
+
+    user_id: int
+    full_name: str
+    email: str
+    gender: Gender
+    age: int
+
+
+class SeatPurchaseInfoResponse(BaseModel):
+    """Purchase details for sold seats."""
+
+    user: SeatUserInfoResponse
+    order_id: int
+    ticket_code: str | None = None
+    issued_at: datetime | None = None
+
+
+class SeatResponse(BaseModel):
+    """Serializable seat object for matrix rendering."""
+
+    id: int
+    zone_id: int | None = None
+    row_index: int
+    row_label: str
+    seat_number: int
+    seat_label: str
+    price: Decimal
+    status: SeatStatus
+    lock_expires_at: datetime | None = None
+    is_locked_by_me: bool = False
+    is_admin_locked: bool = False
+    locked_by_user: SeatUserInfoResponse | None = None
+    sold_to_user: SeatPurchaseInfoResponse | None = None
+
+
+class SeatMatrixResponse(BaseModel):
+    """Seats and zones returned to one show booking screen."""
+
+    show_id: int
+    show_title: str
+    event_id: int
+    event_slug: str
+    event_title: str
+    queue_enabled: bool
+    zones: list[SeatZoneResponse]
+    seats: list[SeatResponse]
+
+
+class EventOccupancyResponse(BaseModel):
+    """Per-show occupancy totals for admin dashboards."""
+
+    event_id: int
+    event_title: str
+    show_id: int
+    show_title: str
+    total_seats: int
+    sold_seats: int
+    locked_seats: int
+    occupancy_rate: float
+
+
+class SeatSingleCreateRequest(BaseModel):
+    """Create a single seat for a show with coordinates (percent 0-100)."""
+
+    seat_label: str = Field(min_length=1, max_length=100)
+    x: float = Field(ge=0.0, le=100.0)
+    y: float = Field(ge=0.0, le=100.0)
+    rotation: float = Field(default=0.0, ge=0.0, le=360.0)
+    zone_id: int | None = None
+    section_id: int | None = None
+    price: Decimal | None = None
+    is_admin_locked: bool = False
+
+
+class ArcConfig(BaseModel):
+    center_x: float = Field(ge=0.0, le=100.0)
+    center_y: float = Field(ge=0.0, le=100.0)
+    radius: float = Field(gt=0.0)
+    start_angle: float
+    end_angle: float
+
+
+class SeatBulkCreateRequest(BaseModel):
+    """Bulk generate seats for a show using supported patterns."""
+
+    zone_id: int | None = None
+    section_id: int | None = None
+    pattern: str = Field(default="straight")
+    rows: int = Field(default=1, ge=1)
+    cols: int = Field(default=1, ge=1)
+    gap_x: float = Field(default=3.0, ge=0.0)
+    gap_y: float = Field(default=3.0, ge=0.0)
+    start_x: float = Field(default=0.0, ge=0.0, le=100.0)
+    start_y: float = Field(default=0.0, ge=0.0, le=100.0)
+    label_prefix: str = Field(default="A", min_length=1, max_length=6)
+    arc_config: ArcConfig | None = None
+
+
+class SeatCreateResponse(BaseModel):
+    id: int
+    seat_label: str
+    x: float | None
+    y: float | None
+
+
+class SeatUpdateRequest(BaseModel):
+    """Update a show's editable seat geometry and sale metadata."""
+
+    seat_label: str | None = Field(default=None, min_length=1, max_length=100)
+    x: float | None = Field(default=None, ge=0.0, le=100.0)
+    y: float | None = Field(default=None, ge=0.0, le=100.0)
+    rotation: float | None = Field(default=None, ge=0.0, le=360.0)
+    zone_id: int | None = None
+    section_id: int | None = None
+    price: Decimal | None = None
+    is_admin_locked: bool | None = None
+
+
+class SeatBulkCreateResponse(BaseModel):
+    created_count: int
+    seats: list[SeatCreateResponse]
+
+
+ShowDetailResponse.model_rebuild()

@@ -6,6 +6,9 @@
     "module": "esnext",
     "types": ["vite/client"],
     "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -14,6 +17,11 @@
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
+
+    /* Path mapping */
+    "paths": {
+      "@/*": ["./src/*"]
+    },
 
     /* Linting */
     "noUnusedLocals": true,
