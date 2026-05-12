@@ -49,3 +49,9 @@ class UpdateProfileRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=120)
     gender: Gender = Gender.OTHER
     age: int = Field(ge=10, le=100)
+
+
+class FirebaseTokenRequest(BaseModel):
+    """Payload for Firebase ID token verification."""
+
+    id_token: str

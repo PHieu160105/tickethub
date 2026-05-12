@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 
+import { signInWithFacebook, signInWithGoogle } from '@/lib/firebase'
 import { authApi, extractApiErrorMessage } from '@/lib/api'
 import { authStorage } from '@/lib/storage'
 import type { User as ApiUser } from '@/types'
@@ -16,6 +17,8 @@ interface AuthContextType {
   isAuthenticated: boolean
   isAdmin: boolean
   login: (email: string, password: string) => Promise<User>
+  loginWithGoogle: () => Promise<User>
+  loginWithFacebook: () => Promise<User>
   register: (
     email: string,
     password: string,
@@ -84,6 +87,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const loginWithGoogle = async () => {
+    setIsLoading(true)
+    try {
+      const idToken = await signInWithGoogle()
+      const response = await authApi.firebaseTokenLogin(idToken)
+      authStorage.setToken(response.access_token)
+      authStorage.setUser(response.user)
+      const enrichedUser = enrichUser(response.user)
+      setUser(enrichedUser)
+      return enrichedUser
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Google login failed. Please try again.'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const loginWithFacebook = async () => {
+    setIsLoading(true)
+    try {
+      const idToken = await signInWithFacebook()
+      const response = await authApi.firebaseTokenLogin(idToken)
+      authStorage.setToken(response.access_token)
+      authStorage.setUser(response.user)
+      const enrichedUser = enrichUser(response.user)
+      setUser(enrichedUser)
+      return enrichedUser
+    } catch (error) {
+      throw new Error(extractApiErrorMessage(error, 'Facebook login failed. Please try again.'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const register = async (
     email: string,
     password: string,
@@ -131,6 +168,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated,
       isAdmin,
       login,
+      loginWithGoogle,
+      loginWithFacebook,
       register,
       updateProfile,
       logout,

@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     queue_admit_ttl_minutes: int = 15
     redis_url: str = Field(default="redis://127.0.0.1:6379/0", validation_alias="REDIS_URL")
 
+    firebase_project_id: str = ""
+    firebase_private_key: str = ""
+    firebase_client_email: str = ""
+
     @property
     def allowed_origins(self) -> list[str]:
         """CORS origins as a list."""

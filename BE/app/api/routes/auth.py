@@ -6,10 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.db import get_db_session
+from app.core.firebase import FirebaseTokenError, verify_firebase_token
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.auth import AuthTokenResponse, LoginRequest, RegisterRequest, UpdateProfileRequest, UserResponse
+from app.schemas.auth import AuthTokenResponse, FirebaseTokenRequest, LoginRequest, RegisterRequest, UpdateProfileRequest, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -48,6 +49,46 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_db_se
 
     token = create_access_token(str(user.id))
     return AuthTokenResponse(access_token=token, user=UserResponse.model_validate(user))
+
+
+@router.post("/firebase-token", response_model=AuthTokenResponse)
+async def firebase_auth(payload: FirebaseTokenRequest, session: AsyncSession = Depends(get_db_session)) -> AuthTokenResponse:
+    """Verify Firebase ID token and return JWT for TicketRush."""
+    try:
+        claims = verify_firebase_token(payload.id_token)
+    except FirebaseTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Firebase token")
+
+    firebase_uid: str | None = claims.get("uid")
+    email: str | None = claims.get("email")
+    name: str | None = claims.get("name")
+
+    if not firebase_uid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Firebase token: missing uid")
+
+    user = await session.scalar(select(User).where(User.firebase_uid == firebase_uid))
+
+    if not user and email:
+        user = await session.scalar(select(User).where(User.email == email.lower()))
+
+    if not user:
+        user = User(
+            full_name=name or email or "User",
+            email=(email or f"{firebase_uid}@firebase").lower(),
+            password_hash="SOCIAL_LOGIN",
+            firebase_uid=firebase_uid,
+            role=UserRole.CUSTOMER,
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+    elif not user.firebase_uid:
+        user.firebase_uid = firebase_uid
+        await session.commit()
+        await session.refresh(user)
+
+    jwt_token = create_access_token(str(user.id))
+    return AuthTokenResponse(access_token=jwt_token, user=UserResponse.model_validate(user))
 
 
 @router.get("/me", response_model=UserResponse)

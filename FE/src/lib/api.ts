@@ -126,6 +126,10 @@ export const authApi = {
     const response = await api.post<AuthResponse>('/auth/register', payload)
     return response.data
   },
+  async firebaseTokenLogin(idToken: string) {
+    const response = await api.post<AuthResponse>('/auth/firebase-token', { id_token: idToken })
+    return response.data
+  },
   async me() {
     return withRetry(() => api.get<AuthResponse['user']>('/auth/me', { timeout: 8000 }), 2)
   },
