@@ -21,7 +21,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const { login } = useAuth()
+  const { login, loginWithGoogle, loginWithFacebook } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -153,11 +153,41 @@ export default function Login() {
 
               {/* Social Login */}
               <div className="grid grid-cols-2 gap-4">
-                <button className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc">
+                <button
+                  className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc"
+                  onClick={async () => {
+                    setIsLoading(true)
+                    setErrorMessage('')
+                    try {
+                      const user = await loginWithGoogle()
+                      navigate(user.role === 'admin' ? '/admin' : '/', { replace: true })
+                    } catch (error) {
+                      setErrorMessage(error instanceof Error ? error.message : 'Google login failed. Please try again.')
+                    } finally {
+                      setIsLoading(false)
+                    }
+                  }}
+                  disabled={isLoading}
+                >
                   <FcGoogle className="w-5 h-5" />
                   <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-white">Google</span>
                 </button>
-                <button className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc">
+                <button
+                  className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc"
+                  onClick={async () => {
+                    setIsLoading(true)
+                    setErrorMessage('')
+                    try {
+                      const user = await loginWithFacebook()
+                      navigate(user.role === 'admin' ? '/admin' : '/', { replace: true })
+                    } catch (error) {
+                      setErrorMessage(error instanceof Error ? error.message : 'Facebook login failed. Please try again.')
+                    } finally {
+                      setIsLoading(false)
+                    }
+                  }}
+                  disabled={isLoading}
+                >
                   <FaFacebook className="w-5 h-5 text-[#1877F2]" />
                   <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-white">Facebook</span>
                 </button>
