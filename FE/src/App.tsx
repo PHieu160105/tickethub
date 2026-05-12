@@ -78,7 +78,7 @@ function AppRoutes() {
           <Route path="help" element={<Help />} />
           <Route path="settings" element={<CustomerSettings />} />
           <Route path="search" element={<Search />} />
-          <Route path="event/:eventKey/seats" element={<SeatSelection />} />
+          <Route path="shows/:showId/seats" element={<SeatSelection />} />
           <Route path="*" element={<ErrorPage />} />
         </Route>
 
@@ -92,7 +92,7 @@ function AppRoutes() {
         >
           <Route index element={<AdminDashboard />} />
           <Route path="events" element={<AdminEvents />} />
-          <Route path="events/:eventKey/seating" element={<AdminSeatPlanner />} />
+          <Route path="events/:eventKey/shows/:showId/seating" element={<AdminSeatPlanner />} />
           <Route path="venues" element={<AdminVenues />} />
           <Route path="tickets" element={<AdminTickets />} />
           <Route path="analytics" element={<AdminAnalytics />} />

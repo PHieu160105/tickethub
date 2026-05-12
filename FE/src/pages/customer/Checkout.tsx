@@ -7,7 +7,7 @@ import { Footer } from '@/components/layout/Footer'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useCheckout, useReleaseSeats } from '@/features/booking/hooks/useBooking'
-import { useEventSeats } from '@/features/events/hooks/useEvents'
+import { useShowSeats } from '@/features/events/hooks/useEvents'
 import { bookingApi } from '@/lib/api'
 import { queueStorage } from '@/lib/storage'
 import type { Seat } from '@/types'
@@ -25,7 +25,7 @@ export default function Checkout() {
   const { checkout, isLoading: isSubmitting } = useCheckout()
   const { releaseSeats, isLoading: isReleasing } = useReleaseSeats()
 
-  const eventId = Number(searchParams.get('eventId'))
+  const showId = Number(searchParams.get('showId'))
   const eventKey = searchParams.get('eventKey') ?? undefined
   const state = (location.state ?? {}) as CheckoutLocationState
 
@@ -39,10 +39,10 @@ export default function Checkout() {
   const [selectedDiscountCode, setSelectedDiscountCode] = useState<string>('')
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
 
-  const { seats: matrix } = useEventSeats(eventKey)
+  const { seats: matrix } = useShowSeats(showId)
   const checkoutCompletedRef = useRef(false)
   const locksReleasedRef = useRef(false)
-  const latestEventIdRef = useRef<number | null>(null)
+  const latestShowIdRef = useRef<number | null>(null)
   const latestLockedSeatIdsRef = useRef<number[]>([])
 
   const lockedSeats = useMemo(() => {
@@ -71,9 +71,9 @@ export default function Checkout() {
     : `${String(Math.floor(remainingSeconds / 60)).padStart(2, '0')}:${String(remainingSeconds % 60).padStart(2, '0')}`
 
   useEffect(() => {
-    latestEventIdRef.current = Number.isNaN(eventId) ? null : eventId
+    latestShowIdRef.current = Number.isNaN(showId) ? null : showId
     latestLockedSeatIdsRef.current = lockedSeatIds
-  }, [eventId, lockedSeatIds])
+  }, [showId, lockedSeatIds])
 
   useEffect(() => {
     if (!lockExpiryTimestamp) {
@@ -93,11 +93,11 @@ export default function Checkout() {
 
   useEffect(() => () => {
     if (checkoutCompletedRef.current || locksReleasedRef.current) return
-    const currentEventId = latestEventIdRef.current
+    const currentShowId = latestShowIdRef.current
     const currentSeatIds = latestLockedSeatIdsRef.current
-    if (!currentEventId || currentSeatIds.length === 0) return
+    if (!currentShowId || currentSeatIds.length === 0) return
     locksReleasedRef.current = true
-    void bookingApi.release(currentEventId, currentSeatIds).catch(() => undefined)
+    void bookingApi.release(currentShowId, currentSeatIds).catch(() => undefined)
   }, [])
 
   const handleInputChange = (field: 'fullName' | 'email' | 'phone', value: string) => {
@@ -110,18 +110,18 @@ export default function Checkout() {
       return
     }
 
-    if (!eventId || Number.isNaN(eventId) || lockedSeatIds.length === 0 || locksReleasedRef.current) {
-      navigate(`/event/${eventKey}/seats`)
+    if (!showId || Number.isNaN(showId) || lockedSeatIds.length === 0 || locksReleasedRef.current) {
+      navigate(`/shows/${showId}/seats`)
       return
     }
 
     try {
-      await releaseSeats(eventId, lockedSeatIds)
+      await releaseSeats(showId, lockedSeatIds)
       locksReleasedRef.current = true
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to release held seats')
     } finally {
-      navigate(`/event/${eventKey}/seats`)
+      navigate(`/shows/${showId}/seats`)
     }
   }
 
@@ -133,8 +133,8 @@ export default function Checkout() {
       return
     }
 
-    if (!eventId || Number.isNaN(eventId)) {
-      setErrorMessage('Missing event information. Please reselect your seats.')
+    if (!showId || Number.isNaN(showId)) {
+      setErrorMessage('Missing show information. Please reselect your seats.')
       return
     }
 
@@ -145,13 +145,17 @@ export default function Checkout() {
 
     try {
       setErrorMessage('')
-      const queueToken = eventKey ? queueStorage.getToken(eventKey) ?? undefined : undefined
-      const result = await checkout(eventId, queueToken, selectedDiscountCode || undefined)
+      const queueToken = showId ? queueStorage.getToken(showId) ?? undefined : undefined
+      const result = await checkout(showId, queueToken, selectedDiscountCode || undefined)
       checkoutCompletedRef.current = true
       navigate('/confirmation', {
         state: {
           order: result,
           eventKey,
+          showId,
+          showTitle: matrix?.show_title,
+          eventTitle: matrix?.event_title,
+          showStartAt: null,
           profile: formData,
           lockedSeats,
         },

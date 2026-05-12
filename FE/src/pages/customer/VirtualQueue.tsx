@@ -21,6 +21,7 @@ export default function VirtualQueue() {
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
 
+  const showId = Number(searchParams.get('showId') ?? '')
   const eventKey = searchParams.get('eventKey')?.trim() ?? ''
 
   const [queueToken, setQueueToken] = useState<string | null>(null)
@@ -37,8 +38,8 @@ export default function VirtualQueue() {
   }, [position])
 
   useEffect(() => {
-    if (!eventKey) {
-      setError('Thieu eventKey. Hay quay lai trang su kien va thu lai.')
+    if (!showId || Number.isNaN(showId)) {
+      setError('Thieu showId. Hay quay lai trang su kien va thu lai.')
       setIsLoading(false)
       return
     }
@@ -54,7 +55,7 @@ export default function VirtualQueue() {
 
     async function pollQueueStatus(token: string) {
       try {
-        const result: QueueStatusResponse = await queueApi.status(eventKey, token)
+        const result: QueueStatusResponse = await queueApi.status(showId, token)
         if (disposed) return
 
         setStatus(result.status)
@@ -63,12 +64,12 @@ export default function VirtualQueue() {
         setMessage(result.message)
 
         if (result.status === 'admitted') {
-          navigate(`/event/${eventKey}/seats`, { replace: true })
+          navigate(`/shows/${showId}/seats`, { replace: true })
           return
         }
 
         if (result.status === 'expired') {
-          queueStorage.clearToken(eventKey)
+          queueStorage.clearToken(showId)
           setQueueToken(null)
           setError('Queue token da het han. Bam Join Queue de vao lai hang doi.')
         }
@@ -81,15 +82,15 @@ export default function VirtualQueue() {
     }
 
     async function joinQueue() {
-      if (!eventKey) return
+      if (!showId) return
       setError(null)
       setIsLoading(true)
 
       try {
-        const response = await queueApi.join(eventKey)
+        const response = await queueApi.join(showId)
         if (disposed) return
 
-        queueStorage.setToken(eventKey, response.token)
+        queueStorage.setToken(showId, response.token)
         setQueueToken(response.token)
         setStatus(response.status)
         setPosition(response.position)
@@ -97,7 +98,7 @@ export default function VirtualQueue() {
         setMessage(response.message || statusDescription(response.status))
 
         if (response.status === 'admitted') {
-          navigate(`/event/${eventKey}/seats`, { replace: true })
+          navigate(`/shows/${showId}/seats`, { replace: true })
         }
       } catch (joinError) {
         if (disposed) return
@@ -107,7 +108,7 @@ export default function VirtualQueue() {
       }
     }
 
-    const existingToken = queueStorage.getToken(eventKey)
+    const existingToken = queueStorage.getToken(showId)
     if (existingToken) {
       setQueueToken(existingToken)
       void pollQueueStatus(existingToken)
@@ -116,17 +117,17 @@ export default function VirtualQueue() {
     }
 
     statusTimer = window.setInterval(() => {
-      const token = queueStorage.getToken(eventKey)
+      const token = queueStorage.getToken(showId)
       if (token) {
         void pollQueueStatus(token)
       }
     }, 5000)
 
     heartbeatTimer = window.setInterval(() => {
-      const token = queueStorage.getToken(eventKey)
+      const token = queueStorage.getToken(showId)
       if (!token) return
       if (status === 'admitted') {
-        void queueApi.heartbeat(eventKey, token)
+        void queueApi.heartbeat(showId, token)
       }
     }, 30000)
 
@@ -135,7 +136,7 @@ export default function VirtualQueue() {
       if (statusTimer) window.clearInterval(statusTimer)
       if (heartbeatTimer) window.clearInterval(heartbeatTimer)
     }
-  }, [eventKey, isAuthenticated, navigate, status])
+  }, [eventKey, isAuthenticated, navigate, showId, status])
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -145,7 +146,7 @@ export default function VirtualQueue() {
         <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-8 space-y-6">
           <div>
             <h1 className="text-3xl font-black">Virtual Queue</h1>
-            <p className="text-slate-400 mt-2">Event: {eventKey || 'N/A'}</p>
+            <p className="text-slate-400 mt-2">Show: {showId || 'N/A'}</p>
           </div>
 
           {isLoading ? (
@@ -194,10 +195,10 @@ export default function VirtualQueue() {
           ) : null}
 
           <div className="flex flex-wrap gap-3 pt-2">
-            <Button variant="outline" onClick={() => navigate(`/event/${eventKey}`)}>
+            <Button variant="outline" onClick={() => navigate(eventKey ? `/event/${eventKey}` : '/search')}>
               Back To Event
             </Button>
-            <Button variant="primary" onClick={() => navigate(`/event/${eventKey}/seats`)}>
+            <Button variant="primary" onClick={() => navigate(`/shows/${showId}/seats`)}>
               <CheckCircle2 className="h-4 w-4" />
               Go To Seats
             </Button>

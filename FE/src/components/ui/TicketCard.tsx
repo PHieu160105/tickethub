@@ -80,6 +80,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
               {status === 'confirmed' ? 'Confirmed' : status}
             </span>
           </div>
+          <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-slate-500">{ticketNumber}</p>
           <h2
             className={`font-black font-headline customer-text-body leading-tight mb-2 uppercase tracking-tighter ${
               isFeatured ? 'text-4xl md:text-5xl' : 'text-2xl'

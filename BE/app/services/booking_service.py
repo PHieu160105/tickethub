@@ -8,10 +8,10 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.cache import event_seat_cache_namespace, public_api_cache
+from app.core.cache import public_api_cache, show_seat_cache_namespace
 from app.core.search import build_ilike_pattern
 from app.models.enums import OrderStatus, SeatStatus
-from app.models.event import Event, SeatZone
+from app.models.event import Event, SeatZone, Show
 from app.models.order import Order, OrderItem, Ticket, TicketCancellation
 from app.models.seat import Seat
 from app.schemas.booking import CheckoutItemResponse, CheckoutResponse, LockSeatsResponse, MyTicketResponse
@@ -27,17 +27,17 @@ def _as_utc(value: datetime | None) -> datetime | None:
     return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
-async def _get_event_or_404(session: AsyncSession, event_id: int) -> Event:
-    event = await session.scalar(select(Event).where(Event.id == event_id, Event.is_deleted.is_(False)))
-    if not event:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
-    return event
+async def _get_show_or_404(session: AsyncSession, show_id: int) -> Show:
+    show = await session.scalar(select(Show).where(Show.id == show_id, Show.is_deleted.is_(False)))
+    if not show:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show not found")
+    return show
 
 
 async def lock_seats(
     session: AsyncSession,
     user_id: int,
-    event_id: int,
+    show_id: int,
     seat_ids: list[int],
     queue_token: str | None,
 ) -> LockSeatsResponse:
@@ -46,12 +46,11 @@ async def lock_seats(
     if len(set(seat_ids)) != len(seat_ids):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Duplicate seat ids in request")
 
-    event = await _get_event_or_404(session, event_id)
-    await ensure_queue_access(session, event, user_id, queue_token)
+    show = await _get_show_or_404(session, show_id)
+    await ensure_queue_access(session, show, user_id, queue_token)
 
     now = datetime.now(UTC)
-    expires_at = now + timedelta(minutes=event.hold_minutes)
-
+    expires_at = now + timedelta(minutes=show.hold_minutes)
     locked_ids: list[int] = []
     failed_ids: list[int] = []
     changed_seats: list[dict[str, int | str | None]] = []
@@ -60,7 +59,7 @@ async def lock_seats(
         seats = list(
             await session.scalars(
                 select(Seat)
-                .where(Seat.event_id == event_id, Seat.id.in_(seat_ids))
+                .where(Seat.show_id == show_id, Seat.id.in_(seat_ids))
                 .order_by(Seat.id.asc())
                 .with_for_update()
             )
@@ -72,19 +71,14 @@ async def lock_seats(
                 failed_ids.append(seat_id)
 
         for seat in seats:
-            if seat.is_admin_locked:
-                failed_ids.append(seat.id)
-                continue
-
-            if seat.status == SeatStatus.SOLD:
+            if seat.is_admin_locked or seat.status == SeatStatus.SOLD:
                 failed_ids.append(seat.id)
                 continue
 
             lock_expires = _as_utc(seat.lock_expires_at)
-            if seat.status == SeatStatus.LOCKED and lock_expires and lock_expires > now:
-                if seat.locked_by_user_id != user_id:
-                    failed_ids.append(seat.id)
-                    continue
+            if seat.status == SeatStatus.LOCKED and lock_expires and lock_expires > now and seat.locked_by_user_id != user_id:
+                failed_ids.append(seat.id)
+                continue
 
             seat.status = SeatStatus.LOCKED
             seat.locked_by_user_id = user_id
@@ -105,8 +99,8 @@ async def lock_seats(
         raise
 
     if changed_seats:
-        await public_api_cache.invalidate_namespace(event_seat_cache_namespace(event_id))
-        await seat_ws_manager.broadcast_seat_changes(event_id=event_id, payload=changed_seats)
+        await public_api_cache.invalidate_namespace(show_seat_cache_namespace(show_id))
+        await seat_ws_manager.broadcast_seat_changes(show_id=show_id, payload=changed_seats)
 
     return LockSeatsResponse(
         locked_seat_ids=locked_ids,
@@ -115,16 +109,15 @@ async def lock_seats(
     )
 
 
-async def release_seats(session: AsyncSession, user_id: int, event_id: int, seat_ids: list[int]) -> int:
+async def release_seats(session: AsyncSession, user_id: int, show_id: int, seat_ids: list[int]) -> int:
     """Release seats currently locked by the same user."""
 
     changed_seats: list[dict[str, int | str | None]] = []
-
     try:
         seats = list(
             await session.scalars(
                 select(Seat)
-                .where(Seat.event_id == event_id, Seat.id.in_(seat_ids))
+                .where(Seat.show_id == show_id, Seat.id.in_(seat_ids))
                 .order_by(Seat.id.asc())
                 .with_for_update()
             )
@@ -154,8 +147,8 @@ async def release_seats(session: AsyncSession, user_id: int, event_id: int, seat
         raise
 
     if changed_seats:
-        await public_api_cache.invalidate_namespace(event_seat_cache_namespace(event_id))
-        await seat_ws_manager.broadcast_seat_changes(event_id=event_id, payload=changed_seats)
+        await public_api_cache.invalidate_namespace(show_seat_cache_namespace(show_id))
+        await seat_ws_manager.broadcast_seat_changes(show_id=show_id, payload=changed_seats)
 
     return count
 
@@ -163,14 +156,14 @@ async def release_seats(session: AsyncSession, user_id: int, event_id: int, seat
 async def checkout_locked_seats(
     session: AsyncSession,
     user_id: int,
-    event_id: int,
+    show_id: int,
     queue_token: str | None,
     discount_code: str | None = None,
 ) -> CheckoutResponse:
     """Confirm payment and convert locked seats to sold tickets atomically."""
 
-    event = await _get_event_or_404(session, event_id)
-    await ensure_queue_access(session, event, user_id, queue_token)
+    show = await _get_show_or_404(session, show_id)
+    await ensure_queue_access(session, show, user_id, queue_token)
 
     now = datetime.now(UTC)
     checkout_items: list[CheckoutItemResponse] = []
@@ -181,7 +174,7 @@ async def checkout_locked_seats(
             await session.scalars(
                 select(Seat)
                 .where(
-                    Seat.event_id == event_id,
+                    Seat.show_id == show_id,
                     Seat.locked_by_user_id == user_id,
                     Seat.status == SeatStatus.LOCKED,
                 )
@@ -211,12 +204,8 @@ async def checkout_locked_seats(
         if not valid_seats:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid locked seats for checkout")
 
-        zone_ids = {seat.zone_id for seat in valid_seats}
-        zone_rows = (
-            await session.execute(select(SeatZone.id, SeatZone.name).where(SeatZone.id.in_(zone_ids)))
-            if zone_ids
-            else None
-        )
+        zone_ids = {seat.zone_id for seat in valid_seats if seat.zone_id is not None}
+        zone_rows = await session.execute(select(SeatZone.id, SeatZone.name).where(SeatZone.id.in_(zone_ids))) if zone_ids else None
         zone_map = {zone_id: zone_name for zone_id, zone_name in (zone_rows.all() if zone_rows else [])}
 
         subtotal_amount = sum(Decimal(str(seat.price)) for seat in valid_seats)
@@ -225,7 +214,8 @@ async def checkout_locked_seats(
 
         order = Order(
             user_id=user_id,
-            event_id=event_id,
+            event_id=show.event_id,
+            show_id=show_id,
             status=OrderStatus.PAID,
             total_amount=total_amount,
             paid_at=now,
@@ -249,12 +239,11 @@ async def checkout_locked_seats(
                 )
             )
 
-            zone_name = zone_map.get(seat.zone_id, "Unknown")
             checkout_items.append(
                 CheckoutItemResponse(
                     seat_id=seat.id,
                     seat_label=seat.seat_label,
-                    zone_name=zone_name,
+                    zone_name=zone_map.get(seat.zone_id, "Unknown"),
                     price=Decimal(str(seat.price)),
                     ticket_code=ticket_code,
                     qr_payload=qr_payload,
@@ -273,21 +262,21 @@ async def checkout_locked_seats(
                 }
             )
 
-        await mark_queue_completed(session, event_id=event_id, user_id=user_id, queue_token=queue_token)
+        await mark_queue_completed(session, show_id=show_id, user_id=user_id, queue_token=queue_token)
         await session.commit()
     except Exception:
         await session.rollback()
         raise
 
     if changed_seats:
-        await public_api_cache.invalidate_namespace(event_seat_cache_namespace(event_id))
-        await seat_ws_manager.broadcast_seat_changes(event_id=event_id, payload=changed_seats)
+        await public_api_cache.invalidate_namespace(show_seat_cache_namespace(show_id))
+        await seat_ws_manager.broadcast_seat_changes(show_id=show_id, payload=changed_seats)
 
     return CheckoutResponse(
         order_id=order.id,
         order_status=order.status,
         total_amount=Decimal(str(order.total_amount)),
-        discount_amount=discount_amount if 'discount_amount' in locals() else Decimal("0"),
+        discount_amount=discount_amount,
         discount_code=discount_code,
         paid_at=order.paid_at or now,
         items=checkout_items,
@@ -306,21 +295,23 @@ async def fetch_my_tickets(
     """Return customer purchased tickets and cancellation history."""
 
     active_stmt = (
-        select(Ticket, Order, Event, OrderItem, Seat, SeatZone)
+        select(Ticket, Order, Event, Show, OrderItem, Seat, SeatZone)
         .join(OrderItem, Ticket.order_item_id == OrderItem.id)
         .join(Order, OrderItem.order_id == Order.id)
-        .join(Event, Order.event_id == Event.id)
+        .join(Show, Order.show_id == Show.id)
+        .join(Event, Show.event_id == Event.id)
         .join(Seat, OrderItem.seat_id == Seat.id)
-        .join(SeatZone, Seat.zone_id == SeatZone.id)
+        .outerjoin(SeatZone, Seat.zone_id == SeatZone.id)
         .where(Order.user_id == user_id)
         .order_by(Ticket.issued_at.desc())
     )
 
     cancelled_stmt = (
-        select(TicketCancellation, Event, Seat, SeatZone)
-        .join(Event, TicketCancellation.event_id == Event.id)
+        select(TicketCancellation, Event, Show, Seat, SeatZone)
+        .join(Show, TicketCancellation.show_id == Show.id)
+        .join(Event, Show.event_id == Event.id)
         .join(Seat, TicketCancellation.seat_id == Seat.id)
-        .join(SeatZone, Seat.zone_id == SeatZone.id)
+        .outerjoin(SeatZone, Seat.zone_id == SeatZone.id)
         .where(TicketCancellation.user_id == user_id)
         .order_by(TicketCancellation.canceled_at.desc())
     )
@@ -328,19 +319,27 @@ async def fetch_my_tickets(
     pattern = build_ilike_pattern(search)
     if pattern:
         active_stmt = active_stmt.where(
-            or_(Ticket.ticket_code.ilike(pattern, escape="\\"), Event.title.ilike(pattern, escape="\\"))
+            or_(
+                Ticket.ticket_code.ilike(pattern, escape="\\"),
+                Event.title.ilike(pattern, escape="\\"),
+                Show.title.ilike(pattern, escape="\\"),
+            )
         )
         cancelled_stmt = cancelled_stmt.where(
-            or_(TicketCancellation.ticket_code.ilike(pattern, escape="\\"), Event.title.ilike(pattern, escape="\\"))
+            or_(
+                TicketCancellation.ticket_code.ilike(pattern, escape="\\"),
+                Event.title.ilike(pattern, escape="\\"),
+                Show.title.ilike(pattern, escape="\\"),
+            )
         )
 
     if start_from:
-        active_stmt = active_stmt.where(Event.start_at >= start_from)
-        cancelled_stmt = cancelled_stmt.where(Event.start_at >= start_from)
+        active_stmt = active_stmt.where(Show.start_at >= start_from)
+        cancelled_stmt = cancelled_stmt.where(Show.start_at >= start_from)
 
     if end_to:
-        active_stmt = active_stmt.where(Event.start_at <= end_to)
-        cancelled_stmt = cancelled_stmt.where(Event.start_at <= end_to)
+        active_stmt = active_stmt.where(Show.start_at <= end_to)
+        cancelled_stmt = cancelled_stmt.where(Show.start_at <= end_to)
 
     active_rows = (await session.execute(active_stmt.limit(limit).offset(offset))).all()
     cancelled_rows = (await session.execute(cancelled_stmt.limit(limit).offset(offset))).all()
@@ -353,18 +352,21 @@ async def fetch_my_tickets(
             event_id=event.id,
             event_slug=event.slug,
             event_title=event.title,
-            event_date=event.start_at,
+            show_id=show.id,
+            show_title=show.title,
+            show_start_at=show.start_at,
+            show_end_at=show.end_at,
             event_cover_image_url=event.cover_image_url,
-            venue=event.venue,
+            venue=show.venue,
             seat_label=seat.seat_label,
-            zone_name=zone.name,
+            zone_name=zone.name if zone else "General",
             price=Decimal(str(order_item.price)),
             order_id=order.id,
             seat_status=seat.status,
-            ticket_status='active',
+            ticket_status="active",
             issued_at=ticket.issued_at,
         )
-        for ticket, order, event, order_item, seat, zone in active_rows
+        for ticket, order, event, show, order_item, seat, zone in active_rows
     ]
 
     cancelled_tickets = [
@@ -375,18 +377,21 @@ async def fetch_my_tickets(
             event_id=event.id,
             event_slug=event.slug,
             event_title=event.title,
-            event_date=event.start_at,
+            show_id=show.id,
+            show_title=show.title,
+            show_start_at=show.start_at,
+            show_end_at=show.end_at,
             event_cover_image_url=event.cover_image_url,
-            venue=event.venue,
+            venue=show.venue,
             seat_label=seat.seat_label,
-            zone_name=zone.name,
+            zone_name=zone.name if zone else "General",
             price=Decimal(str(cancel.canceled_price)),
             order_id=cancel.order_id,
             seat_status=seat.status,
-            ticket_status='cancelled',
+            ticket_status="cancelled",
             canceled_at=cancel.canceled_at,
         )
-        for cancel, event, seat, zone in cancelled_rows
+        for cancel, event, show, seat, zone in cancelled_rows
     ]
 
     combined = active_tickets + cancelled_tickets
@@ -433,6 +438,7 @@ async def cancel_ticket(session: AsyncSession, user_id: int, ticket_id: int) -> 
                 ticket_code=ticket.ticket_code,
                 user_id=order.user_id,
                 event_id=order.event_id,
+                show_id=order.show_id,
                 order_id=order.id,
                 seat_id=seat.id,
                 canceled_price=order_item.price,
@@ -444,9 +450,7 @@ async def cancel_ticket(session: AsyncSession, user_id: int, ticket_id: int) -> 
         await session.delete(order_item)
         await session.flush()
 
-        total_amount = await session.scalar(
-            select(func.coalesce(func.sum(OrderItem.price), 0)).where(OrderItem.order_id == order.id)
-        )
+        total_amount = await session.scalar(select(func.coalesce(func.sum(OrderItem.price), 0)).where(OrderItem.order_id == order.id))
         updated_total = Decimal(str(total_amount or 0))
         order.total_amount = updated_total
         if updated_total <= Decimal("0"):
@@ -457,8 +461,8 @@ async def cancel_ticket(session: AsyncSession, user_id: int, ticket_id: int) -> 
         await session.rollback()
         raise
 
-    await seat_ws_manager.broadcast_seat_changes(event_id=seat.event_id, payload=[changed_seat])
-    await public_api_cache.invalidate_namespace(event_seat_cache_namespace(seat.event_id))
+    await seat_ws_manager.broadcast_seat_changes(show_id=seat.show_id or 0, payload=[changed_seat])
+    await public_api_cache.invalidate_namespace(show_seat_cache_namespace(seat.show_id or 0))
 
 
 async def release_expired_locks(session: AsyncSession) -> dict[int, list[dict[str, int | str | None]]]:
@@ -469,6 +473,7 @@ async def release_expired_locks(session: AsyncSession) -> dict[int, list[dict[st
         await session.scalars(
             select(Seat)
             .where(
+                Seat.show_id.is_not(None),
                 Seat.status == SeatStatus.LOCKED,
                 Seat.lock_expires_at.is_not(None),
                 Seat.lock_expires_at < now,
@@ -480,14 +485,13 @@ async def release_expired_locks(session: AsyncSession) -> dict[int, list[dict[st
     if not seats:
         return {}
 
-    event_payloads: dict[int, list[dict[str, int | str | None]]] = {}
-
+    show_payloads: dict[int, list[dict[str, int | str | None]]] = {}
     try:
         for seat in seats:
             seat.status = SeatStatus.AVAILABLE
             seat.locked_by_user_id = None
             seat.lock_expires_at = None
-            event_payloads.setdefault(seat.event_id, []).append(
+            show_payloads.setdefault(seat.show_id or 0, []).append(
                 {
                     "id": seat.id,
                     "status": SeatStatus.AVAILABLE.value,
@@ -500,4 +504,4 @@ async def release_expired_locks(session: AsyncSession) -> dict[int, list[dict[st
         await session.rollback()
         raise
 
-    return event_payloads
+    return {show_id: payload for show_id, payload in show_payloads.items() if show_id}

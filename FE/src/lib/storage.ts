@@ -36,13 +36,13 @@ export const authStorage = {
 }
 
 export const queueStorage = {
-  getToken(eventKey: string): string | null {
-    return sessionStorage.getItem(`ticketrush_queue_${eventKey}`)
+  getToken(showKey: string | number): string | null {
+    return sessionStorage.getItem(`ticketrush_queue_${showKey}`)
   },
-  setToken(eventKey: string, token: string) {
-    sessionStorage.setItem(`ticketrush_queue_${eventKey}`, token)
+  setToken(showKey: string | number, token: string) {
+    sessionStorage.setItem(`ticketrush_queue_${showKey}`, token)
   },
-  clearToken(eventKey: string) {
-    sessionStorage.removeItem(`ticketrush_queue_${eventKey}`)
+  clearToken(showKey: string | number) {
+    sessionStorage.removeItem(`ticketrush_queue_${showKey}`)
   },
 }

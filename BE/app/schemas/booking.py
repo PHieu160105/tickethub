@@ -12,7 +12,7 @@ from app.models.enums import OrderStatus, SeatStatus
 class LockSeatsRequest(BaseModel):
     """Seat lock request payload."""
 
-    event_id: int
+    show_id: int
     seat_ids: list[int] = Field(min_length=1)
     queue_token: str | None = None
 
@@ -28,14 +28,14 @@ class LockSeatsResponse(BaseModel):
 class ReleaseSeatsRequest(BaseModel):
     """Manual release payload."""
 
-    event_id: int
+    show_id: int
     seat_ids: list[int] = Field(min_length=1)
 
 
 class CheckoutRequest(BaseModel):
     """Checkout confirmation payload (no external gateway)."""
 
-    event_id: int
+    show_id: int
     queue_token: str | None = None
     discount_code: str | None = None
 
@@ -73,7 +73,10 @@ class MyTicketResponse(BaseModel):
     event_id: int
     event_slug: str
     event_title: str
-    event_date: datetime
+    show_id: int
+    show_title: str
+    show_start_at: datetime
+    show_end_at: datetime
     event_cover_image_url: str | None = None
     venue: str
     seat_label: str

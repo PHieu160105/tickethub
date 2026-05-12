@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.sqltypes import Date
 
 from app.models.enums import EventStatus, OrderStatus, QueueStatus
-from app.models.event import Event
+from app.models.event import Show
 from app.models.order import Order, OrderItem, TicketCancellation
 from app.models.queue import QueueEntry
 from app.models.user import User
@@ -27,12 +27,12 @@ async def get_dashboard_summary(session: AsyncSession) -> DashboardSummaryRespon
                 .label("total_revenue"),
                 select(func.count(OrderItem.id)).scalar_subquery().label("tickets_sold"),
                 select(func.count(TicketCancellation.id)).scalar_subquery().label("cancelled_tickets"),
-                select(func.count(Event.id))
-                .where(Event.status == EventStatus.LIVE, Event.is_deleted.is_(False))
+                select(func.count(Show.id))
+                .where(Show.status == EventStatus.LIVE, Show.is_deleted.is_(False))
                 .scalar_subquery()
                 .label("active_events"),
                 select(func.count(QueueEntry.id))
-                .where(QueueEntry.status == QueueStatus.WAITING)
+                .where(QueueEntry.status == QueueStatus.WAITING, QueueEntry.show_id.is_not(None))
                 .scalar_subquery()
                 .label("waiting_queue_users"),
             )

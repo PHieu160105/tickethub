@@ -73,7 +73,7 @@ function FilterListbox({ value, options, onChange, buttonClassName = 'w-full sm:
 
 export default function AdminTickets() {
   const [summary, setSummary] = useState<DashboardSummary>(DEFAULT_SUMMARY)
-  const [revenueByEvent, setRevenueByEvent] = useState<AdminEventRevenueItem[]>([])
+  const [revenueByShow, setRevenueByShow] = useState<AdminEventRevenueItem[]>([])
   const [ticketSales, setTicketSales] = useState<AdminTicketSaleItem[]>([])
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [eventFilter, setEventFilter] = useState<string>('all')
@@ -88,7 +88,7 @@ export default function AdminTickets() {
   async function loadStaticData() {
     const [summaryRes, revenueRes] = await Promise.all([adminApi.summary(), adminApi.revenueByEvent()])
     setSummary(summaryRes)
-    setRevenueByEvent(revenueRes)
+    setRevenueByShow(revenueRes)
   }
 
   async function loadSalesData() {
@@ -129,7 +129,7 @@ export default function AdminTickets() {
   const totalPages = Math.max(1, Math.ceil(totalSales / PAGE_SIZE))
   const eventOptions: SelectOption[] = [
     { value: 'all', label: 'Tất cả sự kiện' },
-    ...revenueByEvent.map((eventItem) => ({
+    ...revenueByShow.map((eventItem) => ({
       value: String(eventItem.event_id),
       label: eventItem.event_title,
     })),
@@ -210,20 +210,23 @@ export default function AdminTickets() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Doanh thu theo sự kiện</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Doanh thu theo show</CardTitle></CardHeader>
         <CardContent>
           {loading ? (
             <p className="text-sm admin-text-body">Đang tải doanh thu...</p>
-          ) : revenueByEvent.length === 0 ? (
-            <p className="text-sm text-gray-400">Chưa có dữ liệu doanh thu theo sự kiện.</p>
+          ) : revenueByShow.length === 0 ? (
+            <p className="text-sm text-gray-400">Chưa có dữ liệu doanh thu theo show.</p>
           ) : (
             <div className="space-y-4">
-              {revenueByEvent.map((item) => {
+              {revenueByShow.map((item) => {
                 const progress = summary.tickets_sold > 0 ? (item.tickets_sold / summary.tickets_sold) * 100 : 0
                 return (
-                  <div key={item.event_id} className="space-y-2">
+                  <div key={item.show_id} className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="admin-text-body font-medium">{item.event_title}</span>
+                      <div>
+                        <span className="admin-text-body font-medium">{item.show_title}</span>
+                        <p className="text-xs text-gray-400">{item.event_title} • {new Date(item.show_start_at).toLocaleString('vi-VN')}</p>
+                      </div>
                       <div className="flex items-center gap-4"><span className="text-gray-400">{item.tickets_sold} vé</span><span className="text-green-400 font-medium">{formatCurrency(item.revenue)}</span></div>
                     </div>
                     <div className="h-3 bg-white/10 rounded-full overflow-hidden">
@@ -275,6 +278,7 @@ export default function AdminTickets() {
                   <tr className="border-b border-white/10 text-left admin-text-body">
                     <th className="pb-3 font-medium">ID</th>
                     <th className="pb-3 font-medium">Sự kiện</th>
+                    <th className="pb-3 font-medium">Show</th>
                     <th className="pb-3 font-medium">Khách hàng</th>
                     <th className="pb-3 font-medium">Ghế</th>
                     <th className="pb-3 font-medium">Gía</th>
@@ -287,6 +291,11 @@ export default function AdminTickets() {
                     <tr key={sale.id} className="border-b border-white/5">
                       <td className="py-3 admin-text-body font-mono text-xs">#{sale.id.toString().padStart(4, '0')}</td>
                       <td className="py-3 admin-text-body max-w-[220px] truncate">{sale.event_title}</td>
+                      <td className="py-3 admin-text-body">
+                        <div>{sale.show_title}</div>
+                        <div className="text-xs text-gray-400">{new Date(sale.show_start_at).toLocaleString('vi-VN')}</div>
+                        <div className="text-xs text-gray-500">{sale.venue}</div>
+                      </td>
                       <td className="py-3 admin-text-body">{sale.customer_name}</td>
                       <td className="py-3 admin-text-body">{sale.zone_name} - {sale.seat_label}</td>
                       <td className="py-3 text-green-400">{formatCurrency(sale.price)}</td>

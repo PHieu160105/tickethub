@@ -110,7 +110,7 @@ export default function AdminDashboard() {
         </Card>
         <Card>
           <CardContent className="pt-2">
-            <p className="text-sm font-bold admin-text-body">Sự kiện đang mở</p>
+            <p className="text-sm font-bold admin-text-body">Show đang mở</p>
             <p className="text-xl font-bold text-cyan-400 mt-2">{summary.active_events}</p>
           </CardContent>
         </Card>
@@ -158,7 +158,7 @@ export default function AdminDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Activity className="h-5 w-5 text-brand-yellow" />
-              Tỷ lệ lấp đầy theo sự kiện
+              Tỷ lệ lấp đầy theo show
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -166,10 +166,11 @@ export default function AdminDashboard() {
               <p className="text-sm admin-text-body">Chưa có dữ liệu occupancy.</p>
             ) : (
               occupancy.map((item) => (
-                <div key={item.event_id} className="rounded-lg border border-white/10 p-3 bg-space-700/40">
+                <div key={item.show_id} className="rounded-lg border border-white/10 p-3 bg-space-700/40">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium admin-text-body">{item.event_title}</p>
+                      <p className="text-sm font-medium admin-text-body">{item.show_title}</p>
+                      <p className="text-xs text-gray-400 mt-1">{item.event_title}</p>
                       <p className="text-xs admin-text-body mt-1">
                         {item.sold_seats}/{item.total_seats} đã bán, {item.locked_seats} đang giữ
                       </p>

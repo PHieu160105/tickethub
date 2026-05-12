@@ -6,18 +6,18 @@ import { api, withRetry } from '../../../lib/api'
 import type { LockSeatResponse, CheckoutResponse, TicketItem, ApiMessage } from '../../../types'
 
 export interface LockSeatsPayload {
-  event_id: number
+  show_id: number
   seat_ids: number[]
   queue_token?: string
 }
 
 export interface ReleaseSeatsPayload {
-  event_id: number
+  show_id: number
   seat_ids: number[]
 }
 
 export interface CheckoutPayload {
-  event_id: number
+  show_id: number
   queue_token?: string
   discount_code?: string
 }
@@ -36,7 +36,7 @@ export const bookingApi = {
     const response = await withRetry(
       () =>
         api.post<LockSeatResponse>('/bookings/lock', {
-          event_id: payload.event_id,
+          show_id: payload.show_id,
           seat_ids: payload.seat_ids,
           queue_token: payload.queue_token,
         }),
@@ -50,7 +50,7 @@ export const bookingApi = {
    */
   async release(payload: ReleaseSeatsPayload): Promise<ApiMessage> {
     const response = await api.post<ApiMessage>('/bookings/release', {
-      event_id: payload.event_id,
+      show_id: payload.show_id,
       seat_ids: payload.seat_ids,
     })
     return response.data
@@ -61,7 +61,7 @@ export const bookingApi = {
    */
   async checkout(payload: CheckoutPayload): Promise<CheckoutResponse> {
     const response = await api.post<CheckoutResponse>('/bookings/checkout', {
-      event_id: payload.event_id,
+      show_id: payload.show_id,
       queue_token: payload.queue_token,
       discount_code: payload.discount_code,
     })

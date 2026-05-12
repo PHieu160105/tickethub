@@ -11,7 +11,6 @@ import {
   CreditCard,
   Shield,
   Save,
-  Upload,
   Palette,
   Moon,
   Sun

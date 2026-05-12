@@ -1,6 +1,6 @@
-"""Event and seat related schemas."""
+"""Event, show, seat, and admin planning schemas."""
 
-from datetime import datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -9,7 +9,7 @@ from app.models.enums import EventStatus, Gender, SeatStatus
 
 
 class SeatZoneCreate(BaseModel):
-    """Seat zone matrix config payload for event creation."""
+    """Seat zone matrix config payload for show creation."""
 
     code: str = Field(min_length=1, max_length=30)
     name: str = Field(min_length=1, max_length=100)
@@ -20,7 +20,7 @@ class SeatZoneCreate(BaseModel):
 
 
 class SeatZoneUpdate(BaseModel):
-    """Admin payload for editing one seat zone matrix."""
+    """Admin payload for editing one show zone matrix."""
 
     code: str = Field(min_length=1, max_length=30)
     name: str = Field(min_length=1, max_length=100)
@@ -31,15 +31,44 @@ class SeatZoneUpdate(BaseModel):
 
 
 class EventCreateRequest(BaseModel):
-    """Admin payload to create a brand-new event and seats."""
+    """Admin payload to create a parent event."""
 
     title: str = Field(min_length=3, max_length=255)
     description: str = Field(min_length=10)
     category: str = Field(min_length=2, max_length=80)
-    venue: str = Field(min_length=3, max_length=200)
-    start_at: datetime
-    end_at: datetime
+    start_date: date
+    end_date: date
     cover_image_url: str = ""
+    status: EventStatus = EventStatus.LIVE
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "EventCreateRequest":
+        if self.end_date < self.start_date:
+            raise ValueError("end_date must be on or after start_date")
+        return self
+
+
+class EventUpdateRequest(BaseModel):
+    """Admin payload to update event metadata only."""
+
+    title: str | None = Field(default=None, min_length=3, max_length=255)
+    description: str | None = Field(default=None, min_length=10)
+    category: str | None = Field(default=None, min_length=2, max_length=80)
+    start_date: date | None = None
+    end_date: date | None = None
+    cover_image_url: str | None = None
+    status: EventStatus | None = None
+
+
+class ShowCreateRequest(BaseModel):
+    """Admin payload to create a sellable show."""
+
+    title: str = Field(min_length=3, max_length=255)
+    description: str = Field(min_length=10)
+    venue: str = Field(min_length=3, max_length=200)
+    show_date: date
+    start_time: time
+    end_time: time
     status: EventStatus = EventStatus.LIVE
     hold_minutes: int = Field(default=10, ge=1, le=60)
     queue_enabled: bool = True
@@ -50,24 +79,27 @@ class EventCreateRequest(BaseModel):
     zones: list[SeatZoneCreate] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_seat_source(self) -> "EventCreateRequest":
+    def validate_show_source(self) -> "ShowCreateRequest":
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time must be later than start_time")
         if self.venue_layout_id is not None:
+            if self.venue_id is None:
+                raise ValueError("venue_id is required when venue_layout_id is provided")
             return self
         if not self.zones:
             raise ValueError("zones is required when venue_layout_id is not provided")
         return self
 
 
-class EventUpdateRequest(BaseModel):
-    """Admin payload to update released event metadata/settings."""
+class ShowUpdateRequest(BaseModel):
+    """Admin payload to update one show."""
 
     title: str | None = Field(default=None, min_length=3, max_length=255)
     description: str | None = Field(default=None, min_length=10)
-    category: str | None = Field(default=None, min_length=2, max_length=80)
     venue: str | None = Field(default=None, min_length=3, max_length=200)
-    start_at: datetime | None = None
-    end_at: datetime | None = None
-    cover_image_url: str | None = None
+    show_date: date | None = None
+    start_time: time | None = None
+    end_time: time | None = None
     status: EventStatus | None = None
     hold_minutes: int | None = Field(default=None, ge=1, le=60)
     queue_enabled: bool | None = None
@@ -75,6 +107,24 @@ class EventUpdateRequest(BaseModel):
     max_active_queue_tokens: int | None = Field(default=None, ge=1, le=5000)
     venue_id: int | None = Field(default=None, ge=1)
     venue_layout_id: int | None = Field(default=None, ge=1)
+
+
+class ShowSummaryResponse(BaseModel):
+    """Short show shape for event detail and admin lists."""
+
+    id: int
+    event_id: int
+    title: str
+    description: str
+    venue: str
+    start_at: datetime
+    end_at: datetime
+    status: EventStatus
+    queue_enabled: bool
+    venue_id: int | None = None
+    venue_layout_id: int | None = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EventCardResponse(BaseModel):
@@ -92,10 +142,23 @@ class EventCardResponse(BaseModel):
     status: EventStatus
     created_at: datetime
     queue_enabled: bool
-    venue_id: int | None = None
-    venue_layout_id: int | None = None
 
-    model_config = ConfigDict(from_attributes=True)
+
+class EventDetailResponse(EventCardResponse):
+    """Detailed event payload with child shows."""
+
+    shows: list[ShowSummaryResponse]
+
+
+class ShowDetailResponse(ShowSummaryResponse):
+    """Detailed show payload for admin and booking clients."""
+
+    event_slug: str
+    event_title: str
+    hold_minutes: int
+    queue_release_batch: int
+    max_active_queue_tokens: int
+    zones: list["SeatZoneResponse"]
 
 
 class SeatZoneResponse(BaseModel):
@@ -131,15 +194,6 @@ class SeatPurchaseInfoResponse(BaseModel):
     issued_at: datetime | None = None
 
 
-class EventDetailResponse(EventCardResponse):
-    """Detailed event payload used for booking screen."""
-
-    hold_minutes: int
-    queue_release_batch: int
-    max_active_queue_tokens: int
-    zones: list[SeatZoneResponse]
-
-
 class SeatResponse(BaseModel):
     """Serializable seat object for matrix rendering."""
 
@@ -159,31 +213,33 @@ class SeatResponse(BaseModel):
 
 
 class SeatMatrixResponse(BaseModel):
-    """Seats and zones returned to seat matrix screen."""
+    """Seats and zones returned to one show booking screen."""
 
+    show_id: int
+    show_title: str
     event_id: int
     event_slug: str
+    event_title: str
     queue_enabled: bool
     zones: list[SeatZoneResponse]
     seats: list[SeatResponse]
 
 
 class EventOccupancyResponse(BaseModel):
-    """Per-event occupancy totals for dashboard."""
+    """Per-show occupancy totals for admin dashboards."""
 
     event_id: int
     event_title: str
+    show_id: int
+    show_title: str
     total_seats: int
     sold_seats: int
     locked_seats: int
     occupancy_rate: float
 
 
-# ── Admin Seat Creation Schemas ──
-
-
 class SeatSingleCreateRequest(BaseModel):
-    """Create a single seat for an event with coordinates (percent 0-100)."""
+    """Create a single seat for a show with coordinates (percent 0-100)."""
 
     seat_label: str = Field(min_length=1, max_length=100)
     x: float = Field(ge=0.0, le=100.0)
@@ -204,11 +260,11 @@ class ArcConfig(BaseModel):
 
 
 class SeatBulkCreateRequest(BaseModel):
-    """Bulk generate seats for an event using supported patterns."""
+    """Bulk generate seats for a show using supported patterns."""
 
     zone_id: int | None = None
     section_id: int | None = None
-    pattern: str = Field(default="straight")  # straight | arc | zigzag
+    pattern: str = Field(default="straight")
     rows: int = Field(default=1, ge=1)
     cols: int = Field(default=1, ge=1)
     gap_x: float = Field(default=3.0, ge=0.0)
@@ -227,7 +283,7 @@ class SeatCreateResponse(BaseModel):
 
 
 class SeatUpdateRequest(BaseModel):
-    """Update an event seat's editable geometry and sale metadata."""
+    """Update a show's editable seat geometry and sale metadata."""
 
     seat_label: str | None = Field(default=None, min_length=1, max_length=100)
     x: float | None = Field(default=None, ge=0.0, le=100.0)
@@ -242,3 +298,6 @@ class SeatUpdateRequest(BaseModel):
 class SeatBulkCreateResponse(BaseModel):
     created_count: int
     seats: list[SeatCreateResponse]
+
+
+ShowDetailResponse.model_rebuild()

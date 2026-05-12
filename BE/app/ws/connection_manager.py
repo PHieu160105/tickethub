@@ -10,14 +10,14 @@ MAX_CONNECTIONS_PER_USER = 5
 
 
 class SeatWebSocketManager:
-    """Handles fan-out of seat status updates for each event room."""
+    """Handles fan-out of seat status updates for each show room."""
 
     def __init__(self) -> None:
         self._rooms: dict[int, set[WebSocket]] = defaultdict(set)
         self._user_connections: dict[int, set[WebSocket]] = defaultdict(set)
         self._lock = asyncio.Lock()
 
-    async def connect(self, event_id: int, user_id: int, websocket: WebSocket) -> bool:
+    async def connect(self, show_id: int, user_id: int, websocket: WebSocket) -> bool:
         """Accept and register a seat-map WebSocket client."""
 
         async with self._lock:
@@ -27,34 +27,34 @@ class SeatWebSocketManager:
 
         await websocket.accept()
         async with self._lock:
-            self._rooms[event_id].add(websocket)
+            self._rooms[show_id].add(websocket)
             self._user_connections[user_id].add(websocket)
         return True
 
-    async def disconnect(self, event_id: int, user_id: int, websocket: WebSocket) -> None:
-        """Remove socket from the event room."""
+    async def disconnect(self, show_id: int, user_id: int, websocket: WebSocket) -> None:
+        """Remove socket from the show room."""
 
         async with self._lock:
-            self._rooms[event_id].discard(websocket)
+            self._rooms[show_id].discard(websocket)
             self._user_connections[user_id].discard(websocket)
 
-    async def broadcast_seat_changes(self, event_id: int, payload: list[dict[str, Any]]) -> None:
-        """Push seat delta updates to all listeners of an event."""
+    async def broadcast_seat_changes(self, show_id: int, payload: list[dict[str, Any]]) -> None:
+        """Push seat delta updates to all listeners of a show."""
 
         if not payload:
             return
 
         dead_connections: list[WebSocket] = []
-        for websocket in list(self._rooms.get(event_id, set())):
+        for websocket in list(self._rooms.get(show_id, set())):
             try:
-                await websocket.send_json({"type": "seat_changes", "event_id": event_id, "payload": payload})
+                await websocket.send_json({"type": "seat_changes", "show_id": show_id, "payload": payload})
             except Exception:
                 dead_connections.append(websocket)
 
         if dead_connections:
             async with self._lock:
                 for conn in dead_connections:
-                    self._rooms[event_id].discard(conn)
+                    self._rooms[show_id].discard(conn)
                 for user_connections in self._user_connections.values():
                     user_connections.difference_update(dead_connections)
 

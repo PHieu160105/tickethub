@@ -17,10 +17,10 @@ export function useLockSeats() {
     error: null,
   })
 
-  const lockSeats = useCallback(async (eventId: number, seatIds: number[], queueToken?: string) => {
+  const lockSeats = useCallback(async (showId: number, seatIds: number[], queueToken?: string) => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }))
     try {
-      const response = await bookingApi.lock({ event_id: eventId, seat_ids: seatIds, queue_token: queueToken })
+      const response = await bookingApi.lock({ show_id: showId, seat_ids: seatIds, queue_token: queueToken })
       setState({ isLoading: false, error: null })
       return response
     } catch (error) {
@@ -42,10 +42,10 @@ export function useReleaseSeats() {
     error: null,
   })
 
-  const releaseSeats = useCallback(async (eventId: number, seatIds: number[]) => {
+  const releaseSeats = useCallback(async (showId: number, seatIds: number[]) => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }))
     try {
-      const response = await bookingApi.release({ event_id: eventId, seat_ids: seatIds })
+      const response = await bookingApi.release({ show_id: showId, seat_ids: seatIds })
       setState({ isLoading: false, error: null })
       return response.detail
     } catch (error) {
@@ -67,10 +67,10 @@ export function useCheckout() {
     error: null,
   })
 
-  const checkout = useCallback(async (eventId: number, queueToken?: string, discountCode?: string) => {
+  const checkout = useCallback(async (showId: number, queueToken?: string, discountCode?: string) => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }))
     try {
-      const response = await bookingApi.checkout({ event_id: eventId, queue_token: queueToken, discount_code: discountCode })
+      const response = await bookingApi.checkout({ show_id: showId, queue_token: queueToken, discount_code: discountCode })
       setState({ isLoading: false, error: null })
       return response
     } catch (error) {

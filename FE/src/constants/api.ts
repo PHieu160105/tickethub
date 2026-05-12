@@ -62,13 +62,13 @@ export const ENDPOINTS = {
   EVENTS: {
     LIST: '/events',
     DETAIL: (eventKey: string) => `/events/${eventKey}`,
-    SEATS: (eventKey: string) => `/events/${eventKey}/seats`,
+    SEATS: (showId: string | number) => `/shows/${showId}/seats`,
   },
   // Queue endpoints
   QUEUE: {
-    JOIN: (eventKey: string) => `/events/${eventKey}/queue/join`,
-    STATUS: (eventKey: string, token: string) => `/events/${eventKey}/queue/status/${token}`,
-    HEARTBEAT: (eventKey: string, token: string) => `/events/${eventKey}/queue/heartbeat/${token}`,
+    JOIN: (showId: string | number) => `/shows/${showId}/queue/join`,
+    STATUS: (showId: string | number, token: string) => `/shows/${showId}/queue/status/${token}`,
+    HEARTBEAT: (showId: string | number, token: string) => `/shows/${showId}/queue/heartbeat/${token}`,
   },
   // Booking endpoints
   BOOKINGS: {

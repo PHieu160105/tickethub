@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { Footer } from '@/components/layout/Footer'
 import { Navbar } from '@/components/layout/Navbar'
 import { Button } from '@/components/ui/Button'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { CustomerSeatMap } from '@/components/customer/CustomerSeatMap'
 import { SeatMapLegend } from '@/components/customer/SeatMapLegend'
 import { useLockSeats, useReleaseSeats } from '@/features/booking/hooks/useBooking'
-import { useEventSeats } from '@/features/events/hooks/useEvents'
+import { useShowSeats } from '@/features/events/hooks/useEvents'
 import { useAuth } from '@/context/AuthContext'
 import { useWebSocketHeartbeat } from '@/hooks/useWebSocketHeartbeat'
 import { authStorage, queueStorage } from '@/lib/storage'
@@ -36,11 +35,12 @@ function groupSeatsByZone(seats: Seat[]) {
 const DEFAULT_VIEWPORT = { scale: 1, offsetX: 0, offsetY: 0 }
 
 export default function SeatSelection() {
-  const { eventKey } = useParams<{ eventKey: string }>()
+  const { showId: showIdParam } = useParams<{ showId: string }>()
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
+  const showId = Number(showIdParam ?? '')
 
-  const { seats: matrix, isLoading, error, refetch } = useEventSeats(eventKey, { pollIntervalMs: 3000 })
+  const { seats: matrix, isLoading, error, refetch } = useShowSeats(showId, { pollIntervalMs: 3000 })
   const { isLoading: isLocking, lockSeats } = useLockSeats()
   const { isLoading: isReleasing, releaseSeats } = useReleaseSeats()
 
@@ -56,14 +56,14 @@ export default function SeatSelection() {
   const [panStartOffset, setPanStartOffset] = useState<{ x: number; y: number } | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
 
-  const queueToken = eventKey ? queueStorage.getToken(eventKey) : null
+  const queueToken = showId ? queueStorage.getToken(showId) : null
   const authToken = authStorage.getToken()
-  const wsUrl = eventKey && authToken ? `${WS_BASE_URL}/events/${eventKey}/seats?token=${encodeURIComponent(authToken)}` : null
+  const wsUrl = showId && authToken ? `${WS_BASE_URL}/shows/${showId}/seats?token=${encodeURIComponent(authToken)}` : null
 
   useEffect(() => {
-    if (!eventKey) return
-    seatmapApi.get(eventKey).then(setSeatMap).catch(() => setSeatMap(null))
-  }, [eventKey])
+    if (!showId || Number.isNaN(showId)) return
+    seatmapApi.get(showId).then(setSeatMap).catch(() => setSeatMap(null))
+  }, [showId])
 
   // Canvas panning via global mouse events
   useEffect(() => {
@@ -119,10 +119,10 @@ export default function SeatSelection() {
     setPendingSeatIds((prev) => [...prev, seat.id])
     try {
       if (seat.is_locked_by_me) {
-        const msg = await releaseSeats(matrix.event_id, [seat.id])
+        const msg = await releaseSeats(matrix.show_id, [seat.id])
         setStatusMessage(msg)
       } else {
-        const res = await lockSeats(matrix.event_id, [seat.id], queueToken ?? undefined)
+        const res = await lockSeats(matrix.show_id, [seat.id], queueToken ?? undefined)
         setStatusMessage(res.locked_seat_ids.includes(seat.id) ? `${seat.seat_label} đã giữ cho bạn.` : `${seat.seat_label} vừa bị người khác đặt.`)
       }
       await refetch(false)
@@ -145,15 +145,15 @@ export default function SeatSelection() {
     setPendingSeatIds((prev) => [...prev, seat.id])
     try {
       if (seat.is_locked_by_me) {
-        const msg = await releaseSeats(matrix.event_id, [seat.id])
+        const msg = await releaseSeats(matrix.show_id, [seat.id])
         setStatusMessage(msg)
       } else {
-        const res = await lockSeats(matrix.event_id, [seat.id], queueToken ?? undefined)
+        const res = await lockSeats(matrix.show_id, [seat.id], queueToken ?? undefined)
         setStatusMessage(res.locked_seat_ids.includes(seat.id) ? `${seat.label} đã giữ cho bạn.` : `${seat.label} vừa bị người khác đặt.`)
       }
       await refetch(false)
       // Re-sync canvas seatmap status
-      if (eventKey) seatmapApi.get(eventKey).then(setSeatMap).catch(() => {})
+      if (showId) seatmapApi.get(showId).then(setSeatMap).catch(() => {})
     } catch (err) {
       setStatusMessage(err instanceof Error ? err.message : 'Không thể cập nhật trạng thái ghế')
     } finally {
@@ -165,7 +165,7 @@ export default function SeatSelection() {
   const handleCheckout = () => {
     if (!matrix || heldSeats.length === 0) return
     if (!isAuthenticated) { navigate('/login'); return }
-    navigate(`/checkout?eventId=${matrix.event_id}&eventKey=${matrix.event_slug}`, {
+    navigate(`/checkout?showId=${matrix.show_id}&eventKey=${matrix.event_slug}`, {
       state: { lockedSeatIds: heldSeats.map((s) => s.id) },
     })
   }
@@ -209,10 +209,10 @@ export default function SeatSelection() {
       const msg = JSON.parse(event.data) as { type?: string }
       if (msg.type === 'seat_changes') {
         void refetch(false)
-        if (eventKey) seatmapApi.get(eventKey).then(setSeatMap).catch(() => {})
+        if (showId) seatmapApi.get(showId).then(setSeatMap).catch(() => {})
       }
     } catch { /* ignore */ }
-  }, [refetch, eventKey])
+  }, [refetch, showId])
 
   useWebSocketHeartbeat({ url: wsUrl, onMessage: handleSeatUpdates })
 
@@ -236,7 +236,7 @@ export default function SeatSelection() {
         <Navbar />
         <main className="mx-auto max-w-3xl space-y-4 px-6 py-24 text-center">
           <p className="text-amber-300">Sự kiện này yêu cầu vào hàng đợi trước khi chọn ghế.</p>
-          <Link to={`/queue?eventKey=${matrix.event_slug}`}><Button>Tham gia hàng đợi</Button></Link>
+          <Link to={`/queue?showId=${matrix.show_id}&eventKey=${matrix.event_slug}`}><Button>Tham gia hàng đợi</Button></Link>
         </main>
       </div>
     )
@@ -251,7 +251,7 @@ export default function SeatSelection() {
           <div className="flex flex-wrap items-start justify-between gap-4 rounded-3xl border border-white/10 bg-slate-900/70 p-6">
             <div>
               <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Chọn chỗ ngồi</p>
-              <h1 className="mt-2 text-3xl font-black">{seatMap?.event_title ?? 'Chọn ghế trên sơ đồ'}</h1>
+              <h1 className="mt-2 text-3xl font-black">{seatMap?.show_title ?? 'Chọn ghế trên sơ đồ'}</h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-400">
                 {useCanvas ? 'Click vào ghế trên sơ đồ để giữ chỗ.' : 'Chọn ghế từ danh sách bên dưới để tiếp tục thanh toán.'}
               </p>

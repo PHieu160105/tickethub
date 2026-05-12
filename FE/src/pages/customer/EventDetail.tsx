@@ -163,7 +163,7 @@ export default function EventDetail() {
                 <Heart className={`w-4 h-4 ${fav ? 'fill-primary text-primary' : ''}`} />
                 {fav ? 'Đã yêu thích' : 'Yêu thích'}
               </button>
-              <Link to={event.queue_enabled ? `/queue?eventKey=${event.slug || event.id}` : `/event/${event.slug || event.id}/seats`}>
+              <Link to="#shows">
               </Link>
             </div>
           </div>
@@ -196,24 +196,32 @@ export default function EventDetail() {
                 <p className="text-slate-300 leading-relaxed">{event.description}</p>
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-6">
-                <h2 className="text-xl font-bold mb-4">Seat Zones</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {event.zones.map((zone) => (
-                    <div key={zone.id} className="rounded-lg bg-slate-800/70 border border-white/10 p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="font-semibold">{zone.name}</p>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-white/10">{zone.code}</span>
+              <div id="shows" className="rounded-xl border border-white/10 bg-slate-900/70 p-6">
+                <h2 className="text-xl font-bold mb-4">Show diễn</h2>
+                {event.shows.length === 0 ? (
+                  <p className="text-sm text-slate-400">Sự kiện này chưa có show mở bán.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {event.shows.map((show) => (
+                      <div key={show.id} className="rounded-lg bg-slate-800/70 border border-white/10 p-4">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div>
+                            <p className="font-semibold">{show.title}</p>
+                            <p className="text-xs text-slate-400 mt-1">{show.description}</p>
+                          </div>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 capitalize">{show.status}</span>
+                        </div>
+                        <div className="text-sm text-slate-300 space-y-1">
+                          <p>{new Date(show.start_at).toLocaleString('vi-VN')}</p>
+                          <p>{show.venue}</p>
+                        </div>
+                        <Link to={show.queue_enabled ? `/queue?showId=${show.id}&eventKey=${event.slug || event.id}` : `/shows/${show.id}/seats`} className="mt-4 inline-block">
+                          <Button>{show.queue_enabled ? 'Đặt vé' : 'Vào chọn ghế'}</Button>
+                        </Link>
                       </div>
-                      <div className="text-sm text-slate-300 space-y-1">
-                        <p>
-                          {zone.row_count} rows x {zone.seats_per_row} seats
-                        </p>
-                        <p className="text-secondary font-semibold">${Number(zone.price).toFixed(2)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -310,15 +318,15 @@ export default function EventDetail() {
             <div className="flex items-start gap-3 text-slate-300">
               <Users className="w-5 h-5 text-secondary mt-0.5" />
               <div>
-                <p className="text-xs uppercase tracking-wider text-slate-400">Queue</p>
-                <p>{event.queue_enabled ? 'Enabled' : 'Disabled'}</p>
+                <p className="text-xs uppercase tracking-wider text-slate-400">Shows</p>
+                <p>{event.shows.length}</p>
               </div>
             </div>
           </div>
 
-          <Link to={event.queue_enabled ? `/queue?eventKey=${event.slug || event.id}` : `/event/${event.slug || event.id}/seats`}>
+          <Link to="#shows">
             <Button className="w-full" size="lg">
-              {event.queue_enabled ? 'Continue To Queue' : 'Continue To Seats'}
+              Xem các show mở bán
             </Button>
           </Link>
         </aside>

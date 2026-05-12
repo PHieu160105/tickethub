@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { adminApi, eventApi, extractApiErrorMessage, seatmapApi } from '@/lib/api'
-import type { EventDetail, Seat, SeatMapPolygon, SeatMapResponse, SeatMapSeat, SeatZone, SeatMatrixResponse } from '@/types'
+import type { Seat, SeatMapPolygon, SeatMapResponse, SeatMapSeat, SeatZone, SeatMatrixResponse, ShowDetail } from '@/types'
 
 const DEFAULT_SINGLE_FORM = {
     seat_label: '',
@@ -67,7 +67,8 @@ function polygonPoints(points: SeatMapPolygon['points']) {
 }
 
 export default function AdminSeatPlanner() {
-    const { eventKey } = useParams<{ eventKey: string }>()
+    const { eventKey, showId: showIdParam } = useParams<{ eventKey: string; showId: string }>()
+    const showId = Number(showIdParam ?? '')
     const canvasRef = useRef<HTMLDivElement>(null)
     const savedSeatsRef = useRef<SeatMapSeat[]>([])
     const savedMatrixSeatsRef = useRef<Seat[]>([])
@@ -76,7 +77,7 @@ export default function AdminSeatPlanner() {
     const tempPolygonIdRef = useRef(-1)
     const suppressNextCanvasClickRef = useRef(false)
 
-    const [eventDetail, setEventDetail] = useState<EventDetail | null>(null)
+    const [showDetail, setShowDetail] = useState<ShowDetail | null>(null)
     const [matrix, setMatrix] = useState<SeatMatrixResponse | null>(null)
     const [seatMap, setSeatMap] = useState<SeatMapResponse | null>(null)
     const [zones, setZones] = useState<SeatZone[]>([])
@@ -126,7 +127,7 @@ export default function AdminSeatPlanner() {
     const seatZoneMap = useMemo(() => new Map(matrix?.seats.map((seat) => [seat.id, seat.zone_id]) ?? []), [matrix?.seats])
     const zoneMap = useMemo(() => new Map(zones.map((zone) => [zone.id, zone])), [zones])
     const selectedSeat = useMemo(() => seatMap?.seats.find((seat) => seat.id === selectedSeatIds[0]) ?? null, [seatMap?.seats, selectedSeatIds])
-    const canEditPolygons = Boolean(eventDetail?.venue_id && eventDetail.venue_layout_id)
+    const canEditPolygons = Boolean(showDetail?.venue_id && showDetail.venue_layout_id)
     const seatPositionMap = useMemo(() => {
         const next = new Map<number, { x: number; y: number }>()
         seatMap?.seats.forEach((seat) => {
@@ -239,15 +240,15 @@ export default function AdminSeatPlanner() {
     }
 
     async function loadData() {
-        if (!eventKey) return
+        if (!eventKey || !showId || Number.isNaN(showId)) return
         setLoading(true)
         setError(null)
         setMessage(null)
         try {
             const [detail, matrixResponse, seatMapResponse] = await Promise.all([
-                eventApi.detail(eventKey),
-                eventApi.seats(eventKey),
-                seatmapApi.get(eventKey),
+                adminApi.getShow(eventKey, showId),
+                eventApi.seats(showId),
+                seatmapApi.get(showId),
             ])
             if (detail.venue_id) {
                 try {
@@ -259,7 +260,7 @@ export default function AdminSeatPlanner() {
             } else {
                 setPlannerBackground(null)
             }
-            setEventDetail(detail)
+            setShowDetail(detail)
             setMatrix(matrixResponse)
             setSeatMap(seatMapResponse)
             setZones(matrixResponse.zones)
@@ -301,7 +302,7 @@ export default function AdminSeatPlanner() {
     useEffect(() => {
         void loadData()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [eventKey])
+    }, [eventKey, showId])
 
     useEffect(() => {
         if (!zones.length) return
@@ -540,7 +541,7 @@ export default function AdminSeatPlanner() {
     }
 
     async function handleSingleSubmit() {
-        if (!eventKey || !singleForm.seat_label.trim() || !singleForm.zone_id) return
+        if (!eventKey || !showId || !singleForm.seat_label.trim() || !singleForm.zone_id) return
         if (editingSeatId) {
             const zone = zones.find((item) => item.id === Number(singleForm.zone_id))
             if (!zone) return
@@ -987,7 +988,7 @@ export default function AdminSeatPlanner() {
     }
 
     async function handleSavePlannerChanges() {
-        if (!eventKey || !seatMap) return
+        if (!eventKey || !showId || !seatMap) return
         setBusySingle(true)
         setError(null)
         setMessage(null)
@@ -1015,7 +1016,7 @@ export default function AdminSeatPlanner() {
             const createdSeatPairs = await Promise.all(
                 newSeats.map(async (seat) => {
                     const matrixSeat = matrix?.seats.find((item) => item.id === seat.id)
-                    const created = await adminApi.createEventSeatSingle(eventKey, {
+                    const created = await adminApi.createEventSeatSingle(eventKey, showId, {
                         seat_label: seat.label,
                         x: seat.x ?? 0,
                         y: seat.y ?? 0,
@@ -1030,7 +1031,7 @@ export default function AdminSeatPlanner() {
             const createdSeatMap = new Map(createdSeatPairs)
             await Promise.all(
                 changedSeats.map((seat) =>
-                    adminApi.updateEventSeat(eventKey, seat.id, {
+                    adminApi.updateEventSeat(eventKey, showId, seat.id, {
                         x: currentMap.get(seat.id)?.x ?? 0,
                         y: currentMap.get(seat.id)?.y ?? 0,
                         rotation: currentMap.get(seat.id)?.rotation ?? 0,
@@ -1040,7 +1041,7 @@ export default function AdminSeatPlanner() {
                     }),
                 ),
             )
-            await Promise.all(pendingDeletedSeatIds.map((seatId) => adminApi.deleteEventSeat(eventKey, seatId)))
+            await Promise.all(pendingDeletedSeatIds.map((seatId) => adminApi.deleteEventSeat(eventKey, showId, seatId)))
             const newPolygons = seatMap.polygons.filter((polygon) => polygon.id < 0)
             const changedPolygons = seatMap.polygons.filter((polygon) => {
                 if (polygon.id < 0) return false
@@ -1052,11 +1053,11 @@ export default function AdminSeatPlanner() {
                     JSON.stringify(savedPolygon.points) !== JSON.stringify(polygon.points)
                 )
             })
-            if (eventDetail?.venue_id && eventDetail.venue_layout_id) {
+            if (showDetail?.venue_id && showDetail.venue_layout_id) {
                 const createdPolygonPairs = await Promise.all(
                     newPolygons.map(async (polygon) => {
-                        const created = await adminApi.createVenuePolygon(eventDetail.venue_id!, {
-                            layout_id: eventDetail.venue_layout_id!,
+                        const created = await adminApi.createVenuePolygon(showDetail.venue_id!, {
+                            layout_id: showDetail.venue_layout_id!,
                             section_id: polygon.section_id,
                             label: polygon.label,
                             points: polygon.points,
@@ -1178,7 +1179,7 @@ export default function AdminSeatPlanner() {
         )
     }
 
-    if (!eventDetail || !matrix || !seatMap) {
+    if (!showDetail || !matrix || !seatMap) {
         return (
             <div className="space-y-6">
                 <Card className="bg-space-900/90 border-white/10">
@@ -1204,9 +1205,9 @@ export default function AdminSeatPlanner() {
             <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Trình đặt ghế sự kiện</p>
-                    <h1 className="text-3xl font-black text-white">{eventDetail.title}</h1>
+                    <h1 className="text-3xl font-black text-white">{showDetail.title}</h1>
                     <p className="mt-1 text-slate-400">
-                        {eventDetail.venue} · {seatMap.venue_name}
+                        {showDetail.event_title} · {showDetail.venue}
                     </p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => {
@@ -1442,7 +1443,7 @@ export default function AdminSeatPlanner() {
                         <CardContent className="space-y-3 text-sm text-slate-300">
                             <div className="flex items-center justify-between">
                                 <span>Sự kiện</span>
-                                <span className="text-white">{eventDetail.slug}</span>
+                                <span className="text-white">{showDetail.event_slug}</span>
                             </div>
                             <div className="flex items-center justify-between">
                                 <span>Số khu</span>

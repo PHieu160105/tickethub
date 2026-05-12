@@ -67,6 +67,8 @@ class SeatMapBackgroundResponse(BaseModel):
 class SeatMapResponse(BaseModel):
     """Full seat map payload for frontend."""
 
+    show_id: int
+    show_title: str
     event_id: int
     event_slug: str
     event_title: str

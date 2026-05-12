@@ -15,7 +15,7 @@ interface CustomerSidebarProps {
 export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
   activeTab,
   userName = 'Alex Voyager',
-  membershipLevel = '',
+  membershipLevel: _membershipLevel = '',
   onNavigate,
   className,
 }) => {

@@ -76,14 +76,14 @@ export function useEventDetail(eventKey?: string) {
   return { ...state, refetch: fetchEvent }
 }
 
-interface UseEventSeatsState {
+interface UseShowSeatsState {
   seats: SeatMatrixResponse | null
   isLoading: boolean
   error: string | null
 }
 
-export function useEventSeats(eventKey?: string, options?: { pollIntervalMs?: number }) {
-  const [state, setState] = useState<UseEventSeatsState>({
+export function useShowSeats(showId?: number, options?: { pollIntervalMs?: number }) {
+  const [state, setState] = useState<UseShowSeatsState>({
     seats: null,
     isLoading: false,
     error: null,
@@ -92,13 +92,13 @@ export function useEventSeats(eventKey?: string, options?: { pollIntervalMs?: nu
   const pollIntervalMs = options?.pollIntervalMs ?? 0
 
   const fetchSeats = useCallback(async (showLoading = true) => {
-    if (!eventKey) return
+    if (!showId) return
 
     if (showLoading) {
       setState((prev) => ({ ...prev, isLoading: true, error: null }))
     }
     try {
-      const seats = await eventsApi.seats(eventKey)
+      const seats = await eventsApi.seats(showId)
       hasLoadedRef.current = true
       setState({ seats, isLoading: false, error: null })
     } catch (error) {
@@ -108,7 +108,7 @@ export function useEventSeats(eventKey?: string, options?: { pollIntervalMs?: nu
         error: hasLoadedRef.current ? prev.error : error instanceof Error ? error.message : 'Failed to fetch seats',
       }))
     }
-  }, [eventKey])
+  }, [showId])
 
   useEffect(() => {
     hasLoadedRef.current = false
@@ -116,14 +116,14 @@ export function useEventSeats(eventKey?: string, options?: { pollIntervalMs?: nu
   }, [fetchSeats])
 
   useEffect(() => {
-    if (!eventKey || pollIntervalMs <= 0) return
+    if (!showId || pollIntervalMs <= 0) return
 
     const intervalId = window.setInterval(() => {
       void fetchSeats(false)
     }, pollIntervalMs)
 
     return () => window.clearInterval(intervalId)
-  }, [eventKey, fetchSeats, pollIntervalMs])
+  }, [showId, fetchSeats, pollIntervalMs])
 
   return { ...state, refetch: fetchSeats }
 }

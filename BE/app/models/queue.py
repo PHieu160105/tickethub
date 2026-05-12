@@ -16,6 +16,7 @@ class QueueEntry(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+    show_id: Mapped[int | None] = mapped_column(ForeignKey("shows.id", ondelete="CASCADE"), nullable=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     token: Mapped[str] = mapped_column(String(120), unique=True, nullable=False, index=True)
@@ -26,5 +27,5 @@ class QueueEntry(TimestampMixin, Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    event = relationship("Event", back_populates="queue_entries")
+    show = relationship("Show", back_populates="queue_entries")
     user = relationship("User", back_populates="queue_entries")

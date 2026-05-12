@@ -9,8 +9,8 @@ from app.core.security import hash_password
 from app.models.enums import EventStatus, Gender, UserRole
 from app.models.event import Event
 from app.models.user import User
-from app.schemas.event import EventCreateRequest, SeatZoneCreate
-from app.services.event_service import create_event_with_matrix
+from app.schemas.event import EventCreateRequest, SeatZoneCreate, ShowCreateRequest
+from app.services.event_service import create_event, create_show_with_inventory
 
 
 async def seed_demo_data(session: AsyncSession) -> None:
@@ -59,14 +59,25 @@ async def seed_demo_data(session: AsyncSession) -> None:
     if not admin_user:
         return
 
-    payload = EventCreateRequest(
+    event_payload = EventCreateRequest(
         title="Vanguard Music Festival 2026",
         description="Mega concert with flash-sale ticketing and real-time seat map.",
         category="Concert",
-        venue="My Dinh National Stadium",
-        start_at=datetime.now(UTC) + timedelta(days=20),
-        end_at=datetime.now(UTC) + timedelta(days=20, hours=4),
+        start_date=(datetime.now(UTC) + timedelta(days=20)).date(),
+        end_date=(datetime.now(UTC) + timedelta(days=20)).date(),
         cover_image_url="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80",
+        status=EventStatus.LIVE,
+    )
+
+    event = await create_event(session, admin_user.id, event_payload)
+
+    show_payload = ShowCreateRequest(
+        title="Day 1 Main Show",
+        description="Mega concert with flash-sale ticketing and real-time seat map.",
+        venue="My Dinh National Stadium",
+        show_date=(datetime.now(UTC) + timedelta(days=20)).date(),
+        start_time=(datetime.now(UTC) + timedelta(days=20)).time().replace(hour=19, minute=0, second=0, microsecond=0),
+        end_time=(datetime.now(UTC) + timedelta(days=20)).time().replace(hour=23, minute=0, second=0, microsecond=0),
         status=EventStatus.LIVE,
         hold_minutes=10,
         queue_enabled=True,
@@ -79,5 +90,5 @@ async def seed_demo_data(session: AsyncSession) -> None:
         ],
     )
 
-    await create_event_with_matrix(session, admin_user.id, payload)
+    await create_show_with_inventory(session, event, admin_user.id, show_payload)
     await session.commit()

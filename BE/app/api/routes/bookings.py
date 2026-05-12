@@ -34,7 +34,7 @@ async def lock_event_seats(
     return await lock_seats(
         session=session,
         user_id=current_user.id,
-        event_id=payload.event_id,
+        show_id=payload.show_id,
         seat_ids=payload.seat_ids,
         queue_token=payload.queue_token,
     )
@@ -51,7 +51,7 @@ async def release_event_seats(
     released_count = await release_seats(
         session=session,
         user_id=current_user.id,
-        event_id=payload.event_id,
+        show_id=payload.show_id,
         seat_ids=payload.seat_ids,
     )
     return APIMessage(detail=f"Released {released_count} seats")
@@ -68,7 +68,7 @@ async def checkout(
     return await checkout_locked_seats(
         session=session,
         user_id=current_user.id,
-        event_id=payload.event_id,
+        show_id=payload.show_id,
         queue_token=payload.queue_token,
         discount_code=payload.discount_code,
     )

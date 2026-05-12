@@ -63,7 +63,7 @@ const CustomerTicket: React.FC = () => {
     const now = Date.now()
 
     return tickets.filter((ticket) => {
-      const eventTime = new Date(ticket.event_date).getTime()
+      const eventTime = new Date(ticket.show_start_at).getTime()
       const isPast = eventTime < now
 
       if (activeTab === 'upcoming') return ticket.ticket_status === 'active' && !isPast && ticket.seat_status === 'sold'
@@ -175,9 +175,9 @@ const CustomerTicket: React.FC = () => {
               {filteredTickets.map((ticket) => (
                 <div key={ticket.ticket_id ?? `cancel-${ticket.cancellation_id}`.toString()} className="space-y-3">
                   <TicketCard
-                    eventTitle={ticket.event_title}
+                    eventTitle={`${ticket.event_title} • ${ticket.show_title}`}
                     ticketNumber={ticket.ticket_code}
-                    date={formatDate(ticket.event_date)}
+                    date={formatDate(ticket.show_start_at)}
                     location={`${ticket.venue} | ${ticket.seat_label}`}
                     imageUrl={ticket.event_cover_image_url || FALLBACK_TICKET_IMAGE}
                     status={ticket.ticket_status === 'cancelled' ? 'cancelled' : toCardStatus(ticket)}

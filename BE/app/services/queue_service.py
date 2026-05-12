@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.models.enums import EventStatus, QueueStatus
-from app.models.event import Event
+from app.models.event import Show
 from app.models.queue import QueueEntry
 from app.schemas.queue import QueueJoinResponse, QueueStatusResponse
 
@@ -32,7 +32,7 @@ async def _queue_position(session: AsyncSession, entry: QueueEntry) -> int:
 
     position = await session.scalar(
         select(func.count(QueueEntry.id)).where(
-            QueueEntry.event_id == entry.event_id,
+            QueueEntry.show_id == entry.show_id,
             QueueEntry.status == QueueStatus.WAITING,
             or_(
                 QueueEntry.created_at < entry.created_at,
@@ -43,18 +43,17 @@ async def _queue_position(session: AsyncSession, entry: QueueEntry) -> int:
     return int(position or 0)
 
 
-async def join_event_queue(session: AsyncSession, event: Event, user_id: int) -> QueueJoinResponse:
+async def join_show_queue(session: AsyncSession, show: Show, user_id: int) -> QueueJoinResponse:
     """Put user into queue, reusing existing token when possible."""
 
-    if not event.queue_enabled:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Queue is not enabled for this event")
+    if not show.queue_enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Queue is not enabled for this show")
 
     now = datetime.now(UTC)
-
     existing = await session.scalar(
         select(QueueEntry)
         .where(
-            QueueEntry.event_id == event.id,
+            QueueEntry.show_id == show.id,
             QueueEntry.user_id == user_id,
             QueueEntry.status.in_([QueueStatus.WAITING, QueueStatus.ADMITTED]),
         )
@@ -71,7 +70,6 @@ async def join_event_queue(session: AsyncSession, event: Event, user_id: int) ->
                 message="You are admitted. Proceed to seat booking.",
                 admitted_until=existing_expires,
             )
-
         if existing.status == QueueStatus.WAITING:
             return QueueJoinResponse(
                 token=existing.token,
@@ -82,7 +80,7 @@ async def join_event_queue(session: AsyncSession, event: Event, user_id: int) ->
 
     waiting_count = await session.scalar(
         select(func.count(QueueEntry.id)).where(
-            QueueEntry.event_id == event.id,
+            QueueEntry.show_id == show.id,
             QueueEntry.status == QueueStatus.WAITING,
         )
     )
@@ -90,7 +88,7 @@ async def join_event_queue(session: AsyncSession, event: Event, user_id: int) ->
 
     active_admitted_count = await session.scalar(
         select(func.count(QueueEntry.id)).where(
-            QueueEntry.event_id == event.id,
+            QueueEntry.show_id == show.id,
             QueueEntry.status == QueueStatus.ADMITTED,
             QueueEntry.expires_at.is_not(None),
             QueueEntry.expires_at > now,
@@ -99,15 +97,15 @@ async def join_event_queue(session: AsyncSession, event: Event, user_id: int) ->
     active_admitted_count = int(active_admitted_count or 0)
 
     entry = QueueEntry(
-        event_id=event.id,
+        event_id=show.event_id,
+        show_id=show.id,
         user_id=user_id,
         token=str(uuid4()),
         status=QueueStatus.WAITING,
         position_hint=waiting_count + 1,
     )
 
-    # If capacity is still free and nobody is ahead, allow user in immediately.
-    if active_admitted_count < event.max_active_queue_tokens and waiting_count == 0:
+    if active_admitted_count < show.max_active_queue_tokens and waiting_count == 0:
         entry.status = QueueStatus.ADMITTED
         entry.admitted_at = now
         entry.expires_at = now + timedelta(minutes=settings.queue_admit_ttl_minutes)
@@ -134,17 +132,16 @@ async def join_event_queue(session: AsyncSession, event: Event, user_id: int) ->
     )
 
 
-async def get_queue_status(session: AsyncSession, event_id: int, token: str, user_id: int) -> QueueStatusResponse:
+async def get_queue_status(session: AsyncSession, show_id: int, token: str, user_id: int) -> QueueStatusResponse:
     """Get latest queue status for waiting room polling."""
 
     entry = await session.scalar(
-        select(QueueEntry).where(QueueEntry.event_id == event_id, QueueEntry.token == token, QueueEntry.user_id == user_id)
+        select(QueueEntry).where(QueueEntry.show_id == show_id, QueueEntry.token == token, QueueEntry.user_id == user_id)
     )
     if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue entry not found")
 
     now = datetime.now(UTC)
-
     entry_expires = _as_utc(entry.expires_at)
     if entry.status == QueueStatus.ADMITTED and entry_expires and entry_expires < now:
         entry.status = QueueStatus.EXPIRED
@@ -168,11 +165,7 @@ async def get_queue_status(session: AsyncSession, event_id: int, token: str, use
         )
 
     if entry.status == QueueStatus.COMPLETED:
-        return QueueStatusResponse(
-            token=entry.token,
-            status=entry.status,
-            message="Your booking access session is complete.",
-        )
+        return QueueStatusResponse(token=entry.token, status=entry.status, message="Your booking access session is complete.")
 
     return QueueStatusResponse(
         token=entry.token,
@@ -181,15 +174,14 @@ async def get_queue_status(session: AsyncSession, event_id: int, token: str, use
     )
 
 
-async def heartbeat_queue_token(session: AsyncSession, event_id: int, token: str, user_id: int) -> QueueEntry:
+async def heartbeat_queue_token(session: AsyncSession, show_id: int, token: str, user_id: int) -> QueueEntry:
     """Refresh last-seen timestamp for admitted users."""
 
     entry = await session.scalar(
-        select(QueueEntry).where(QueueEntry.event_id == event_id, QueueEntry.token == token, QueueEntry.user_id == user_id)
+        select(QueueEntry).where(QueueEntry.show_id == show_id, QueueEntry.token == token, QueueEntry.user_id == user_id)
     )
     if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue entry not found")
-
     if entry.status != QueueStatus.ADMITTED:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Queue entry is not admitted")
 
@@ -207,25 +199,16 @@ async def heartbeat_queue_token(session: AsyncSession, event_id: int, token: str
     return entry
 
 
-async def ensure_queue_access(
-    session: AsyncSession,
-    event: Event,
-    user_id: int,
-    queue_token: str | None,
-) -> None:
+async def ensure_queue_access(session: AsyncSession, show: Show, user_id: int, queue_token: str | None) -> None:
     """Gate seat operations behind a valid admitted queue token when enabled."""
 
-    if not event.queue_enabled:
+    if not show.queue_enabled:
         return
-
     if not queue_token:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Queue token is required for this flash-sale event",
-        )
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Queue token is required for this show")
 
     entry = await session.scalar(
-        select(QueueEntry).where(QueueEntry.event_id == event.id, QueueEntry.token == queue_token, QueueEntry.user_id == user_id)
+        select(QueueEntry).where(QueueEntry.show_id == show.id, QueueEntry.token == queue_token, QueueEntry.user_id == user_id)
     )
     if not entry:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid queue token")
@@ -242,14 +225,14 @@ async def ensure_queue_access(
     entry.last_seen_at = now
 
 
-async def mark_queue_completed(session: AsyncSession, event_id: int, user_id: int, queue_token: str | None) -> None:
+async def mark_queue_completed(session: AsyncSession, show_id: int, user_id: int, queue_token: str | None) -> None:
     """Mark queue entry as completed after successful checkout."""
 
     if not queue_token:
         return
 
     entry = await session.scalar(
-        select(QueueEntry).where(QueueEntry.event_id == event_id, QueueEntry.token == queue_token, QueueEntry.user_id == user_id)
+        select(QueueEntry).where(QueueEntry.show_id == show_id, QueueEntry.token == queue_token, QueueEntry.user_id == user_id)
     )
     if not entry:
         return
@@ -263,23 +246,21 @@ async def process_virtual_queue(session: AsyncSession) -> int:
 
     now = datetime.now(UTC)
     updated_entries = 0
-
-    events = list(
+    shows = list(
         await session.scalars(
-            select(Event).where(
-                Event.queue_enabled.is_(True),
-                Event.is_deleted.is_(False),
-                Event.status.in_([EventStatus.LIVE, EventStatus.DRAFT]),
+            select(Show).where(
+                Show.queue_enabled.is_(True),
+                Show.is_deleted.is_(False),
+                Show.status.in_([EventStatus.LIVE, EventStatus.DRAFT]),
             )
         )
     )
 
-    for event in events:
-        # Expire outdated admissions first.
+    for show in shows:
         expired_result = await session.execute(
             update(QueueEntry)
             .where(
-                QueueEntry.event_id == event.id,
+                QueueEntry.show_id == show.id,
                 QueueEntry.status == QueueStatus.ADMITTED,
                 QueueEntry.expires_at.is_not(None),
                 QueueEntry.expires_at < now,
@@ -290,7 +271,7 @@ async def process_virtual_queue(session: AsyncSession) -> int:
 
         active_admitted_count = await session.scalar(
             select(func.count(QueueEntry.id)).where(
-                QueueEntry.event_id == event.id,
+                QueueEntry.show_id == show.id,
                 QueueEntry.status == QueueStatus.ADMITTED,
                 QueueEntry.expires_at.is_not(None),
                 QueueEntry.expires_at > now,
@@ -298,15 +279,15 @@ async def process_virtual_queue(session: AsyncSession) -> int:
         )
         active_admitted_count = int(active_admitted_count or 0)
 
-        available_slots = max(event.max_active_queue_tokens - active_admitted_count, 0)
-        batch_size = min(event.queue_release_batch, available_slots)
+        available_slots = max(show.max_active_queue_tokens - active_admitted_count, 0)
+        batch_size = min(show.queue_release_batch, available_slots)
         if batch_size <= 0:
             continue
 
         waiting_entries = list(
             await session.scalars(
                 select(QueueEntry)
-                .where(QueueEntry.event_id == event.id, QueueEntry.status == QueueStatus.WAITING)
+                .where(QueueEntry.show_id == show.id, QueueEntry.status == QueueStatus.WAITING)
                 .order_by(QueueEntry.created_at.asc())
                 .limit(batch_size)
             )
@@ -320,11 +301,10 @@ async def process_virtual_queue(session: AsyncSession) -> int:
             entry.position_hint = index
             updated_entries += 1
 
-        # Refresh waiting position hints for better UX.
         remaining_waiting = list(
             await session.scalars(
                 select(QueueEntry)
-                .where(QueueEntry.event_id == event.id, QueueEntry.status == QueueStatus.WAITING)
+                .where(QueueEntry.show_id == show.id, QueueEntry.status == QueueStatus.WAITING)
                 .order_by(QueueEntry.created_at.asc())
             )
         )

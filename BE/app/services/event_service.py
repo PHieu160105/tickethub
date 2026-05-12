@@ -1,6 +1,7 @@
-"""Event-related business logic and seat matrix generation."""
+"""Event/show business logic and seat matrix generation."""
 
-from datetime import UTC, datetime
+from collections import defaultdict
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 import re
 
@@ -10,11 +11,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.search import build_ilike_pattern, sanitize_search_query
 from app.models.enums import SeatStatus
-from app.models.event import Event, SeatZone
+from app.models.event import Event, SeatZone, Show
 from app.models.order import Order, OrderItem, Ticket
 from app.models.seat import Seat
 from app.models.user import User
-from app.schemas.event import EventCreateRequest, SeatPurchaseInfoResponse, SeatResponse, SeatUserInfoResponse, SeatZoneCreate, SeatZoneResponse
+from app.models.venue import Section, Venue, VenueLayout
+from app.schemas.event import (
+    EventCardResponse,
+    EventCreateRequest,
+    EventDetailResponse,
+    SeatPurchaseInfoResponse,
+    SeatResponse,
+    SeatUserInfoResponse,
+    SeatZoneCreate,
+    SeatZoneResponse,
+    ShowCreateRequest,
+    ShowSummaryResponse,
+)
+
 
 def slugify(text: str) -> str:
     """Generate URL-friendly slug from title."""
@@ -34,7 +48,30 @@ def row_label_from_index(index: int) -> str:
     return label
 
 
-def _build_zone_seats(event_id: int, zone: SeatZone, payload: SeatZoneCreate) -> list[Seat]:
+def combine_show_datetime(show_date: date, show_time: time) -> datetime:
+    """Combine date and time into a UTC-aware datetime."""
+
+    return datetime.combine(show_date, show_time, tzinfo=UTC)
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    """Normalize naive datetimes from DB layer to UTC-aware values."""
+
+    if value is None:
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def _event_range_to_datetimes(start_date: date, end_date: date) -> tuple[datetime, datetime]:
+    """Create synthetic UTC datetimes for event list/detail responses."""
+
+    return (
+        datetime.combine(start_date, time.min, tzinfo=UTC),
+        datetime.combine(end_date, time.max, tzinfo=UTC),
+    )
+
+
+def _build_zone_seats(event_id: int, show_id: int, zone: SeatZone, payload: SeatZoneCreate) -> list[Seat]:
     """Generate full seat matrix models for one zone payload."""
 
     seat_models: list[Seat] = []
@@ -45,6 +82,7 @@ def _build_zone_seats(event_id: int, zone: SeatZone, payload: SeatZoneCreate) ->
             seat_models.append(
                 Seat(
                     event_id=event_id,
+                    show_id=show_id,
                     zone_id=zone.id,
                     row_index=row_index,
                     row_label=row_label,
@@ -55,14 +93,6 @@ def _build_zone_seats(event_id: int, zone: SeatZone, payload: SeatZoneCreate) ->
                 )
             )
     return seat_models
-
-
-def _as_utc(value: datetime | None) -> datetime | None:
-    """Normalize naive datetimes from DB layer to UTC-aware values."""
-
-    if value is None:
-        return None
-    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 async def build_unique_slug(session: AsyncSession, title: str) -> str:
@@ -82,23 +112,154 @@ async def build_unique_slug(session: AsyncSession, title: str) -> str:
         suffix += 1
 
 
-async def create_event_with_matrix(session: AsyncSession, admin_id: int, payload: EventCreateRequest) -> Event:
-    """Create event, zones and all generated seats in one transaction."""
+async def _resolve_event_layout(
+    session: AsyncSession,
+    venue_id: int | None,
+    venue_layout_id: int | None,
+) -> tuple[Venue | None, VenueLayout | None]:
+    """Resolve venue + layout pair, validating ownership."""
 
-    if payload.end_at <= payload.start_at:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="end_at must be later than start_at")
+    if venue_layout_id is None:
+        if venue_id is None:
+            return None, None
+        venue = await session.get(Venue, venue_id)
+        if not venue:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+        return venue, None
 
-    venue, layout = await _resolve_event_layout(session, payload.venue_id, payload.venue_layout_id)
-    slug = await build_unique_slug(session, payload.title)
+    layout = await session.get(VenueLayout, venue_layout_id)
+    if not layout:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue layout not found")
+    if venue_id is not None and layout.venue_id != venue_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="venue_layout_id does not belong to venue_id")
+
+    venue = await session.get(Venue, layout.venue_id)
+    if not venue:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+    return venue, layout
+
+
+async def create_event(session: AsyncSession, admin_id: int, payload: EventCreateRequest) -> Event:
+    """Create a parent event without sellable inventory."""
+
+    if payload.end_date < payload.start_date:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="end_date must be on or after start_date")
+
+    start_at_legacy, end_at_legacy = _event_range_to_datetimes(payload.start_date, payload.end_date)
     event = Event(
-        slug=slug,
+        slug=await build_unique_slug(session, payload.title),
         title=payload.title,
         description=payload.description,
         category=payload.category,
-        venue=payload.venue,
-        start_at=payload.start_at,
-        end_at=payload.end_at,
         cover_image_url=payload.cover_image_url,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        status=payload.status,
+        created_by_user_id=admin_id,
+        venue="",
+        start_at_legacy=start_at_legacy,
+        end_at_legacy=end_at_legacy,
+    )
+    session.add(event)
+    await session.flush()
+    return event
+
+
+async def _clone_layout_inventory(session: AsyncSession, event: Event, show: Show, layout: VenueLayout) -> None:
+    """Clone venue template sections/seats into a sellable show inventory."""
+
+    sections = list(
+        await session.scalars(
+            select(Section).where(Section.venue_layout_id == layout.id).order_by(Section.sort_order.asc(), Section.id.asc())
+        )
+    )
+    template_seats = list(
+        await session.scalars(
+            select(Seat)
+            .where(Seat.venue_layout_id == layout.id, Seat.show_id.is_(None))
+            .order_by(Seat.section_id.asc().nulls_last(), Seat.seat_label.asc())
+        )
+    )
+
+    zone_map: dict[int | None, SeatZone] = {}
+    if sections:
+        for section in sections:
+            zone = SeatZone(
+                event_id=event.id,
+                show_id=show.id,
+                code=section.code,
+                name=section.name,
+                row_count=1,
+                seats_per_row=1,
+                price=section.price_base,
+                color=section.color,
+            )
+            session.add(zone)
+            await session.flush()
+            zone_map[section.id] = zone
+    elif template_seats:
+        fallback_zone = SeatZone(
+            event_id=event.id,
+            show_id=show.id,
+            code="GEN",
+            name="General",
+            row_count=1,
+            seats_per_row=max(len(template_seats), 1),
+            price=Decimal("0"),
+            color="#024ddf",
+        )
+        session.add(fallback_zone)
+        await session.flush()
+        zone_map[None] = fallback_zone
+
+    cloned_seats: list[Seat] = []
+    for template_seat in template_seats:
+        zone = zone_map.get(template_seat.section_id) or zone_map.get(None)
+        price = float(zone.price) if zone else float(template_seat.price)
+        cloned_seats.append(
+            Seat(
+                event_id=event.id,
+                show_id=show.id,
+                zone_id=zone.id if zone else None,
+                row_index=template_seat.row_index,
+                row_label=template_seat.row_label,
+                seat_number=template_seat.seat_number,
+                seat_label=template_seat.seat_label,
+                price=price,
+                status=SeatStatus.AVAILABLE,
+                x_coord=template_seat.x_coord,
+                y_coord=template_seat.y_coord,
+                rotation=template_seat.rotation,
+                section_id=template_seat.section_id,
+                venue_layout_id=template_seat.venue_layout_id,
+                is_admin_locked=template_seat.is_admin_locked,
+            )
+        )
+
+    if cloned_seats:
+        session.add_all(cloned_seats)
+        await session.flush()
+
+
+async def create_show_with_inventory(session: AsyncSession, event: Event, admin_id: int, payload: ShowCreateRequest) -> Show:
+    """Create a sellable show and initialize its seats."""
+
+    if payload.show_date < event.start_date or payload.show_date > event.end_date:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="show_date must be within the event date range")
+
+    start_at = combine_show_datetime(payload.show_date, payload.start_time)
+    end_at = combine_show_datetime(payload.show_date, payload.end_time)
+    if end_at <= start_at:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="end_time must be later than start_time")
+
+    venue, layout = await _resolve_event_layout(session, payload.venue_id, payload.venue_layout_id)
+    show = Show(
+        event_id=event.id,
+        title=payload.title,
+        description=payload.description,
+        venue=payload.venue if payload.venue else (venue.name if venue else ""),
+        start_at=start_at,
+        end_at=end_at,
         status=payload.status,
         hold_minutes=payload.hold_minutes,
         queue_enabled=payload.queue_enabled,
@@ -108,14 +269,19 @@ async def create_event_with_matrix(session: AsyncSession, admin_id: int, payload
         venue_id=venue.id if venue else None,
         venue_layout_id=layout.id if layout else None,
     )
-    session.add(event)
+    session.add(show)
     await session.flush()
+
+    if layout:
+        await _clone_layout_inventory(session, event, show, layout)
+        return show
 
     zone_models: list[SeatZone] = []
     seat_models: list[Seat] = []
     for zone_payload in payload.zones:
         zone = SeatZone(
             event_id=event.id,
+            show_id=show.id,
             code=zone_payload.code,
             name=zone_payload.name,
             row_count=zone_payload.row_count,
@@ -126,31 +292,54 @@ async def create_event_with_matrix(session: AsyncSession, admin_id: int, payload
         session.add(zone)
         await session.flush()
         zone_models.append(zone)
+        seat_models.extend(_build_zone_seats(event.id, show.id, zone, zone_payload))
 
-        seat_models.extend(_build_zone_seats(event.id, zone, zone_payload))
-
-    session.add_all(seat_models)
-    await session.flush()
-    return event
-
-
-async def list_event_zones(session: AsyncSession, event_id: int) -> list[SeatZone]:
-    """List all zones of an event by stable ordering."""
-
-    return list(await session.scalars(select(SeatZone).where(SeatZone.event_id == event_id).order_by(SeatZone.id.asc())))
+    if seat_models:
+        session.add_all(seat_models)
+        await session.flush()
+    return show
 
 
-async def create_event_zone(session: AsyncSession, event: Event, payload: SeatZoneCreate) -> SeatZone:
+async def list_event_shows(session: AsyncSession, event_id: int, include_deleted: bool = False) -> list[Show]:
+    """List child shows for one event."""
+
+    stmt = select(Show).where(Show.event_id == event_id)
+    if not include_deleted:
+        stmt = stmt.where(Show.is_deleted.is_(False))
+    stmt = stmt.order_by(Show.start_at.asc(), Show.id.asc())
+    return list(await session.scalars(stmt))
+
+
+async def get_show_by_id(session: AsyncSession, show_id: int, include_deleted: bool = False) -> Show:
+    """Resolve show by numeric id."""
+
+    stmt = select(Show).where(Show.id == show_id)
+    if not include_deleted:
+        stmt = stmt.where(Show.is_deleted.is_(False))
+    show = await session.scalar(stmt)
+    if not show:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show not found")
+    return show
+
+
+async def list_show_zones(session: AsyncSession, show_id: int) -> list[SeatZone]:
+    """List all zones of a show by stable ordering."""
+
+    return list(await session.scalars(select(SeatZone).where(SeatZone.show_id == show_id).order_by(SeatZone.id.asc())))
+
+
+async def create_show_zone(session: AsyncSession, show: Show, payload: SeatZoneCreate) -> SeatZone:
     """Create one zone and generate all seats for it."""
 
     existing = await session.scalar(
-        select(func.count(SeatZone.id)).where(SeatZone.event_id == event.id, func.lower(SeatZone.code) == payload.code.lower())
+        select(func.count(SeatZone.id)).where(SeatZone.show_id == show.id, func.lower(SeatZone.code) == payload.code.lower())
     )
     if existing:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Zone code already exists in this event")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Zone code already exists in this show")
 
     zone = SeatZone(
-        event_id=event.id,
+        event_id=show.event_id,
+        show_id=show.id,
         code=payload.code,
         name=payload.name,
         row_count=payload.row_count,
@@ -161,28 +350,27 @@ async def create_event_zone(session: AsyncSession, event: Event, payload: SeatZo
     session.add(zone)
     await session.flush()
 
-    session.add_all(_build_zone_seats(event.id, zone, payload))
-
+    session.add_all(_build_zone_seats(show.event_id, show.id, zone, payload))
     await session.flush()
     return zone
 
 
-async def update_event_zone(session: AsyncSession, event: Event, zone_id: int, payload: SeatZoneCreate) -> SeatZone:
-    """Update one zone and regenerate seats only when zone has no sold/locked seats."""
+async def update_show_zone(session: AsyncSession, show: Show, zone_id: int, payload: SeatZoneCreate) -> SeatZone:
+    """Update one zone and regenerate seats when safe."""
 
-    zone = await session.scalar(select(SeatZone).where(SeatZone.id == zone_id, SeatZone.event_id == event.id))
+    zone = await session.scalar(select(SeatZone).where(SeatZone.id == zone_id, SeatZone.show_id == show.id))
     if not zone:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zone not found")
 
     duplicate = await session.scalar(
         select(func.count(SeatZone.id)).where(
-            SeatZone.event_id == event.id,
+            SeatZone.show_id == show.id,
             SeatZone.id != zone.id,
             func.lower(SeatZone.code) == payload.code.lower(),
         )
     )
     if duplicate:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Zone code already exists in this event")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Zone code already exists in this show")
 
     blocked = await session.scalar(
         select(func.count(Seat.id)).where(
@@ -191,11 +379,8 @@ async def update_event_zone(session: AsyncSession, event: Event, zone_id: int, p
         )
     )
     if blocked:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot update zone while it has sold/locked seats",
-        )
-    
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot update zone while it has sold/locked seats")
+
     zone.code = payload.code
     zone.name = payload.name
     zone.row_count = payload.row_count
@@ -203,22 +388,20 @@ async def update_event_zone(session: AsyncSession, event: Event, zone_id: int, p
     zone.price = payload.price
     zone.color = payload.color
 
-
     existing_seats = list(await session.scalars(select(Seat).where(Seat.zone_id == zone.id)))
     for seat in existing_seats:
         await session.delete(seat)
     await session.flush()
 
-    session.add_all(_build_zone_seats(event.id, zone, payload))
-
+    session.add_all(_build_zone_seats(show.event_id, show.id, zone, payload))
     await session.flush()
     return zone
 
 
-async def delete_event_zone(session: AsyncSession, event: Event, zone_id: int) -> None:
+async def delete_show_zone(session: AsyncSession, show: Show, zone_id: int) -> None:
     """Delete zone if it does not contain sold/locked seats."""
 
-    zone = await session.scalar(select(SeatZone).where(SeatZone.id == zone_id, SeatZone.event_id == event.id))
+    zone = await session.scalar(select(SeatZone).where(SeatZone.id == zone_id, SeatZone.show_id == show.id))
     if not zone:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zone not found")
 
@@ -229,10 +412,7 @@ async def delete_event_zone(session: AsyncSession, event: Event, zone_id: int) -
         )
     )
     if blocked:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete zone while it has sold/locked seats",
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete zone while it has sold/locked seats")
 
     await session.delete(zone)
     await session.flush()
@@ -247,13 +427,13 @@ async def list_live_events(
     limit: int = 30,
     offset: int = 0,
 ) -> list[Event]:
-    """Return events with basic optional search filters."""
+    """Return events with optional search/category/date filters."""
 
-    stmt = select(Event).where(Event.is_deleted.is_(False)).order_by(Event.start_at.asc())
+    stmt = select(Event).where(Event.is_deleted.is_(False)).order_by(Event.start_date.asc(), Event.id.asc())
 
     pattern = build_ilike_pattern(search)
     if pattern:
-        stmt = stmt.where(Event.title.ilike(pattern, escape="\\") | Event.venue.ilike(pattern, escape="\\"))
+        stmt = stmt.where(Event.title.ilike(pattern, escape="\\"))
 
     if category:
         normalized_category = sanitize_search_query(category, max_length=80)
@@ -261,15 +441,13 @@ async def list_live_events(
             stmt = stmt.where(Event.category.ilike(normalized_category))
 
     if start_from:
-        stmt = stmt.where(Event.start_at >= start_from)
+        stmt = stmt.where(Event.start_date >= start_from.date())
 
     if end_to:
-        stmt = stmt.where(Event.start_at <= end_to)
+        stmt = stmt.where(Event.start_date <= end_to.date())
 
     stmt = stmt.limit(limit).offset(offset)
-
-    result = await session.scalars(stmt)
-    return list(result)
+    return list(await session.scalars(stmt))
 
 
 async def get_event_by_slug_or_id(session: AsyncSession, slug_or_id: str, include_deleted: bool = False) -> Event:
@@ -289,16 +467,87 @@ async def get_event_by_slug_or_id(session: AsyncSession, slug_or_id: str, includ
     return event
 
 
-async def get_event_seat_matrix(
+async def build_show_summary_response(show: Show) -> ShowSummaryResponse:
+    """Serialize one show for API responses."""
+
+    return ShowSummaryResponse.model_validate(show)
+
+
+async def build_event_card_response(session: AsyncSession, event: Event, shows: list[Show] | None = None) -> EventCardResponse:
+    """Build one event card enriched by its child shows."""
+
+    if shows is None:
+        shows = await list_event_shows(session, event.id)
+
+    start_at, end_at = _event_range_to_datetimes(event.start_date, event.end_date)
+    distinct_venues = [show.venue for show in shows if show.venue]
+    if not distinct_venues:
+        venue_summary = event.venue or "TBD"
+    elif len(set(distinct_venues)) == 1:
+        venue_summary = distinct_venues[0]
+    else:
+        venue_summary = "Multiple venues"
+
+    return EventCardResponse(
+        id=event.id,
+        slug=event.slug,
+        title=event.title,
+        description=event.description,
+        category=event.category,
+        venue=venue_summary,
+        start_at=start_at,
+        end_at=end_at,
+        cover_image_url=event.cover_image_url,
+        status=event.status,
+        created_at=event.created_at,
+        queue_enabled=any(show.queue_enabled for show in shows),
+    )
+
+
+async def build_event_detail_response(session: AsyncSession, event: Event) -> EventDetailResponse:
+    """Build one detailed event payload with child shows."""
+
+    shows = await list_event_shows(session, event.id)
+    card = await build_event_card_response(session, event, shows=shows)
+    return EventDetailResponse(**card.model_dump(), shows=[await build_show_summary_response(show) for show in shows])
+
+
+async def build_show_detail_response(session: AsyncSession, show: Show) -> dict[str, object]:
+    """Build one detailed show payload."""
+
+    event = await session.get(Event, show.event_id)
+    zones, _ = await get_show_seat_matrix(session, show.id)
+    return {
+        "id": show.id,
+        "event_id": show.event_id,
+        "title": show.title,
+        "description": show.description,
+        "venue": show.venue,
+        "start_at": show.start_at,
+        "end_at": show.end_at,
+        "status": show.status,
+        "queue_enabled": show.queue_enabled,
+        "venue_id": show.venue_id,
+        "venue_layout_id": show.venue_layout_id,
+        "event_slug": event.slug if event else "",
+        "event_title": event.title if event else "",
+        "hold_minutes": show.hold_minutes,
+        "queue_release_batch": show.queue_release_batch,
+        "max_active_queue_tokens": show.max_active_queue_tokens,
+        "zones": zones,
+    }
+
+
+async def get_show_seat_matrix(
     session: AsyncSession,
-    event_id: int,
+    show_id: int,
     current_user_id: int | None = None,
     include_user_details: bool = False,
 ) -> tuple[list[SeatZoneResponse], list[SeatResponse]]:
-    """Fetch seat matrix with lock ownership hints for current user."""
+    """Fetch one show's seat matrix with lock ownership hints."""
 
-    zones = list(await session.scalars(select(SeatZone).where(SeatZone.event_id == event_id).order_by(SeatZone.id.asc())))
-    seats = list(await session.scalars(select(Seat).where(Seat.event_id == event_id).order_by(Seat.zone_id, Seat.row_index, Seat.seat_number)))
+    zones = list(await session.scalars(select(SeatZone).where(SeatZone.show_id == show_id).order_by(SeatZone.id.asc())))
+    seats = list(await session.scalars(select(Seat).where(Seat.show_id == show_id).order_by(Seat.zone_id, Seat.row_index, Seat.seat_number)))
 
     now = datetime.now(UTC)
     zone_responses = [SeatZoneResponse.model_validate(zone) for zone in zones]
@@ -364,7 +613,6 @@ async def get_event_seat_matrix(
         }
 
     for seat in seats:
-        # Treat expired locks as available for client rendering. Real unlock still happens in worker.
         normalized_status = SeatStatus.LOCKED if seat.is_admin_locked and seat.status != SeatStatus.SOLD else seat.status
         lock_expires = _as_utc(seat.lock_expires_at)
         if seat.status == SeatStatus.LOCKED and lock_expires and lock_expires < now:

@@ -32,6 +32,18 @@ export interface EventCard {
   status: EventStatus
   created_at: string
   queue_enabled: boolean
+}
+
+export interface ShowSummary {
+  id: number
+  event_id: number
+  title: string
+  description: string
+  venue: string
+  start_at: string
+  end_at: string
+  status: EventStatus
+  queue_enabled: boolean
   venue_id?: number | null
   venue_layout_id?: number | null
 }
@@ -123,6 +135,12 @@ export interface SeatZone {
 }
 
 export interface EventDetail extends EventCard {
+  shows: ShowSummary[]
+}
+
+export interface ShowDetail extends ShowSummary {
+  event_slug: string
+  event_title: string
   hold_minutes: number
   queue_release_batch: number
   max_active_queue_tokens: number
@@ -161,8 +179,11 @@ export interface SeatPurchaseInfo {
 }
 
 export interface SeatMatrixResponse {
+  show_id: number
+  show_title: string
   event_id: number
   event_slug: string
+  event_title: string
   queue_enabled: boolean
   zones: SeatZone[]
   seats: Seat[]
@@ -212,6 +233,8 @@ export interface SeatMapSeat {
 }
 
 export interface SeatMapResponse {
+  show_id: number
+  show_title: string
   event_id: number
   event_slug: string
   event_title: string
@@ -290,7 +313,10 @@ export interface TicketItem {
   event_id: number
   event_slug: string
   event_title: string
-  event_date: string
+  show_id: number
+  show_title: string
+  show_start_at: string
+  show_end_at: string
   event_cover_image_url: string
   venue: string
   seat_label: string
@@ -324,6 +350,8 @@ export interface AudienceDistribution {
 export interface OccupancyItem {
   event_id: number
   event_title: string
+  show_id: number
+  show_title: string
   total_seats: number
   sold_seats: number
   locked_seats: number
@@ -334,15 +362,10 @@ export interface AdminEventUpdatePayload {
   title?: string
   description?: string
   category?: string
-  venue?: string
-  start_at?: string
-  end_at?: string
+  start_date?: string
+  end_date?: string
   cover_image_url?: string
   status?: EventStatus
-  hold_minutes?: number
-  queue_enabled?: boolean
-  queue_release_batch?: number
-  max_active_queue_tokens?: number
 }
 
 export interface EventZoneStats {
@@ -362,6 +385,10 @@ export interface EventZoneStats {
 export interface EventDetailStats {
   event_id: number
   event_title: string
+  show_id: number
+  show_title: string
+  show_start_at: string
+  show_end_at: string
   total_seats: number
   sold_seats: number
   locked_seats: number
@@ -422,10 +449,15 @@ export interface AdminUserItem {
 
 export interface AdminTicketSaleItem {
   id: number
+  event_id: number
   event_title: string
+  show_id: number
+  show_title: string
+  show_start_at: string
   customer_name: string
   seat_label: string
   zone_name: string
+  venue: string
   price: number
   purchased_at: string
   order_status: string
@@ -434,6 +466,9 @@ export interface AdminTicketSaleItem {
 export interface AdminEventRevenueItem {
   event_id: number
   event_title: string
+  show_id: number
+  show_title: string
+  show_start_at: string
   tickets_sold: number
   revenue: number
 }

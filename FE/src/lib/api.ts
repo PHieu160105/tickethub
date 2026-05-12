@@ -14,6 +14,8 @@ import type {
   EventCard,
   EventDetailStats,
   EventDetail,
+  ShowDetail,
+  ShowSummary,
   LockSeatResponse,
   OccupancyItem,
   PaginatedAdminTicketSalesResponse,
@@ -146,59 +148,62 @@ export const eventApi = {
   async detail(eventKey: string) {
     return withRetry(() => api.get<EventDetail>(`/events/${eventKey}`))
   },
-  async seats(eventKey: string) {
-    return withRetry(() => api.get<SeatMatrixResponse>(`/events/${eventKey}/seats`))
+  async show(showId: number) {
+    return withRetry(() => api.get<ShowDetail>(`/shows/${showId}`))
+  },
+  async seats(showId: number) {
+    return withRetry(() => api.get<SeatMatrixResponse>(`/shows/${showId}/seats`))
   },
 }
 
 export const seatmapApi = {
-  async get(eventKey: string) {
-    return withRetry(() => api.get<SeatMapResponse>(`/events/${eventKey}/seatmap`))
+  async get(showId: number) {
+    return withRetry(() => api.get<SeatMapResponse>(`/shows/${showId}/seatmap`))
   },
 }
 
 export const queueApi = {
-  async join(eventKey: string) {
-    const response = await api.post<QueueJoinResponse>(`/events/${eventKey}/queue/join`)
+  async join(showId: number) {
+    const response = await api.post<QueueJoinResponse>(`/shows/${showId}/queue/join`)
     return response.data
   },
-  async status(eventKey: string, token: string) {
-    return withRetry(() => api.get<QueueStatusResponse>(`/events/${eventKey}/queue/status/${token}`))
+  async status(showId: number, token: string) {
+    return withRetry(() => api.get<QueueStatusResponse>(`/shows/${showId}/queue/status/${token}`))
   },
-  async heartbeat(eventKey: string, token: string) {
-    await api.post(`/events/${eventKey}/queue/heartbeat/${token}`)
+  async heartbeat(showId: number, token: string) {
+    await api.post(`/shows/${showId}/queue/heartbeat/${token}`)
   },
 }
 
 export const bookingApi = {
-  async lock(eventId: number, seatIds: number[], queueToken?: string) {
+  async lock(showId: number, seatIds: number[], queueToken?: string) {
     return withRetry(
       () =>
         api.post<LockSeatResponse>('/bookings/lock', {
-          event_id: eventId,
+          show_id: showId,
           seat_ids: seatIds,
           queue_token: queueToken,
         }),
       2,
     )
   },
-  async release(eventId: number, seatIds: number[]) {
+  async release(showId: number, seatIds: number[]) {
     const response = await api.post<ApiMessage>('/bookings/release', {
-      event_id: eventId,
+      show_id: showId,
       seat_ids: seatIds,
     })
     return response.data
   },
-  async checkout(eventId: number, queueToken?: string) {
+  async checkout(showId: number, queueToken?: string) {
     const response = await api.post<CheckoutResponse>('/bookings/checkout', {
-      event_id: eventId,
+      show_id: showId,
       queue_token: queueToken,
     })
     return response.data
   },
-  async checkoutWithDiscount(eventId: number, queueToken: string | undefined, discountCode: string | undefined) {
+  async checkoutWithDiscount(showId: number, queueToken: string | undefined, discountCode: string | undefined) {
     const response = await api.post<CheckoutResponse>('/bookings/checkout', {
-      event_id: eventId,
+      show_id: showId,
       queue_token: queueToken,
       discount_code: discountCode,
     })
@@ -235,6 +240,27 @@ export const adminApi = {
   async eventStats(eventKey: string | number) {
     return withRetry(() => api.get<EventDetailStats>(`/admin/events/${eventKey}/stats`))
   },
+  async listShows(eventKey: string | number) {
+    return withRetry(() => api.get<ShowSummary[]>(`/admin/events/${eventKey}/shows`))
+  },
+  async getShow(eventKey: string | number, showId: number) {
+    return withRetry(() => api.get<ShowDetail>(`/admin/events/${eventKey}/shows/${showId}`))
+  },
+  async createShow(eventKey: string | number, payload: unknown) {
+    const response = await api.post<ShowDetail>(`/admin/events/${eventKey}/shows`, payload)
+    return response.data
+  },
+  async updateShow(eventKey: string | number, showId: number, payload: unknown) {
+    const response = await api.patch<ShowDetail>(`/admin/events/${eventKey}/shows/${showId}`, payload)
+    return response.data
+  },
+  async deleteShow(eventKey: string | number, showId: number) {
+    const response = await api.delete<ApiMessage>(`/admin/events/${eventKey}/shows/${showId}`)
+    return response.data
+  },
+  async showStats(eventKey: string | number, showId: number) {
+    return withRetry(() => api.get<EventDetailStats>(`/admin/events/${eventKey}/shows/${showId}/stats`))
+  },
   async uploadEventImage(file: File) {
     const formData = new FormData()
     formData.append('file', file)
@@ -260,7 +286,7 @@ export const adminApi = {
     return withRetry(() => api.get<PaginatedAdminTicketSalesResponse>('/admin/tickets/sales', { params }))
   },
   async revenueByEvent() {
-    return withRetry(() => api.get<AdminEventRevenueItem[]>('/admin/tickets/revenue-by-event'))
+    return withRetry(() => api.get<AdminEventRevenueItem[]>('/admin/tickets/revenue-by-show'))
   },
   async listVenues(params?: { search?: string; limit?: number; offset?: number }) {
     return withRetry(() => api.get<VenueSummary[]>('/admin/venues', { params }))
@@ -427,30 +453,32 @@ export const adminApi = {
     const response = await api.delete<ApiMessage>(`/admin/polygons/${polygonId}`)
     return response.data
   },
-  async getZones(eventKey: string | number) {
-    return withRetry(() => api.get<SeatZone[]>(`/admin/events/${eventKey}/zones`))
+  async getShowZones(eventKey: string | number, showId: number) {
+    return withRetry(() => api.get<SeatZone[]>(`/admin/events/${eventKey}/shows/${showId}/zones`))
   },
-  async createZone(eventKey: string | number, payload: Omit<SeatZone, 'id'>) {
-    const response = await api.post<SeatZone>(`/admin/events/${eventKey}/zones`, payload)
+  async createZone(eventKey: string | number, showId: number, payload: Omit<SeatZone, 'id'>) {
+    const response = await api.post<SeatZone>(`/admin/events/${eventKey}/shows/${showId}/zones`, payload)
     return response.data
   },
-  async updateZone(eventKey: string | number, zoneId: number, payload: Omit<SeatZone, 'id'>) {
-    const response = await api.patch<SeatZone>(`/admin/events/${eventKey}/zones/${zoneId}`, payload)
+  async updateZone(eventKey: string | number, showId: number, zoneId: number, payload: Omit<SeatZone, 'id'>) {
+    const response = await api.patch<SeatZone>(`/admin/events/${eventKey}/shows/${showId}/zones/${zoneId}`, payload)
     return response.data
   },
-  async deleteZone(eventKey: string | number, zoneId: number) {
-    const response = await api.delete(`/admin/events/${eventKey}/zones/${zoneId}`)
+  async deleteZone(eventKey: string | number, showId: number, zoneId: number) {
+    const response = await api.delete(`/admin/events/${eventKey}/shows/${showId}/zones/${zoneId}`)
     return response.data
   },
   async createEventSeatSingle(
     eventKey: string | number,
+    showId: number,
     payload: { seat_label: string; x: number; y: number; rotation?: number; zone_id?: number | null; section_id?: number | null; price?: number | null; is_admin_locked?: boolean },
   ) {
-    const response = await api.post(`/admin/events/${eventKey}/seats/single`, payload)
+    const response = await api.post(`/admin/events/${eventKey}/shows/${showId}/seats/single`, payload)
     return response.data
   },
   async createEventSeatBulk(
     eventKey: string | number,
+    showId: number,
     payload: {
       zone_id?: number | null
       section_id?: number | null
@@ -465,19 +493,20 @@ export const adminApi = {
       arc_config?: { center_x: number; center_y: number; radius: number; start_angle: number; end_angle: number } | null
     },
   ) {
-    const response = await api.post(`/admin/events/${eventKey}/seats/bulk`, payload)
+    const response = await api.post(`/admin/events/${eventKey}/shows/${showId}/seats/bulk`, payload)
     return response.data
   },
   async updateEventSeat(
     eventKey: string | number,
+    showId: number,
     seatId: number,
     payload: Partial<{ seat_label: string; x: number; y: number; rotation: number; zone_id: number | null; section_id: number | null; price: number | null; is_admin_locked: boolean }>,
   ) {
-    const response = await api.patch(`/admin/events/${eventKey}/seats/${seatId}`, payload)
+    const response = await api.patch(`/admin/events/${eventKey}/shows/${showId}/seats/${seatId}`, payload)
     return response.data
   },
-  async deleteEventSeat(eventKey: string | number, seatId: number) {
-    const response = await api.delete<ApiMessage>(`/admin/events/${eventKey}/seats/${seatId}`)
+  async deleteEventSeat(eventKey: string | number, showId: number, seatId: number) {
+    const response = await api.delete<ApiMessage>(`/admin/events/${eventKey}/shows/${showId}/seats/${seatId}`)
     return response.data
   },
 }

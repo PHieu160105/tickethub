@@ -24,6 +24,7 @@ class User(TimestampMixin, Base):
     age: Mapped[int] = mapped_column(Integer, default=18, nullable=False)
 
     events_created = relationship("Event", back_populates="created_by", cascade="all,delete")
+    shows_created = relationship("Show", back_populates="created_by", cascade="all,delete")
     venues = relationship("Venue", back_populates="created_by")
     locked_seats = relationship("Seat", back_populates="locked_by_user", foreign_keys="Seat.locked_by_user_id")
     orders = relationship("Order", back_populates="user", cascade="all,delete")

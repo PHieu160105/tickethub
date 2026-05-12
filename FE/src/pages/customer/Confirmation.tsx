@@ -9,6 +9,11 @@ import { Calendar, CheckCircle, Download, MapPin, QrCode, Ticket } from 'lucide-
 interface ConfirmationLocationState {
   order?: CheckoutResponse
   eventKey?: string
+  showId?: number
+  eventTitle?: string
+  showTitle?: string
+  venue?: string
+  showStartAt?: string | null
   profile?: {
     fullName: string
     email: string
@@ -142,10 +147,22 @@ export default function Confirmation() {
                   <Calendar className="w-4 h-4" />
                   Keep ticket QR and code for entry.
                 </p>
+                {state.showTitle && (
+                  <p className="flex items-center gap-2">
+                    <Ticket className="w-4 h-4" />
+                    Show: {state.showTitle}
+                  </p>
+                )}
+                {state.venue && (
+                  <p className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4" />
+                    Venue: {state.venue}
+                  </p>
+                )}
                 {state.eventKey && (
                   <p className="flex items-center gap-2">
                     <MapPin className="w-4 h-4" />
-                    Event: {state.eventKey}
+                    Event: {state.eventTitle ?? state.eventKey}
                   </p>
                 )}
               </div>

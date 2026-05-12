@@ -7,24 +7,24 @@ import type { QueueJoinResponse, QueueStatusResponse } from '../../../types'
 
 export const queueApi = {
   /**
-   * Join queue for an event
+   * Join queue for a show
    */
-  async join(eventKey: string) {
-    const response = await api.post<QueueJoinResponse>(`/events/${eventKey}/queue/join`)
+  async join(showId: number) {
+    const response = await api.post<QueueJoinResponse>(`/shows/${showId}/queue/join`)
     return response.data
   },
 
   /**
    * Get queue status
    */
-  async status(eventKey: string, token: string) {
-    return withRetry(() => api.get<QueueStatusResponse>(`/events/${eventKey}/queue/status/${token}`))
+  async status(showId: number, token: string) {
+    return withRetry(() => api.get<QueueStatusResponse>(`/shows/${showId}/queue/status/${token}`))
   },
 
   /**
    * Send heartbeat to keep queue session alive
    */
-  async heartbeat(eventKey: string, token: string) {
-    await api.post(`/events/${eventKey}/queue/heartbeat/${token}`)
+  async heartbeat(showId: number, token: string) {
+    await api.post(`/shows/${showId}/queue/heartbeat/${token}`)
   },
 }

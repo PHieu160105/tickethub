@@ -4,7 +4,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
-from app.core.cache import event_seat_cache_namespace, public_api_cache
+from app.core.cache import public_api_cache, show_seat_cache_namespace
 from app.core.db import AsyncSessionLocal
 from app.services.booking_service import release_expired_locks
 from app.services.dashboard_service import get_dashboard_summary
@@ -42,10 +42,10 @@ class WorkerOrchestrator:
         while not self._stop_event.is_set():
             try:
                 async with AsyncSessionLocal() as session:
-                    released_by_event = await release_expired_locks(session)
-                    for event_id, payload in released_by_event.items():
-                        await public_api_cache.invalidate_namespace(event_seat_cache_namespace(event_id))
-                        await seat_ws_manager.broadcast_seat_changes(event_id, payload)
+                    released_by_show = await release_expired_locks(session)
+                    for show_id, payload in released_by_show.items():
+                        await public_api_cache.invalidate_namespace(show_seat_cache_namespace(show_id))
+                        await seat_ws_manager.broadcast_seat_changes(show_id, payload)
 
                 async with AsyncSessionLocal() as session:
                     await process_virtual_queue(session)

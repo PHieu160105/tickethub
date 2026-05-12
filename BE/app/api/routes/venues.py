@@ -81,7 +81,7 @@ async def _ensure_unique_layout_seat_label(
 ) -> None:
     stmt = select(func.count()).select_from(Seat).where(
         Seat.venue_layout_id == layout_id,
-        Seat.event_id.is_(None),
+        Seat.show_id.is_(None),
         func.lower(Seat.seat_label) == label.lower(),
     )
     if exclude_seat_id is not None:
@@ -664,7 +664,7 @@ async def list_venue_seats(
     seats = list(
         await session.scalars(
             select(Seat)
-            .where(Seat.venue_layout_id == layout.id, Seat.event_id.is_(None))
+            .where(Seat.venue_layout_id == layout.id, Seat.show_id.is_(None))
             .order_by(Seat.section_id.asc(), Seat.row_index.asc(), Seat.seat_number.asc(), Seat.seat_label.asc())
         )
     )
@@ -723,7 +723,7 @@ async def create_venue_seat_bulk(
     existing_labels = {
         str(label).lower()
         for label in await session.scalars(
-            select(Seat.seat_label).where(Seat.venue_layout_id == layout.id, Seat.event_id.is_(None))
+            select(Seat.seat_label).where(Seat.venue_layout_id == layout.id, Seat.show_id.is_(None))
         )
     }
     seats_to_add = _generate_bulk_layout_seats(payload, layout.id, section.id if section else None, existing_labels)
@@ -870,7 +870,7 @@ async def update_venue_seat(
     """Update a template seat attached to a venue layout."""
 
     seat = await session.scalar(
-        select(Seat).where(Seat.id == seat_id, Seat.event_id.is_(None), Seat.venue_layout_id.is_not(None))
+        select(Seat).where(Seat.id == seat_id, Seat.show_id.is_(None), Seat.venue_layout_id.is_not(None))
     )
     if not seat:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template seat not found")
@@ -908,7 +908,7 @@ async def delete_venue_seat(
     """Delete a template seat attached to a venue layout."""
 
     seat = await session.scalar(
-        select(Seat).where(Seat.id == seat_id, Seat.event_id.is_(None), Seat.venue_layout_id.is_not(None))
+        select(Seat).where(Seat.id == seat_id, Seat.show_id.is_(None), Seat.venue_layout_id.is_not(None))
     )
     if not seat:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template seat not found")

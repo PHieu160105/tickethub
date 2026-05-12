@@ -1,167 +1,135 @@
-﻿import { useEffect, useMemo, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Calendar, Edit, MapPin, Plus, Search, Ticket, Trash2 } from 'lucide-react'
+
 import { Badge } from '@/components/ui/Badge'
-import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
+import { Input } from '@/components/ui/Input'
+import { Modal } from '@/components/ui/Modal'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
-import type { EventCard, EventStatus, SeatZone } from '@/types'
-import { Calendar, Edit, Filter, MapPin, Search, Trash2, Users, LayoutGrid, Palette, Plus, Check, Loader2 } from 'lucide-react'
-import { Listbox } from '@headlessui/react';
+import type { EventCard, EventDetail, EventStatus, ShowSummary, VenueLayoutItem, VenueSummary } from '@/types'
 
 interface EventFormState {
   title: string
   description: string
   category: string
+  start_date: string
+  end_date: string
+  status: EventStatus
+  cover_image_url: string
+  image_file: File | null
+}
+
+interface ShowFormState {
+  title: string
+  description: string
   venue: string
-  start_at: string
-  end_at: string
+  show_date: string
+  start_time: string
+  end_time: string
   status: EventStatus
   queue_enabled: boolean
   hold_minutes: string
   queue_release_batch: string
   max_active_queue_tokens: string
+  seat_map_mode: 'classic' | 'venue'
+  venue_id: string
+  venue_layout_id: string
   zone_code: string
   zone_name: string
   row_count: string
   seats_per_row: string
   zone_price: string
   zone_color: string
-  cover_image_url: string
-  image_file: File | null
-  seat_map_mode: 'classic' | 'venue'
-  venue_id: string
-  venue_layout_id: string
 }
 
-const INITIAL_FORM: EventFormState = {
+const INITIAL_EVENT_FORM: EventFormState = {
   title: '',
   description: '',
   category: '',
+  start_date: '',
+  end_date: '',
+  status: 'live',
+  cover_image_url: '',
+  image_file: null,
+}
+
+const INITIAL_SHOW_FORM: ShowFormState = {
+  title: '',
+  description: '',
   venue: '',
-  start_at: '',
-  end_at: '',
+  show_date: '',
+  start_time: '19:00',
+  end_time: '21:00',
   status: 'live',
   queue_enabled: true,
   hold_minutes: '10',
   queue_release_batch: '50',
   max_active_queue_tokens: '200',
+  seat_map_mode: 'classic',
+  venue_id: '',
+  venue_layout_id: '',
   zone_code: 'A',
   zone_name: 'Standard',
   row_count: '10',
   seats_per_row: '20',
   zone_price: '500000',
   zone_color: '#024ddf',
-  cover_image_url: '',
-  image_file: null,
-  seat_map_mode: 'classic',
-  venue_id: '',
-  venue_layout_id: '',
-}
-
-function toDatetimeLocal(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const timezoneOffset = date.getTimezoneOffset() * 60000
-  return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16)
 }
 
 function statusBadge(status: EventStatus) {
   const variants: Record<EventStatus, { text: string; className: string }> = {
-    draft: { text: 'Draft', className: 'bg-gray-500/20 text-gray-300 fold-bold' },
-    live: { text: 'Live', className: 'bg-green-700/20 text-green-700 font-bold' },
-    closed: { text: 'Closed', className: 'bg-red-500/20 text-red-300 font-bold' },
+    draft: { text: 'Draft', className: 'bg-gray-500/20 text-gray-300' },
+    live: { text: 'Live', className: 'bg-green-700/20 text-green-300' },
+    closed: { text: 'Closed', className: 'bg-red-500/20 text-red-300' },
   }
-  const { text, className } = variants[status]
-  return <Badge className={className}>{text}</Badge>
+
+  const variant = variants[status]
+  return <Badge className={variant.className}>{variant.text}</Badge>
 }
 
-type Status = {
-  value: string;
-  label: string;
-};
-
-interface StatusSelectProps {
-  statusFilter: 'all' | EventStatus;
-  setStatusFilter: React.Dispatch<React.SetStateAction<'all' | EventStatus>>;
+function isoDate(value: string) {
+  if (!value) return ''
+  return new Date(value).toISOString().slice(0, 10)
 }
 
-function StatusSelect({ statusFilter, setStatusFilter }: StatusSelectProps) {
-  const statuses: Status[] = [
-    { value: 'all', label: 'Tất cả status' },
-    { value: 'draft', label: 'Draft' },
-    { value: 'live', label: 'Live' },
-    { value: 'closed', label: 'Closed' },
-  ];
-
-
-  return (
-    <Listbox value={statusFilter} onChange={(value) => setStatusFilter(value)}>
-      <div className="relative">
-        <Listbox.Button className="w-full md:w-48 px-3 py-2 admin-bg-listbox admin-text-header border admin-border rounded-md shadow-sm text-left">
-          {statuses.find((r) => r.value === statusFilter)?.label}
-        </Listbox.Button>
-        <Listbox.Options className="absolute z-50 mt-1 w-full md:w-48 admin-bg-listbox admin-text-header border admin-border rounded-md shadow-lg">
-          {statuses.map((status) => (
-            <Listbox.Option
-              key={status.value}
-              value={status.value}
-              className="px-3 py-2 z-50 cursor-pointer hover:admin-bg-soft"
-            >
-              {status.label}
-            </Listbox.Option>
-          ))}
-        </Listbox.Options>
-      </div>
-    </Listbox>
-  );
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString('vi-VN')
 }
-
 
 export default function AdminEvents() {
   const navigate = useNavigate()
-  // Existing Event States
   const [events, setEvents] = useState<EventCard[]>([])
+  const [venues, setVenues] = useState<VenueSummary[]>([])
+  const [venueLayouts, setVenueLayouts] = useState<VenueLayoutItem[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | EventStatus>('all')
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingEvent, setEditingEvent] = useState<EventCard | null>(null)
-  const [form, setForm] = useState(INITIAL_FORM)
   const [error, setError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
-  const [venues, setVenues] = useState<VenueSummary[]>([])
-  const [venueLayouts, setVenueLayouts] = useState<VenueLayoutItem[]>([])
-  const [venueOptionsLoading, setVenueOptionsLoading] = useState(false)
 
-  // NEW: Zone Management States
-  const [isZoneModalOpen, setIsZoneModalOpen] = useState(false)
-  const [currentEventSlug, setCurrentEventSlug] = useState<string | null>(null)
-  const [zones, setZones] = useState<SeatZone[]>([])
-  const [zoneLoading, setZoneLoading] = useState(false)
-  const [zoneError, setZoneError] = useState<string | null>(null)
-  const [editingZoneId, setEditingZoneId] = useState<number | null>(null)
-  const [zoneForm, setZoneForm] = useState({
-    code: '',
-    name: '',
-    row_count: 10,
-    seats_per_row: 20,
-    price: 500000,
-    color: '#024ddf'
-  })
+  const [eventModalOpen, setEventModalOpen] = useState(false)
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [showModalOpen, setShowModalOpen] = useState(false)
+
+  const [editingEvent, setEditingEvent] = useState<EventCard | null>(null)
+  const [activeEvent, setActiveEvent] = useState<EventDetail | null>(null)
+  const [editingShow, setEditingShow] = useState<ShowSummary | null>(null)
+  const [eventForm, setEventForm] = useState<EventFormState>(INITIAL_EVENT_FORM)
+  const [showForm, setShowForm] = useState<ShowFormState>(INITIAL_SHOW_FORM)
 
   const filteredEvents = useMemo(
     () =>
       events.filter((event) => {
-        const matchesSearch =
-          event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          event.venue.toLowerCase().includes(searchTerm.toLowerCase())
+        const haystack = `${event.title} ${event.venue} ${event.category}`.toLowerCase()
+        const matchesSearch = haystack.includes(searchTerm.toLowerCase())
         const matchesStatus = statusFilter === 'all' || event.status === statusFilter
         return matchesSearch && matchesStatus
       }),
-    [events, searchTerm, statusFilter]
+    [events, searchTerm, statusFilter],
   )
 
   async function loadEvents() {
@@ -171,66 +139,143 @@ export default function AdminEvents() {
       const response = await adminApi.listEvents()
       setEvents(response)
     } catch (errorValue) {
-      setError(extractApiErrorMessage(errorValue, 'KhÃ´ng thá»ƒ táº£i danh sÃ¡ch sá»± kiá»‡n.'))
+      setError(extractApiErrorMessage(errorValue, 'Không thể tải danh sách sự kiện.'))
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    void loadEvents()
-  }, [])
-
-  useEffect(() => {
-    void (async () => {
-      setVenueOptionsLoading(true)
-      try {
-        const venueList = await adminApi.listVenues({ limit: 200 })
-        setVenues(venueList)
-      } catch {
-        setVenues([])
-      } finally {
-        setVenueOptionsLoading(false)
-      }
-    })()
-  }, [])
-
-  // Event CRUD Handlers
-  function openCreateModal() {
-    setEditingEvent(null)
-    setForm(INITIAL_FORM)
-    setVenueLayouts([])
-    setFormError(null)
-    setIsModalOpen(true)
+  async function loadVenues() {
+    try {
+      const response = await adminApi.listVenues({ limit: 200 })
+      setVenues(response)
+    } catch {
+      setVenues([])
+    }
   }
 
-  function openEditModal(event: EventCard) {
+  async function loadEventDetail(eventKey: string) {
+    const response = await adminApi.getEvent(eventKey)
+    setActiveEvent(response)
+    return response
+  }
+
+  useEffect(() => {
+    void loadEvents()
+    void loadVenues()
+  }, [])
+
+  function resetEventForm() {
+    setEventForm(INITIAL_EVENT_FORM)
+    setEditingEvent(null)
+    setFormError(null)
+  }
+
+  function resetShowForm(eventDetail?: EventDetail | null) {
+    setShowForm({
+      ...INITIAL_SHOW_FORM,
+      show_date: eventDetail ? isoDate(eventDetail.start_at) : '',
+    })
+    setEditingShow(null)
+    setVenueLayouts([])
+    setFormError(null)
+  }
+
+  function openCreateEventModal() {
+    resetEventForm()
+    setEventModalOpen(true)
+  }
+
+  function openEditEventModal(event: EventCard) {
     setEditingEvent(event)
     setFormError(null)
-    setForm({
-      ...form,
+    setEventForm({
       title: event.title,
       description: event.description,
       category: event.category,
-      venue: event.venue,
-      start_at: toDatetimeLocal(event.start_at),
-      end_at: toDatetimeLocal(event.end_at),
+      start_date: isoDate(event.start_at),
+      end_date: isoDate(event.end_at),
       status: event.status,
-      queue_enabled: event.queue_enabled,
       cover_image_url: event.cover_image_url || '',
-      seat_map_mode: event.venue_layout_id ? 'venue' : 'classic',
-      venue_id: event.venue_id ? String(event.venue_id) : '',
-      venue_layout_id: event.venue_layout_id ? String(event.venue_layout_id) : '',
+      image_file: null,
     })
-    setVenueLayouts([])
-    setIsModalOpen(true)
+    setEventModalOpen(true)
+  }
+
+  async function openDetailModal(event: EventCard) {
+    setError(null)
+    try {
+      await loadEventDetail(event.slug)
+      setDetailModalOpen(true)
+    } catch (errorValue) {
+      setError(extractApiErrorMessage(errorValue, 'Không thể tải chi tiết sự kiện.'))
+    }
+  }
+
+  async function handleDeleteEvent(eventKey: string) {
+    if (!window.confirm('Bạn có chắc muốn xóa sự kiện này?')) return
+    try {
+      await adminApi.deleteEvent(eventKey)
+      setEvents((previous) => previous.filter((event) => event.slug !== eventKey))
+      if (activeEvent?.slug === eventKey) {
+        setActiveEvent(null)
+        setDetailModalOpen(false)
+      }
+    } catch (errorValue) {
+      setError(extractApiErrorMessage(errorValue, 'Không thể xóa sự kiện.'))
+    }
+  }
+
+  async function handleEventSubmit() {
+    if (!eventForm.title || !eventForm.description || !eventForm.category || !eventForm.start_date || !eventForm.end_date) {
+      setFormError('Vui lòng nhập đầy đủ thông tin sự kiện.')
+      return
+    }
+
+    setSaving(true)
+    setFormError(null)
+    try {
+      let coverImageUrl = eventForm.cover_image_url
+      if (eventForm.image_file) {
+        const upload = await adminApi.uploadEventImage(eventForm.image_file)
+        coverImageUrl = upload.image_url
+      }
+
+      const payload = {
+        title: eventForm.title,
+        description: eventForm.description,
+        category: eventForm.category,
+        start_date: eventForm.start_date,
+        end_date: eventForm.end_date,
+        status: eventForm.status,
+        cover_image_url: coverImageUrl,
+      }
+
+      if (editingEvent) {
+        await adminApi.updateEvent(editingEvent.slug, payload)
+      } else {
+        await adminApi.createEvent(payload)
+      }
+
+      setEventModalOpen(false)
+      resetEventForm()
+      await loadEvents()
+      if (activeEvent && editingEvent?.slug === activeEvent.slug) {
+        await loadEventDetail(activeEvent.slug)
+      }
+    } catch (errorValue) {
+      setFormError(extractApiErrorMessage(errorValue, 'Không thể lưu sự kiện.'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleVenueChange(venueId: string) {
-    setForm((previous) => ({
+    setShowForm((previous) => ({
       ...previous,
       venue_id: venueId,
       venue_layout_id: '',
+      venue: venueId ? venues.find((item) => item.id === Number(venueId))?.name ?? previous.venue : previous.venue,
     }))
 
     if (!venueId) {
@@ -239,168 +284,141 @@ export default function AdminEvents() {
     }
 
     try {
-      const layouts = await adminApi.listLayouts(Number(venueId))
-      setVenueLayouts(layouts)
+      const response = await adminApi.listLayouts(Number(venueId))
+      setVenueLayouts(response)
     } catch {
       setVenueLayouts([])
     }
   }
 
-  async function handleDeleteEvent(eventKey: string) {
-    const accepted = window.confirm('Báº¡n cÃ³ cháº¯c cháº¯n muá»‘n xÃ³a sá»± kiá»‡n nÃ y?')
-    if (!accepted) return
+  async function openCreateShowModal() {
+    if (!activeEvent) return
+    resetShowForm(activeEvent)
+    setShowModalOpen(true)
+  }
+
+  async function openEditShowModal(show: ShowSummary) {
+    if (!activeEvent) return
+
+    const detail = await adminApi.getShow(activeEvent.slug, show.id)
+
+    setEditingShow(show)
+    setFormError(null)
+    const nextForm: ShowFormState = {
+      ...INITIAL_SHOW_FORM,
+      title: detail.title,
+      description: detail.description,
+      venue: detail.venue,
+      show_date: isoDate(detail.start_at),
+      start_time: new Date(detail.start_at).toISOString().slice(11, 16),
+      end_time: new Date(detail.end_at).toISOString().slice(11, 16),
+      status: detail.status,
+      queue_enabled: detail.queue_enabled,
+      seat_map_mode: detail.venue_layout_id ? 'venue' : 'classic',
+      venue_id: detail.venue_id ? String(detail.venue_id) : '',
+      venue_layout_id: detail.venue_layout_id ? String(detail.venue_layout_id) : '',
+      hold_minutes: String(detail.hold_minutes),
+      queue_release_batch: String(detail.queue_release_batch),
+      max_active_queue_tokens: String(detail.max_active_queue_tokens),
+      zone_code: 'A',
+      zone_name: 'Standard',
+      row_count: '10',
+      seats_per_row: '20',
+      zone_price: '500000',
+      zone_color: '#024ddf',
+    }
+
+    setShowForm(nextForm)
+    if (detail.venue_id) {
+      try {
+        const response = await adminApi.listLayouts(detail.venue_id)
+        setVenueLayouts(response)
+      } catch {
+        setVenueLayouts([])
+      }
+    } else {
+      setVenueLayouts([])
+    }
+    setShowModalOpen(true)
+  }
+
+  async function handleDeleteShow(show: ShowSummary) {
+    if (!activeEvent || !window.confirm(`Xóa show "${show.title}"?`)) return
     try {
-      await adminApi.deleteEvent(eventKey)
-      setEvents((previous) => previous.filter((event) => event.slug !== eventKey))
+      await adminApi.deleteShow(activeEvent.slug, show.id)
+      await loadEventDetail(activeEvent.slug)
+      await loadEvents()
     } catch (errorValue) {
-      setError(extractApiErrorMessage(errorValue, 'KhÃ´ng thá»ƒ xÃ³a sá»± kiá»‡n.'))
+      setFormError(extractApiErrorMessage(errorValue, 'Không thể xóa show.'))
     }
   }
 
-  async function handleSubmit() {
-    if (!form.title || !form.description || !form.category || !form.start_at || !form.end_at) {
-      setFormError('Vui lÃ²ng nháº­p Ä‘áº§y Ä‘á»§ thÃ´ng tin báº¯t buá»™c.')
+  async function handleShowSubmit() {
+    if (!activeEvent) return
+    if (!showForm.title || !showForm.description || !showForm.venue || !showForm.show_date || !showForm.start_time || !showForm.end_time) {
+      setFormError('Vui lòng nhập đầy đủ thông tin show.')
       return
     }
-    if (form.seat_map_mode === 'classic' && !form.venue) {
-      setFormError('Vui lÃ²ng nháº­p venue cho sá»± kiá»‡n.')
+    if (showForm.seat_map_mode === 'venue' && !editingShow && (!showForm.venue_id || !showForm.venue_layout_id)) {
+      setFormError('Vui lòng chọn venue và layout cho show này.')
       return
     }
-    if (!editingEvent && form.seat_map_mode === 'venue' && (!form.venue_id || !form.venue_layout_id)) {
-      setFormError('Vui lÃ²ng chá»n venue vÃ  layout Ä‘á»ƒ dÃ¹ng Venue Seat Map.')
+    if (showForm.seat_map_mode === 'classic' && !editingShow && (!showForm.zone_code || !showForm.zone_name)) {
+      setFormError('Vui lòng cấu hình zone khởi tạo cho show classic grid.')
       return
     }
+
     setSaving(true)
     setFormError(null)
-
     try {
-      let coverImageUrl = form.cover_image_url
-      if (form.image_file) {
-        const uploadResponse = await adminApi.uploadEventImage(form.image_file)
-        coverImageUrl = uploadResponse.image_url
-      }
-
-      const basePayload: Record<string, unknown> = {
-        title: form.title,
-        description: form.description,
-        category: form.category,
-        venue:
-          form.seat_map_mode === 'venue'
-            ? venues.find((venue) => venue.id === Number(form.venue_id))?.name || form.venue
-            : form.venue,
-        start_at: new Date(form.start_at).toISOString(),
-        end_at: new Date(form.end_at).toISOString(),
-        status: form.status,
-        queue_enabled: form.queue_enabled,
-        hold_minutes: Number(form.hold_minutes),
-        queue_release_batch: Number(form.queue_release_batch),
-        max_active_queue_tokens: Number(form.max_active_queue_tokens),
-      }
-
-      if (coverImageUrl) basePayload.cover_image_url = coverImageUrl
-
-      if (editingEvent) {
-        const updated = await adminApi.updateEvent(editingEvent.slug, basePayload)
-        setEvents((previous) => previous.map((event) => (event.id === updated.id ? updated : event)))
-      } else {
-        const payload =
-          form.seat_map_mode === 'venue'
+      const payload = {
+        title: showForm.title,
+        description: showForm.description,
+        venue: showForm.venue,
+        show_date: showForm.show_date,
+        start_time: showForm.start_time,
+        end_time: showForm.end_time,
+        status: showForm.status,
+        queue_enabled: showForm.queue_enabled,
+        hold_minutes: Number(showForm.hold_minutes),
+        queue_release_batch: Number(showForm.queue_release_batch),
+        max_active_queue_tokens: Number(showForm.max_active_queue_tokens),
+        ...(editingShow
+          ? {}
+          : showForm.seat_map_mode === 'venue'
             ? {
-              ...basePayload,
-              venue_id: Number(form.venue_id),
-              venue_layout_id: Number(form.venue_layout_id),
-              zones: [],
-            }
+                venue_id: Number(showForm.venue_id),
+                venue_layout_id: Number(showForm.venue_layout_id),
+                zones: [],
+              }
             : {
-              ...basePayload,
-              zones: [
-                {
-                  code: form.zone_code,
-                  name: form.zone_name,
-                  row_count: Number(form.row_count),
-                  seats_per_row: Number(form.seats_per_row),
-                  price: Number(form.zone_price),
-                  color: form.zone_color,
-                },
-              ],
-            }
-        const created = await adminApi.createEvent(payload)
-        setEvents((previous) => [created, ...previous])
+                zones: [
+                  {
+                    code: showForm.zone_code,
+                    name: showForm.zone_name,
+                    row_count: Number(showForm.row_count),
+                    seats_per_row: Number(showForm.seats_per_row),
+                    price: Number(showForm.zone_price),
+                    color: showForm.zone_color,
+                  },
+                ],
+              }),
       }
 
-      setFormError(null)
-      setIsModalOpen(false)
+      if (editingShow) {
+        await adminApi.updateShow(activeEvent.slug, editingShow.id, payload)
+      } else {
+        await adminApi.createShow(activeEvent.slug, payload)
+      }
+
+      await loadEventDetail(activeEvent.slug)
+      await loadEvents()
+      setShowModalOpen(false)
+      resetShowForm(activeEvent)
     } catch (errorValue) {
-      setFormError(extractApiErrorMessage(errorValue, 'KhÃ´ng thá»ƒ lÆ°u sá»± kiá»‡n.'))
+      setFormError(extractApiErrorMessage(errorValue, 'Không thể lưu show.'))
     } finally {
       setSaving(false)
-    }
-  }
-
-  // NEW: Zone Handlers
-  async function openZoneModal(slug: string) {
-    setCurrentEventSlug(slug)
-    setIsZoneModalOpen(true)
-    await fetchZones(slug)
-  }
-
-  async function fetchZones(slug: string) {
-    setZoneLoading(true)
-    setZoneError(null)
-    try {
-      // âš ï¸ Thay tháº¿ báº±ng API thá»±c táº¿ cá»§a báº¡n
-      const response = await adminApi.getZones?.(slug) ?? []
-      setZones(Array.isArray(response) ? response : [])
-    } catch (e) {
-      setZoneError(extractApiErrorMessage(e, 'KhÃ´ng thá»ƒ táº£i danh sÃ¡ch zone.'))
-    } finally {
-      setZoneLoading(false)
-    }
-  }
-
-  function resetZoneForm() {
-    setEditingZoneId(null)
-    setZoneForm({ code: '', name: '', row_count: 10, seats_per_row: 20, price: 500000, color: '#024ddf' })
-  }
-
-  function handleEditZone(zone: SeatZone) {
-    setEditingZoneId(zone.id)
-    setZoneForm({
-      code: zone.code,
-      name: zone.name,
-      row_count: zone.row_count,
-      seats_per_row: zone.seats_per_row,
-      price: zone.price,
-      color: zone.color
-    })
-  }
-
-  async function handleZoneSubmit() {
-    if (!currentEventSlug) return
-    setZoneLoading(true)
-    setZoneError(null)
-    try {
-      if (editingZoneId) {
-        await adminApi.updateZone?.(currentEventSlug, editingZoneId, zoneForm)
-      } else {
-        await adminApi.createZone?.(currentEventSlug, zoneForm)
-      }
-      resetZoneForm()
-      await fetchZones(currentEventSlug)
-    } catch (e) {
-      setZoneError(extractApiErrorMessage(e, 'Lá»—i khi lÆ°u zone.'))
-    } finally {
-      setZoneLoading(false)
-    }
-  }
-
-  async function handleDeleteZone(zoneId: number) {
-    if (!currentEventSlug || !window.confirm('Báº¡n cÃ³ cháº¯c muá»‘n xÃ³a zone nÃ y?')) return
-    try {
-      await adminApi.deleteZone?.(currentEventSlug, zoneId)
-      await fetchZones(currentEventSlug)
-    } catch (e) {
-      setZoneError(extractApiErrorMessage(e, 'Lá»—i khi xÃ³a zone.'))
     }
   }
 
@@ -410,12 +428,13 @@ export default function AdminEvents() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 className="text-2xl font-bold admin-text-header">Quản lý Sự kiện</h1>
-        <Button
-          className="py-4 rounded-xl bg-[var(--admin-bg-opt)] from-primary to-primary-container text-on-primary-container font-headline font-bold uppercase tracking-widest text-sm glow-button hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 group/btn"
-          variant="primary" onClick={openCreateModal}>
-          <Plus className="mr-2 h-4 w-4" /> Tạo sự kiện mới
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold admin-text-header">Quản lý Event / Show</h1>
+          <p className="mt-1 text-sm text-gray-400">Event chỉ giữ metadata. Show giữ venue, queue, seat planner và ticket logic.</p>
+        </div>
+        <Button variant="primary" onClick={openCreateEventModal}>
+          <Plus className="mr-2 h-4 w-4" /> Tạo event
         </Button>
       </div>
 
@@ -427,404 +446,408 @@ export default function AdminEvents() {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 admin-text-body" />
-              <Input
-                placeholder="Tìm kiếm theo từ khóa..."
-                className="pl-10"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-              />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_180px]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} className="pl-10" placeholder="Tìm theo tên event, venue hoặc category..." />
             </div>
-            <div className="flex items-center gap-2 w-full md:w-auto">
-              <Filter className="h-4 w-4 admin-text-body" />
-              <div className="relative w-full">
-                <StatusSelect statusFilter={statusFilter} setStatusFilter={setStatusFilter} />
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
-                  <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                  </svg>
-                </div>
-              </div>
-            </div>
+            <select
+              className="rounded-lg border border-white/10 admin-bg-listbox px-3 py-2 text-sm"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as 'all' | EventStatus)}
+            >
+              <option value="all">Tất cả status</option>
+              <option value="draft">Draft</option>
+              <option value="live">Live</option>
+              <option value="closed">Closed</option>
+            </select>
           </div>
         </CardContent>
       </Card>
 
-      {loading ? (
+      {filteredEvents.length === 0 ? (
         <Card>
-          <CardContent className="pt-6 text-sm text-gray-300">Đang tải sự kiện...</CardContent>
+          <CardContent className="py-12 text-center text-gray-400">Không có event phù hợp.</CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {filteredEvents.map((event) => {
-            const startDate = new Date(event.start_at)
-            const endDate = new Date(event.end_at)
-            return (
-              <Card
-                key={event.id}
-                className="group hover:border-brand-red/30 transition-all bg-space-900/90"
-                style={
-                  event.cover_image_url
-                    ? {
-                      backgroundImage: `linear-gradient(180deg, var(--admin-event-overlay-start) 80%, var(--admin-event-overlay-mid) 90%, var(--admin-event-overlay-end) 100%), url(${event.cover_image_url})`,
-                      backgroundSize: 'cover',
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {filteredEvents.map((event) => (
+            <Card
+              key={event.id}
+              className="bg-space-900/90 transition-all hover:border-brand-red/30"
+              style={
+                event.cover_image_url
+                  ? {
+                      backgroundImage: `linear-gradient(180deg, rgba(4, 7, 20, 0.88), rgba(4, 7, 20, 0.94)), url(${event.cover_image_url})`,
                       backgroundPosition: 'center',
+                      backgroundSize: 'cover',
                     }
-                    : undefined
-                }
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <CardTitle className="text-lg">{event.title}</CardTitle>
-                      <p className="text-sm admin-text-body mt-1 line-clamp-2">{event.description}</p>
-                    </div>
-                    {statusBadge(event.status)}
+                  : undefined
+              }
+            >
+              <CardHeader>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-lg">{event.title}</CardTitle>
+                    <p className="mt-1 line-clamp-2 text-sm text-gray-300">{event.description}</p>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center gap-2 admin-text-body col-span-2">
-                      <Calendar className="h-4 w-4 text-brand-red" />
-                      <span>
-                        {startDate.toLocaleString('vi-VN')} - {endDate.toLocaleString('vi-VN')}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 admin-text-body col-span-2">
-                      <MapPin className="h-4 w-4 text-green-400" />
-                      <span className="truncate">{event.venue}</span>
-                    </div>
-                    <div className="flex items-center gap-2 admin-text-body col-span-2">
-                      <Users className="h-4 w-4 text-cyan-400" />
-                      <span>Queue: {event.queue_enabled ? 'enabled' : 'disabled'}</span>
-                    </div>
-                  </div>
+                  {statusBadge(event.status)}
+                </div>
+              </CardHeader>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="warning" size="sm">{event.category}</Badge>
-                    <Badge variant="default" size="sm">/{event.slug}</Badge>
-                    <Badge variant="info" size="sm">{event.venue_layout_id ? 'Venue Map' : 'Classic Grid'}</Badge>
+              <CardContent className="space-y-3">
+                <div className="space-y-2 text-sm text-gray-300">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-brand-red" />
+                    <span>{formatDateTime(event.start_at)} - {formatDateTime(event.end_at)}</span>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-emerald-400" />
+                    <span className="truncate">{event.venue || 'Chưa có show'}</span>
+                  </div>
+                </div>
 
-                  <div className="flex justify-end gap-2 pt-2">
-                    {/* âœ… ÄÃ£ sá»­a nÃºt Zone Ä‘á»ƒ má»Ÿ Ä‘Ãºng modal quáº£n lÃ½ zone */}
-                    <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/events/${event.slug}/seating`)}>
-                      <Wand2 className="h-4 w-4" /> Seat Planner
-                    </Button>
-                    {/* <Button variant="ghost" size="sm" onClick={() => openZoneModal(event.slug)}>
-                      <LayoutGrid className="h-4 w-4" /> Zone
-                    </Button> */}
-                    <Button variant="ghost" size="sm" onClick={() => openEditModal(event)}>
-                      <Edit className="h-4 w-4" /> Sửa
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-red-400 hover:text-red-300"
-                      onClick={() => void handleDeleteEvent(event.slug)}
-                    >
-                      <Trash2 className="h-4 w-4" /> Xóa
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="warning" size="sm">{event.category}</Badge>
+                  <Badge variant="default" size="sm">/{event.slug}</Badge>
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-2 pt-2">
+                  <Button variant="ghost" size="sm" onClick={() => void openDetailModal(event)}>
+                    <Ticket className="h-4 w-4" /> Detail
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => openEditEventModal(event)}>
+                    <Edit className="h-4 w-4" /> Sửa event
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300" onClick={() => void handleDeleteEvent(event.slug)}>
+                    <Trash2 className="h-4 w-4" /> Xóa
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
-      {!loading && filteredEvents.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center text-gray-400">KhÃ´ng tÃ¬m tháº¥y sá»± kiá»‡n phÃ¹ há»£p.</CardContent>
-        </Card>
-      )}
-
-      {/* Event Modal */}
       <Modal
-        isOpen={isModalOpen}
+        isOpen={eventModalOpen}
         onClose={() => {
-          setFormError(null)
-          setIsModalOpen(false)
+          setEventModalOpen(false)
+          resetEventForm()
         }}
-        title={editingEvent ? 'Cập nhật sự kiện' : 'Tạo sự kiện mới'}
+        title={editingEvent ? 'Cập nhật event' : 'Tạo event mới'}
         className="max-w-2xl"
       >
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-          {formError && (
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-200">
-              {formError}
-            </div>
-          )}
+        <div className="space-y-4">
+          {formError && <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{formError}</div>}
+
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Tên sự kiện</label>
-            <Input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
+            <label className="mb-2 block text-sm font-medium text-gray-300">Tên event</label>
+            <Input value={eventForm.title} onChange={(event) => setEventForm((prev) => ({ ...prev, title: event.target.value }))} />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Mô tả</label>
-            <textarea className="w-full rounded-lg border bg-space-700/50 border-white/20 px-4 py-2.5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-red" rows={3} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+            <label className="mb-2 block text-sm font-medium text-gray-300">Mô tả</label>
+            <textarea
+              className="w-full rounded-lg border border-white/20 bg-space-700/50 px-4 py-2.5 text-white"
+              rows={4}
+              value={eventForm.description}
+              onChange={(event) => setEventForm((prev) => ({ ...prev, description: event.target.value }))}
+            />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Thể loại</label>
-              <Input value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} />
+              <label className="mb-2 block text-sm font-medium text-gray-300">Category</label>
+              <Input value={eventForm.category} onChange={(event) => setEventForm((prev) => ({ ...prev, category: event.target.value }))} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Địa chỉ</label>
-              <Input
-                value={form.venue}
-                disabled={!editingEvent && form.seat_map_mode === 'venue'}
-                onChange={(event) => setForm({ ...form, venue: event.target.value })}
-                placeholder={!editingEvent && form.seat_map_mode === 'venue' ? 'Địa chỉ chọn cố định' : undefined}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Start at</label>
-              <Input type="datetime-local" value={form.start_at} onChange={(event) => setForm({ ...form, start_at: event.target.value })} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">End at</label>
-              <Input type="datetime-local" value={form.end_at} onChange={(event) => setForm({ ...form, end_at: event.target.value })} />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
-              <select className="w-full admin-bg-listbox border border-white/10 rounded-lg px-3 py-2" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as EventStatus })}>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Status</label>
+              <select className="w-full rounded-lg border border-white/10 admin-bg-listbox px-3 py-2" value={eventForm.status} onChange={(event) => setEventForm((prev) => ({ ...prev, status: event.target.value as EventStatus }))}>
                 <option value="draft">Draft</option>
                 <option value="live">Live</option>
                 <option value="closed">Closed</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Queue</label>
-              <select className="w-full admin-bg-listbox border border-white/10 rounded-lg px-3 py-2" value={form.queue_enabled ? 'true' : 'false'} onChange={(event) => setForm({ ...form, queue_enabled: event.target.value === 'true' })}>
-                <option value="true">Enabled</option>
-                <option value="false">Disabled</option>
-              </select>
-            </div>
           </div>
-          <div className="pt-3 border-t border-white/10">
-            <p className="text-sm text-gray-300 mb-3">Nền / Ảnh sự kiện</p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Tải lên từ thiết bị</label>
-                <input type="file" accept="image/*" onChange={(event) => {
-                  const file = event.target.files?.[0] || null
-                  setForm({ ...form, image_file: file })
-                  if (file) {
-                    const reader = new FileReader()
-                    reader.onload = (e) => setForm((prev) => ({ ...prev, cover_image_url: e.target?.result as string }))
-                    reader.readAsDataURL(file)
-                  } else {
-                    setForm({ ...form, cover_image_url: '' })
-                  }
-                }} className="w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-red file:text-white hover:file:bg-brand-red/90" />
-              </div>
-              {form.cover_image_url && (
-                <div className="mt-2">
-                  <p className="text-sm text-gray-400 mb-2">Preview:</p>
-                  <img src={form.cover_image_url} alt="Cover preview" className="w-full max-h-48 object-cover rounded-lg border border-white/20" onError={(e) => { e.currentTarget.style.display = 'none' }} />
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Hold (min)</label>
-              <Input type="number" min={1} value={form.hold_minutes} onChange={(event) => setForm({ ...form, hold_minutes: event.target.value })} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Release batch</label>
-              <Input type="number" min={1} value={form.queue_release_batch} onChange={(event) => setForm({ ...form, queue_release_batch: event.target.value })} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Max queue</label>
-              <Input type="number" min={1} value={form.max_active_queue_tokens} onChange={(event) => setForm({ ...form, max_active_queue_tokens: event.target.value })} />
-            </div>
-          </div>
-          {!editingEvent && (
-            <>
-              <div className="pt-3 border-t border-white/10">
-                <p className="text-sm text-gray-300 mb-3">Seat map mode</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setForm({ ...form, seat_map_mode: 'classic', venue_id: '', venue_layout_id: '' })}
-                    className={`rounded-xl border px-4 py-4 text-left transition ${form.seat_map_mode === 'classic' ? 'border-brand-red/40 bg-brand-red/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
-                  >
-                    <p className="font-semibold text-white">Classic Grid</p>
-                    <p className="mt-1 text-sm text-slate-400">Táº¡o event tá»« zone cÅ© theo rows x seats/row.</p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setForm({ ...form, seat_map_mode: 'venue' })}
-                    className={`rounded-xl border px-4 py-4 text-left transition ${form.seat_map_mode === 'venue' ? 'border-brand-red/40 bg-brand-red/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
-                  >
-                    <p className="font-semibold text-white">Venue Seat Map</p>
-                    <p className="mt-1 text-sm text-slate-400">DÃ¹ng layout Ä‘Ã£ dá»±ng trong Venue Studio theo docs seat map.</p>
-                  </button>
-                </div>
 
-                {form.seat_map_mode === 'venue' ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Venue template</label>
-                      <select
-                        className="w-full rounded-lg border admin-bg-listbox border-white/20 px-4 py-2.5 admin-text-body focus:outline-none focus:ring-2 focus:ring-brand-red"
-                        value={form.venue_id}
-                        onChange={(event) => void handleVenueChange(event.target.value)}
-                      >
-                        <option value="">{venueOptionsLoading ? 'Đang venue...' : 'Chọn venue'}</option>
-                        {venues.map((venue) => (
-                          <option key={venue.id} value={venue.id}>{venue.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Layout</label>
-                      <select
-                        className="w-full rounded-lg border admin-bg-listbox border-white/20 px-4 py-2.5 admin-text-body focus:outline-none focus:ring-2 focus:ring-brand-red"
-                        value={form.venue_layout_id}
-                        onChange={(event) => setForm({ ...form, venue_layout_id: event.target.value })}
-                        disabled={!form.venue_id}
-                      >
-                        <option value="">{form.venue_id ? 'Chá»n layout' : 'Chá»n venue trÆ°á»›c'}</option>
-                        {venueLayouts.map((layout) => (
-                          <option key={layout.id} value={layout.id}>{layout.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <p className="text-sm text-gray-300 mt-4 mb-3">Zone khá»Ÿi táº¡o</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><label className="block text-sm font-medium text-gray-300 mb-2">Zone code</label><Input value={form.zone_code} onChange={(event) => setForm({ ...form, zone_code: event.target.value })} /></div>
-                      <div><label className="block text-sm font-medium text-gray-300 mb-2">Zone name</label><Input value={form.zone_name} onChange={(event) => setForm({ ...form, zone_name: event.target.value })} /></div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                      <div><label className="block text-sm font-medium text-gray-300 mb-2">Rows</label><Input type="number" min={1} value={form.row_count} onChange={(event) => setForm({ ...form, row_count: event.target.value })} /></div>
-                      <div><label className="block text-sm font-medium text-gray-300 mb-2">Seats/row</label><Input type="number" min={1} value={form.seats_per_row} onChange={(event) => setForm({ ...form, seats_per_row: event.target.value })} /></div>
-                      <div><label className="block text-sm font-medium text-gray-300 mb-2">Price</label><Input type="number" min={1} value={form.zone_price} onChange={(event) => setForm({ ...form, zone_price: event.target.value })} /></div>
-                    </div>
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Zone color</label>
-                      <Input value={form.zone_color} onChange={(event) => setForm({ ...form, zone_color: event.target.value })} />
-                    </div>
-                  </>
-                )}
-              </div>
-            </>
-          )}
-          <div className="flex justify-end gap-3 pt-2">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setFormError(null)
-                setIsModalOpen(false)
-              }}
-            >
-              Hủy
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Ngày bắt đầu</label>
+              <Input type="date" value={eventForm.start_date} onChange={(event) => setEventForm((prev) => ({ ...prev, start_date: event.target.value }))} />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Ngày kết thúc</label>
+              <Input type="date" value={eventForm.end_date} onChange={(event) => setEventForm((prev) => ({ ...prev, end_date: event.target.value }))} />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-300">Ảnh cover</label>
+            <input
+              type="file"
+              accept="image/*"
+              className="w-full text-sm text-gray-300 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-red file:px-4 file:py-2 file:font-semibold file:text-white"
+              onChange={(event) => setEventForm((prev) => ({ ...prev, image_file: event.target.files?.[0] ?? null }))}
+            />
+            {eventForm.cover_image_url && (
+              <img src={eventForm.cover_image_url} alt="Event cover preview" className="max-h-48 w-full rounded-lg border border-white/10 object-cover" />
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setEventModalOpen(false)}>Hủy</Button>
+            <Button variant="primary" onClick={() => void handleEventSubmit()} isLoading={saving}>
+              {editingEvent ? 'Cập nhật event' : 'Tạo event'}
             </Button>
-            <Button variant="primary" onClick={() => void handleSubmit()} isLoading={saving}>{editingEvent ? 'Cập nhật' : 'Tạo mới'}</Button>
           </div>
         </div>
       </Modal>
 
-      {/* âœ… NEW: Zone Management Modal */}
-      <Modal isOpen={isZoneModalOpen} onClose={() => setIsZoneModalOpen(false)} title={`Quáº£n lÃ½ Zone - ${currentEventSlug}`} className="max-w-3xl">
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-          {zoneError && (
-            <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/30 text-sm text-red-200">{zoneError}</div>
-          )}
+      <Modal
+        isOpen={detailModalOpen}
+        onClose={() => {
+          setDetailModalOpen(false)
+          setActiveEvent(null)
+        }}
+        title={activeEvent ? `Show của ${activeEvent.title}` : 'Chi tiết event'}
+        className="max-w-5xl"
+      >
+        {activeEvent && (
+          <div className="space-y-5">
+            <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm text-gray-300">{activeEvent.category}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {formatDateTime(activeEvent.start_at)} - {formatDateTime(activeEvent.end_at)}
+                </p>
+              </div>
+              <Button variant="primary" onClick={() => void openCreateShowModal()}>
+                <Plus className="mr-2 h-4 w-4" /> Tạo show
+              </Button>
+            </div>
 
-          {/* Zone List */}
-          <div className="space-y-3">
-            {zoneLoading ? (
-              <div className="flex items-center justify-center py-4 text-gray-400"><Loader2 className="animate-spin mr-2" /> Äang táº£i zones...</div>
-            ) : zones.length === 0 ? (
-              <div className="text-center py-4 text-gray-400 text-sm">ChÆ°a cÃ³ zone nÃ o. HÃ£y thÃªm zone má»›i bÃªn dÆ°á»›i.</div>
+            {activeEvent.shows.length === 0 ? (
+              <Card>
+                <CardContent className="py-10 text-center text-gray-400">Event này chưa có show nào.</CardContent>
+              </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {zones.map((zone) => (
-                  <div key={zone.id} className="p-3 rounded-lg bg-space-800/50 border border-white/10 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 rounded border border-white/20 flex-shrink-0" style={{ backgroundColor: zone.color }} />
-                      <div>
-                        <p className="text-sm font-medium text-white">{zone.name} <span className="text-gray-500 text-xs">({zone.code})</span></p>
-                        <p className="text-xs text-gray-400">{zone.row_count} hÃ ng x {zone.seats_per_row} gháº¿ | {zone.price.toLocaleString('vi-VN')}Ä‘</p>
+              <div className="space-y-4">
+                {activeEvent.shows.map((show) => (
+                  <Card key={show.id} className="border-white/10 bg-space-900/80">
+                    <CardContent className="pt-6">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-semibold text-white">{show.title}</h3>
+                            {statusBadge(show.status)}
+                            <Badge variant="info" size="sm">{show.venue_layout_id ? 'Venue Map' : 'Classic Grid'}</Badge>
+                          </div>
+                          <p className="text-sm text-gray-300">{show.description}</p>
+                          <div className="space-y-1 text-sm text-gray-400">
+                            <p>{formatDateTime(show.start_at)} - {formatDateTime(show.end_at)}</p>
+                            <p>{show.venue}</p>
+                            <p>Queue: {show.queue_enabled ? 'enabled' : 'disabled'}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/events/${activeEvent.slug}/shows/${show.id}/seating`)}>
+                            Seat Planner
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => void openEditShowModal(show)}>
+                            <Edit className="h-4 w-4" /> Sửa show
+                          </Button>
+                          <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300" onClick={() => void handleDeleteShow(show)}>
+                            <Trash2 className="h-4 w-4" /> Xóa show
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => handleEditZone(zone)} className="p-1.5 rounded hover:bg-white/10 text-blue-400 transition" title="Sá»­a"><Edit className="h-4 w-4" /></button>
-                      <button onClick={() => handleDeleteZone(zone.id)} className="p-1.5 rounded hover:bg-white/10 text-red-400 transition" title="XÃ³a"><Trash2 className="h-4 w-4" /></button>
-                    </div>
-                  </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             )}
           </div>
+        )}
+      </Modal>
 
-          <div className="pt-3 border-t border-white/10">
-            <p className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
-              <Palette className="h-4 w-4" /> {editingZoneId ? 'Chá»‰nh sá»­a Zone' : 'ThÃªm Zone má»›i'}
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Zone Code</label>
-                <Input value={zoneForm.code} onChange={(e) => setZoneForm({ ...zoneForm, code: e.target.value })} placeholder="VD: A, B, VIP" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Zone Name</label>
-                <Input value={zoneForm.name} onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })} placeholder="VD: Standard, VIP" />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Rows</label>
-                <Input type="number" min={1} value={zoneForm.row_count} onChange={(e) => setZoneForm({ ...zoneForm, row_count: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Seats/Row</label>
-                <Input type="number" min={1} value={zoneForm.seats_per_row} onChange={(e) => setZoneForm({ ...zoneForm, seats_per_row: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Price</label>
-                <Input type="number" min={0} value={zoneForm.price} onChange={(e) => setZoneForm({ ...zoneForm, price: Number(e.target.value) })} />
-              </div>
-            </div>
+      <Modal
+        isOpen={showModalOpen}
+        onClose={() => {
+          setShowModalOpen(false)
+          resetShowForm(activeEvent)
+        }}
+        title={editingShow ? 'Cập nhật show' : 'Tạo show mới'}
+        className="max-w-3xl"
+      >
+        <div className="max-h-[75vh] space-y-4 overflow-y-auto pr-2">
+          {formError && <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{formError}</div>}
 
-            {/* âœ… Visual Color Picker */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-300 mb-2">Zone Color</label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={zoneForm.color || '#000000'}
-                  onChange={(e) => setZoneForm({ ...zoneForm, color: e.target.value })}
-                  className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent p-0"
-                  title="Chá»n mÃ u trá»±c tiáº¿p"
-                />
-                <Input
-                  value={zoneForm.color}
-                  onChange={(e) => setZoneForm({ ...zoneForm, color: e.target.value })}
-                  placeholder="#024ddf"
-                  className="flex-1"
-                />
-              </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-300">Tên show</label>
+            <Input value={showForm.title} onChange={(event) => setShowForm((prev) => ({ ...prev, title: event.target.value }))} />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-300">Mô tả</label>
+            <textarea
+              className="w-full rounded-lg border border-white/20 bg-space-700/50 px-4 py-2.5 text-white"
+              rows={4}
+              value={showForm.description}
+              onChange={(event) => setShowForm((prev) => ({ ...prev, description: event.target.value }))}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Venue</label>
+              <Input
+                value={showForm.venue}
+                disabled={showForm.seat_map_mode === 'venue'}
+                onChange={(event) => setShowForm((prev) => ({ ...prev, venue: event.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Status</label>
+              <select className="w-full rounded-lg border border-white/10 admin-bg-listbox px-3 py-2" value={showForm.status} onChange={(event) => setShowForm((prev) => ({ ...prev, status: event.target.value as EventStatus }))}>
+                <option value="draft">Draft</option>
+                <option value="live">Live</option>
+                <option value="closed">Closed</option>
+              </select>
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-2 border-t border-white/10">
-            {editingZoneId && (
-              <Button variant="ghost" onClick={resetZoneForm}>Há»§y chá»‰nh sá»­a</Button>
-            )}
-            <Button variant="primary" onClick={handleZoneSubmit} isLoading={zoneLoading}>
-              {editingZoneId ? <><Check className="mr-2 h-4 w-4" /> Cáº­p nháº­t</> : <><Plus className="mr-2 h-4 w-4" /> ThÃªm Zone</>}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Ngày diễn</label>
+              <Input
+                type="date"
+                min={activeEvent ? isoDate(activeEvent.start_at) : undefined}
+                max={activeEvent ? isoDate(activeEvent.end_at) : undefined}
+                value={showForm.show_date}
+                onChange={(event) => setShowForm((prev) => ({ ...prev, show_date: event.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Bắt đầu</label>
+              <Input type="time" value={showForm.start_time} onChange={(event) => setShowForm((prev) => ({ ...prev, start_time: event.target.value }))} />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Kết thúc</label>
+              <Input type="time" value={showForm.end_time} onChange={(event) => setShowForm((prev) => ({ ...prev, end_time: event.target.value }))} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Queue</label>
+              <select className="w-full rounded-lg border border-white/10 admin-bg-listbox px-3 py-2" value={showForm.queue_enabled ? 'true' : 'false'} onChange={(event) => setShowForm((prev) => ({ ...prev, queue_enabled: event.target.value === 'true' }))}>
+                <option value="true">Enabled</option>
+                <option value="false">Disabled</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Hold</label>
+              <Input type="number" min={1} value={showForm.hold_minutes} onChange={(event) => setShowForm((prev) => ({ ...prev, hold_minutes: event.target.value }))} />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Release batch</label>
+              <Input type="number" min={1} value={showForm.queue_release_batch} onChange={(event) => setShowForm((prev) => ({ ...prev, queue_release_batch: event.target.value }))} />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Max queue</label>
+              <Input type="number" min={1} value={showForm.max_active_queue_tokens} onChange={(event) => setShowForm((prev) => ({ ...prev, max_active_queue_tokens: event.target.value }))} />
+            </div>
+          </div>
+
+          {!editingShow && (
+            <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <button
+                  type="button"
+                  className={`rounded-xl border px-4 py-4 text-left transition ${showForm.seat_map_mode === 'classic' ? 'border-brand-red/40 bg-brand-red/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                  onClick={() => setShowForm((prev) => ({ ...prev, seat_map_mode: 'classic', venue_id: '', venue_layout_id: '' }))}
+                >
+                  <p className="font-semibold text-white">Classic Grid</p>
+                  <p className="mt-1 text-sm text-slate-400">Khởi tạo zone/ghế trực tiếp cho show.</p>
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-xl border px-4 py-4 text-left transition ${showForm.seat_map_mode === 'venue' ? 'border-brand-red/40 bg-brand-red/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                  onClick={() => setShowForm((prev) => ({ ...prev, seat_map_mode: 'venue' }))}
+                >
+                  <p className="font-semibold text-white">Venue Layout</p>
+                  <p className="mt-1 text-sm text-slate-400">Clone layout đã dựng từ Venue Studio.</p>
+                </button>
+              </div>
+
+              {showForm.seat_map_mode === 'venue' ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-300">Venue template</label>
+                    <select className="w-full rounded-lg border border-white/10 admin-bg-listbox px-3 py-2" value={showForm.venue_id} onChange={(event) => void handleVenueChange(event.target.value)}>
+                      <option value="">Chọn venue</option>
+                      {venues.map((venue) => (
+                        <option key={venue.id} value={venue.id}>{venue.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-300">Layout</label>
+                    <select className="w-full rounded-lg border border-white/10 admin-bg-listbox px-3 py-2" value={showForm.venue_layout_id} onChange={(event) => setShowForm((prev) => ({ ...prev, venue_layout_id: event.target.value }))} disabled={!showForm.venue_id}>
+                      <option value="">{showForm.venue_id ? 'Chọn layout' : 'Chọn venue trước'}</option>
+                      {venueLayouts.map((layout) => (
+                        <option key={layout.id} value={layout.id}>{layout.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-gray-300">Zone code</label>
+                      <Input value={showForm.zone_code} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_code: event.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-gray-300">Zone name</label>
+                      <Input value={showForm.zone_name} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_name: event.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-gray-300">Rows</label>
+                      <Input type="number" min={1} value={showForm.row_count} onChange={(event) => setShowForm((prev) => ({ ...prev, row_count: event.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-gray-300">Seats / row</label>
+                      <Input type="number" min={1} value={showForm.seats_per_row} onChange={(event) => setShowForm((prev) => ({ ...prev, seats_per_row: event.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-gray-300">Price</label>
+                      <Input type="number" min={1} value={showForm.zone_price} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_price: event.target.value }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-300">Zone color</label>
+                    <Input value={showForm.zone_color} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_color: event.target.value }))} />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {editingShow && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+              Venue layout nguồn không đổi sau khi show đã tạo. Muốn đổi seat source, hãy tạo show mới.
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setShowModalOpen(false)}>Hủy</Button>
+            <Button variant="primary" onClick={() => void handleShowSubmit()} isLoading={saving}>
+              {editingShow ? 'Cập nhật show' : 'Tạo show'}
             </Button>
           </div>
         </div>
@@ -832,8 +855,3 @@ export default function AdminEvents() {
     </div>
   )
 }
-
-
-
-
-

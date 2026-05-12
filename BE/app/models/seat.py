@@ -13,10 +13,11 @@ class Seat(TimestampMixin, Base):
     """A concrete seat that can transition through available/locked/sold."""
 
     __tablename__ = "seats"
-    __table_args__ = (UniqueConstraint("event_id", "seat_label", name="uq_seats_event_id_seat_label"),)
+    __table_args__ = (UniqueConstraint("show_id", "seat_label", name="uq_seats_show_id_seat_label"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     event_id: Mapped[int | None] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), nullable=True, index=True)
+    show_id: Mapped[int | None] = mapped_column(ForeignKey("shows.id", ondelete="CASCADE"), nullable=True, index=True)
     zone_id: Mapped[int | None] = mapped_column(ForeignKey("seat_zones.id", ondelete="CASCADE"), nullable=True, index=True)
 
     row_index: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -38,7 +39,7 @@ class Seat(TimestampMixin, Base):
 
     sold_order_item = relationship("OrderItem", back_populates="seat", uselist=False)
     zone = relationship("SeatZone", back_populates="seats")
-    event = relationship("Event", back_populates="seats")
+    show = relationship("Show", back_populates="seats")
     locked_by_user = relationship("User", back_populates="locked_seats", foreign_keys=[locked_by_user_id])
     section = relationship("Section", back_populates="seats")
     venue_layout = relationship("VenueLayout", back_populates="seats")

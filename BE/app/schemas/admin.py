@@ -60,10 +60,14 @@ class EventZoneStatsResponse(BaseModel):
 
 
 class EventDetailStatsResponse(BaseModel):
-    """Detailed event analytics for admin drilldown."""
+    """Detailed show analytics for admin drilldown."""
 
     event_id: int
     event_title: str
+    show_id: int
+    show_title: str
+    show_start_at: str
+    show_end_at: str
     total_seats: int
     sold_seats: int
     locked_seats: int
@@ -92,20 +96,28 @@ class AdminTicketSaleResponse(BaseModel):
     """Recent ticket sale row shown on admin ticket table."""
 
     id: int
+    event_id: int
     event_title: str
+    show_id: int
+    show_title: str
+    show_start_at: str
     customer_name: str
     seat_label: str
     zone_name: str
+    venue: str
     price: float
     purchased_at: str
     order_status: str
 
 
 class AdminEventRevenueResponse(BaseModel):
-    """Per-event revenue aggregate used in admin ticket analytics."""
+    """Per-show revenue aggregate used in admin ticket analytics."""
 
     event_id: int
     event_title: str
+    show_id: int
+    show_title: str
+    show_start_at: str
     tickets_sold: int
     revenue: float
 

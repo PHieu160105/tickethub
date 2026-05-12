@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.core.db import AsyncSessionLocal
 from app.core.security import TokenDecodeError, decode_access_token
 from app.models.enums import UserRole
-from app.models.event import Event
+from app.models.event import Show
 from app.models.help import HelpThread
 from app.models.user import User
 from app.services.dashboard_service import get_dashboard_summary
@@ -28,9 +28,9 @@ async def _resolve_ws_user(token: str) -> User | None:
         return await session.scalar(select(User).where(User.id == user_id))
 
 
-@router.websocket("/ws/events/{event_key}/seats")
-async def event_seat_ws(websocket: WebSocket, event_key: str, token: str | None = None) -> None:
-    """Push incremental seat updates for one event."""
+@router.websocket("/ws/shows/{show_id}/seats")
+async def show_seat_ws(websocket: WebSocket, show_id: int, token: str | None = None) -> None:
+    """Push incremental seat updates for one show."""
 
     if not token:
         await websocket.close(code=1008, reason="Auth token is required")
@@ -42,16 +42,13 @@ async def event_seat_ws(websocket: WebSocket, event_key: str, token: str | None 
         return
 
     async with AsyncSessionLocal() as session:
-        if event_key.isdigit():
-            event = await session.scalar(select(Event).where(Event.id == int(event_key), Event.is_deleted.is_(False)))
-        else:
-            event = await session.scalar(select(Event).where(Event.slug == event_key, Event.is_deleted.is_(False)))
+        show = await session.scalar(select(Show).where(Show.id == show_id, Show.is_deleted.is_(False)))
 
-    if not event:
-        await websocket.close(code=1008, reason="Event not found")
+    if not show:
+        await websocket.close(code=1008, reason="Show not found")
         return
 
-    connected = await seat_ws_manager.connect(event.id, user.id, websocket)
+    connected = await seat_ws_manager.connect(show.id, user.id, websocket)
     if not connected:
         return
 
@@ -60,7 +57,7 @@ async def event_seat_ws(websocket: WebSocket, event_key: str, token: str | None 
             # Keep socket alive and allow client to ping.
             await websocket.receive_text()
     except WebSocketDisconnect:
-        await seat_ws_manager.disconnect(event.id, user.id, websocket)
+        await seat_ws_manager.disconnect(show.id, user.id, websocket)
 
 
 @router.websocket("/ws/admin/dashboard")

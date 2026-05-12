@@ -28,7 +28,7 @@ interface AppNotification {
 function classifyTicketStatus(ticket: TicketItem): 'upcoming' | 'past' | 'cancelled' | null {
   if (ticket.ticket_status === 'cancelled') return 'cancelled'
   if (ticket.ticket_status !== 'active' || ticket.seat_status !== 'sold') return null
-  return new Date(ticket.event_date).getTime() < Date.now() ? 'past' : 'upcoming'
+  return new Date(ticket.show_start_at).getTime() < Date.now() ? 'past' : 'upcoming'
 }
 
 function formatNotificationTime(value: string): string {
