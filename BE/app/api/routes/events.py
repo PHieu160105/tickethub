@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
-from app.core.cache import EVENT_LIST_CACHE_NAMESPACE, public_api_cache
+from app.core.cache import EVENT_DETAIL_CACHE_NAMESPACE, EVENT_LIST_CACHE_NAMESPACE, public_api_cache
 from app.core.db import get_db_session
 from app.models.review import EventReview
 from app.models.user import User
@@ -19,6 +19,7 @@ from app.services.event_service import (
     build_show_detail_response,
     get_event_by_slug_or_id,
     get_show_by_id,
+    list_shows_for_event_ids,
     list_live_events,
 )
 
@@ -53,7 +54,8 @@ async def list_events(
             return cached
 
     events = await list_live_events(session, search=search, category=category, start_from=start_from, end_to=end_to, limit=limit, offset=offset)
-    response = [await build_event_card_response(session, event) for event in events]
+    shows_by_event_id = await list_shows_for_event_ids(session, [event.id for event in events])
+    response = [await build_event_card_response(session, event, shows=shows_by_event_id.get(event.id, [])) for event in events]
     return await public_api_cache.set(EVENT_LIST_CACHE_NAMESPACE, cache_key, response, ttl_seconds=300)
 
 
@@ -61,8 +63,16 @@ async def list_events(
 async def event_detail(event_key: str, session: AsyncSession = Depends(get_db_session)) -> EventDetailResponse:
     """Get event details by slug or id."""
 
+    cached = await public_api_cache.get(EVENT_DETAIL_CACHE_NAMESPACE, event_key)
+    if cached is not None:
+        return cached
+
     event = await get_event_by_slug_or_id(session, event_key)
-    return await build_event_detail_response(session, event)
+    response = await build_event_detail_response(session, event)
+    await public_api_cache.set(EVENT_DETAIL_CACHE_NAMESPACE, event_key, response, ttl_seconds=180)
+    if event.slug != event_key:
+        await public_api_cache.set(EVENT_DETAIL_CACHE_NAMESPACE, event.slug, response, ttl_seconds=180)
+    return response
 
 
 @show_router.get("/{show_id}", response_model=ShowDetailResponse)

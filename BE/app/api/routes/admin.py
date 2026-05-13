@@ -10,14 +10,15 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_admin
-from app.core.cache import EVENT_LIST_CACHE_NAMESPACE, public_api_cache, show_seat_cache_namespace
+from app.core.cache import EVENT_DETAIL_CACHE_NAMESPACE, EVENT_LIST_CACHE_NAMESPACE, public_api_cache, show_seat_cache_namespace
 from app.core.db import get_db_session
 from app.core.search import build_ilike_pattern, sanitize_search_query
 from app.models.enums import OrderStatus, SeatStatus
-from app.models.event import Event, SeatZone, Show
+from app.models.event import Event, SeatZone, Show, ShowPolygon
 from app.models.order import Order, OrderItem, Ticket, TicketCancellation
 from app.models.seat import Seat
 from app.models.user import User
+from app.models.venue import Section
 from app.schemas.admin import (
     AdminEventRevenueResponse,
     AdminTicketSaleResponse,
@@ -41,8 +42,14 @@ from app.schemas.event import (
     SeatBulkCreateRequest,
     SeatBulkCreateResponse,
     SeatCreateResponse,
+    SeatSyncCreatedItem,
+    SeatSyncRequest,
+    SeatSyncResponse,
     SeatSingleCreateRequest,
     SeatUpdateRequest,
+    ShowPolygonCreateRequest,
+    ShowPolygonResponse,
+    ShowPolygonUpdateRequest,
     SeatZoneCreate,
     SeatZoneResponse,
     SeatZoneUpdate,
@@ -58,6 +65,7 @@ from app.services.event_service import (
     build_show_detail_response,
     combine_show_datetime,
     create_event,
+    create_initial_show_zone,
     create_show_with_inventory,
     create_show_zone,
     delete_show_zone,
@@ -65,6 +73,7 @@ from app.services.event_service import (
     get_show_by_id,
     list_event_shows,
     list_live_events,
+    list_shows_for_event_ids,
     list_show_zones,
     update_show_zone,
 )
@@ -91,6 +100,7 @@ def _apply_admin_lock_state(seat: Seat, is_admin_locked: bool) -> None:
 async def _invalidate_show_cache(show_id: int) -> None:
     await public_api_cache.invalidate_namespace(show_seat_cache_namespace(show_id))
     await public_api_cache.invalidate_namespace(EVENT_LIST_CACHE_NAMESPACE)
+    await public_api_cache.invalidate_namespace(EVENT_DETAIL_CACHE_NAMESPACE)
 
 
 async def _build_event_or_404_show(session: AsyncSession, event_key: str, show_id: int) -> tuple[Event, Show]:
@@ -99,6 +109,30 @@ async def _build_event_or_404_show(session: AsyncSession, event_key: str, show_i
     if show.event_id != event.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show not found for this event")
     return event, show
+
+
+def _validate_unique_ids(values: list[int], detail: str) -> None:
+    if len(values) != len(set(values)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+
+def _validate_unique_labels(values: list[str], detail: str) -> None:
+    normalized = [value.strip() for value in values]
+    if len(normalized) != len(set(normalized)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+
+def _show_polygon_response_from_model(polygon: ShowPolygon, zone_name: str | None = None) -> ShowPolygonResponse:
+    return ShowPolygonResponse(
+        id=polygon.id,
+        show_id=polygon.show_id,
+        zone_id=polygon.zone_id,
+        zone_name=zone_name,
+        label=polygon.label,
+        points=polygon.points,
+        created_at=polygon.created_at,
+        updated_at=polygon.updated_at,
+    )
 
 
 async def _build_show_stats_response(session: AsyncSession, show: Show, event: Event | None = None) -> EventDetailStatsResponse:
@@ -221,6 +255,7 @@ async def create_admin_event(
         raise
 
     await public_api_cache.invalidate_namespace(EVENT_LIST_CACHE_NAMESPACE)
+    await public_api_cache.invalidate_namespace(EVENT_DETAIL_CACHE_NAMESPACE)
     return await build_event_detail_response(session, event)
 
 
@@ -238,7 +273,8 @@ async def list_admin_events(
     """List all events for admin management view."""
 
     events = await list_live_events(session, search=search, category=category, start_from=start_from, end_to=end_to, limit=limit, offset=offset)
-    return [await build_event_card_response(session, event) for event in events]
+    shows_by_event_id = await list_shows_for_event_ids(session, [event.id for event in events], include_deleted=True)
+    return [await build_event_card_response(session, event, shows=shows_by_event_id.get(event.id, [])) for event in events]
 
 
 @router.get("/events/{event_key}", response_model=EventDetailResponse)
@@ -283,6 +319,7 @@ async def update_event(
         raise
 
     await public_api_cache.invalidate_namespace(EVENT_LIST_CACHE_NAMESPACE)
+    await public_api_cache.invalidate_namespace(EVENT_DETAIL_CACHE_NAMESPACE)
     return await build_event_detail_response(session, event)
 
 
@@ -307,6 +344,7 @@ async def delete_event(
         raise
 
     await public_api_cache.invalidate_namespace(EVENT_LIST_CACHE_NAMESPACE)
+    await public_api_cache.invalidate_namespace(EVENT_DETAIL_CACHE_NAMESPACE)
     for show in shows:
         await public_api_cache.invalidate_namespace(show_seat_cache_namespace(show.id))
     return APIMessage(detail="Event deleted successfully")
@@ -475,6 +513,28 @@ async def create_zone(
     return SeatZoneResponse.model_validate(zone)
 
 
+@router.post("/events/{event_key}/shows/{show_id}/zones/initial", response_model=SeatZoneResponse, status_code=status.HTTP_201_CREATED)
+async def create_initial_zone(
+    event_key: str,
+    show_id: int,
+    payload: SeatZoneCreate,
+    session: AsyncSession = Depends(get_db_session),
+    _: User = Depends(get_current_active_admin),
+) -> SeatZoneResponse:
+    """Create a free-form starter zone with seeded seats and one boundary polygon."""
+
+    _, show = await _build_event_or_404_show(session, event_key, show_id)
+    try:
+        zone = await create_initial_show_zone(session, show, payload)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+    await _invalidate_show_cache(show.id)
+    return SeatZoneResponse.model_validate(zone)
+
+
 @router.patch("/events/{event_key}/shows/{show_id}/zones/{zone_id}", response_model=SeatZoneResponse)
 async def update_zone(
     event_key: str,
@@ -488,7 +548,7 @@ async def update_zone(
 
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     try:
-        zone = await update_show_zone(session, show, zone_id, SeatZoneCreate(**payload.model_dump()))
+        zone = await update_show_zone(session, show, zone_id, payload)
         await session.commit()
     except Exception:
         await session.rollback()
@@ -518,6 +578,92 @@ async def delete_zone(
 
     await _invalidate_show_cache(show.id)
     return APIMessage(detail="Zone deleted successfully")
+
+
+@router.post("/events/{event_key}/shows/{show_id}/polygons", response_model=ShowPolygonResponse)
+async def create_show_polygon(
+    event_key: str,
+    show_id: int,
+    payload: ShowPolygonCreateRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _: User = Depends(get_current_active_admin),
+) -> ShowPolygonResponse:
+    """Create one polygon overlay for a show seat plan."""
+
+    _, show = await _build_event_or_404_show(session, event_key, show_id)
+    zone = None
+    if payload.zone_id is not None:
+        zone = await session.scalar(select(SeatZone).where(SeatZone.id == payload.zone_id, SeatZone.show_id == show.id))
+        if not zone:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zone not found for this show")
+
+    polygon = ShowPolygon(
+        show_id=show.id,
+        zone_id=zone.id if zone else None,
+        label=payload.label,
+        points=[point.model_dump() for point in payload.points],
+    )
+    session.add(polygon)
+    await session.commit()
+    await session.refresh(polygon)
+
+    await _invalidate_show_cache(show.id)
+    return _show_polygon_response_from_model(polygon, zone.name if zone else None)
+
+
+@router.patch("/show-polygons/{polygon_id}", response_model=ShowPolygonResponse)
+async def update_show_polygon(
+    polygon_id: int,
+    payload: ShowPolygonUpdateRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _: User = Depends(get_current_active_admin),
+) -> ShowPolygonResponse:
+    """Update one show polygon overlay."""
+
+    polygon = await session.scalar(select(ShowPolygon).where(ShowPolygon.id == polygon_id))
+    if not polygon:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show polygon not found")
+
+    zone = None
+    if payload.zone_id is not None:
+        zone = await session.scalar(select(SeatZone).where(SeatZone.id == payload.zone_id, SeatZone.show_id == polygon.show_id))
+        if not zone:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zone not found for this show")
+        polygon.zone_id = zone.id
+    elif payload.zone_id is None and "zone_id" in payload.model_fields_set:
+        polygon.zone_id = None
+
+    if payload.label is not None:
+        polygon.label = payload.label
+    if payload.points is not None:
+        polygon.points = [point.model_dump() for point in payload.points]
+
+    await session.commit()
+    await session.refresh(polygon)
+    await _invalidate_show_cache(polygon.show_id)
+
+    if zone is None and polygon.zone_id is not None:
+        zone = await session.scalar(select(SeatZone).where(SeatZone.id == polygon.zone_id))
+    return _show_polygon_response_from_model(polygon, zone.name if zone else None)
+
+
+@router.delete("/show-polygons/{polygon_id}", response_model=APIMessage)
+async def delete_show_polygon(
+    polygon_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    _: User = Depends(get_current_active_admin),
+) -> APIMessage:
+    """Delete one show polygon overlay."""
+
+    polygon = await session.scalar(select(ShowPolygon).where(ShowPolygon.id == polygon_id))
+    if not polygon:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show polygon not found")
+
+    show_id = polygon.show_id
+    await session.delete(polygon)
+    await session.commit()
+    await _invalidate_show_cache(show_id)
+    return APIMessage(detail="Show polygon deleted")
 
 
 @router.post("/events/{event_key}/shows/{show_id}/seats/single", response_model=SeatCreateResponse)
@@ -681,6 +827,154 @@ async def create_show_seat_bulk(
 
     await _invalidate_show_cache(show.id)
     return SeatBulkCreateResponse(created_count=len(created), seats=created)
+
+
+@router.post("/events/{event_key}/shows/{show_id}/seats/sync", response_model=SeatSyncResponse)
+async def sync_show_seats(
+    event_key: str,
+    show_id: int,
+    payload: SeatSyncRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _: User = Depends(get_current_active_admin),
+) -> SeatSyncResponse:
+    """Synchronize many seat changes for one show in a single transaction."""
+
+    _, show = await _build_event_or_404_show(session, event_key, show_id)
+    existing_seats = list(await session.scalars(select(Seat).where(Seat.show_id == show.id).order_by(Seat.id.asc())))
+    seat_map = {seat.id: seat for seat in existing_seats}
+    zone_map = {
+        zone.id: zone
+        for zone in await session.scalars(select(SeatZone).where(SeatZone.show_id == show.id))
+    }
+    sections = (
+        list(await session.scalars(select(Section).where(Section.venue_layout_id == show.venue_layout_id)))
+        if show.venue_layout_id is not None
+        else []
+    )
+    section_map = {section.id: section for section in sections}
+
+    update_ids = [item.id for item in payload.update]
+    delete_ids = list(payload.delete_ids)
+    client_ids = [item.client_id for item in payload.create]
+
+    _validate_unique_ids(update_ids, "Duplicate seat ids in update payload")
+    _validate_unique_ids(delete_ids, "Duplicate seat ids in delete payload")
+    _validate_unique_ids(client_ids, "Duplicate client ids in create payload")
+
+    delete_id_set = set(delete_ids)
+    if delete_id_set.intersection(update_ids):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A seat cannot be updated and deleted in the same request")
+
+    missing_update_ids = [seat_id for seat_id in update_ids if seat_id not in seat_map]
+    if missing_update_ids:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Seat not found for this show")
+
+    missing_delete_ids = [seat_id for seat_id in delete_ids if seat_id not in seat_map]
+    if missing_delete_ids:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Seat not found for this show")
+
+    if show.venue_layout_id is None:
+        if any(item.section_id is not None for item in payload.create) or any(item.section_id is not None for item in payload.update):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="section_id is not supported for this show")
+    else:
+        invalid_section = next(
+            (
+                item.section_id
+                for item in [*payload.create, *payload.update]
+                if item.section_id is not None and item.section_id not in section_map
+            ),
+            None,
+        )
+        if invalid_section is not None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Section not found for this show")
+
+    for item in payload.create:
+        if item.zone_id is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="zone_id is required")
+        if item.zone_id not in zone_map:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zone not found for this show")
+
+    for item in payload.update:
+        if item.zone_id is not None and item.zone_id not in zone_map:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zone not found for this show")
+
+    final_labels: list[str] = []
+    update_map = {item.id: item for item in payload.update}
+    for seat in existing_seats:
+        if seat.id in delete_id_set:
+            continue
+        candidate = update_map.get(seat.id)
+        final_labels.append(candidate.seat_label if candidate else seat.seat_label)
+    final_labels.extend(item.seat_label for item in payload.create)
+    _validate_unique_labels(final_labels, "Seat label already exists for this show")
+
+    created_pairs: list[tuple[int, Seat]] = []
+    try:
+        for item in payload.update:
+            seat = seat_map[item.id]
+            zone = zone_map.get(item.zone_id) if item.zone_id is not None else None
+
+            if item.zone_id is not None:
+                seat.zone_id = item.zone_id
+                if item.price is None:
+                    seat.price = float(zone.price) if zone else seat.price
+
+            seat.seat_label = item.seat_label
+            seat.x_coord = item.x
+            seat.y_coord = item.y
+            seat.rotation = item.rotation
+            seat.section_id = item.section_id
+            if item.price is not None:
+                seat.price = float(item.price)
+            _apply_admin_lock_state(seat, item.is_admin_locked)
+
+        for item in payload.create:
+            zone = zone_map[item.zone_id]
+            seat = Seat(
+                event_id=show.event_id,
+                show_id=show.id,
+                zone_id=zone.id,
+                row_index=0,
+                row_label="",
+                seat_number=0,
+                seat_label=item.seat_label,
+                price=float(item.price) if item.price is not None else float(zone.price),
+                status=SeatStatus.LOCKED if item.is_admin_locked else SeatStatus.AVAILABLE,
+                x_coord=item.x,
+                y_coord=item.y,
+                rotation=item.rotation,
+                section_id=item.section_id,
+                venue_layout_id=show.venue_layout_id,
+                is_admin_locked=item.is_admin_locked,
+            )
+            session.add(seat)
+            created_pairs.append((item.client_id, seat))
+
+        for seat_id in delete_ids:
+            await session.delete(seat_map[seat_id])
+
+        await session.flush()
+        response = SeatSyncResponse(
+            created=[
+                SeatSyncCreatedItem(
+                    client_id=client_id,
+                    id=seat.id,
+                    seat_label=seat.seat_label,
+                    x=float(seat.x_coord) if seat.x_coord is not None else None,
+                    y=float(seat.y_coord) if seat.y_coord is not None else None,
+                )
+                for client_id, seat in created_pairs
+            ],
+            updated_ids=update_ids,
+            deleted_ids=delete_ids,
+        )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+    await _invalidate_show_cache(show.id)
+    return response
 
 
 @router.patch("/events/{event_key}/shows/{show_id}/seats/{seat_id}", response_model=SeatCreateResponse)

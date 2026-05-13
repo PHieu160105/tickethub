@@ -34,7 +34,8 @@ interface ShowFormState {
   hold_minutes: string
   queue_release_batch: string
   max_active_queue_tokens: string
-  seat_map_mode: 'classic' | 'venue'
+  seat_map_mode: 'free' | 'venue'
+  create_seed_zone: boolean
   venue_id: string
   venue_layout_id: string
   zone_code: string
@@ -68,7 +69,8 @@ const INITIAL_SHOW_FORM: ShowFormState = {
   hold_minutes: '10',
   queue_release_batch: '50',
   max_active_queue_tokens: '200',
-  seat_map_mode: 'classic',
+  seat_map_mode: 'free',
+  create_seed_zone: false,
   venue_id: '',
   venue_layout_id: '',
   zone_code: 'A',
@@ -314,7 +316,8 @@ export default function AdminEvents() {
       end_time: new Date(detail.end_at).toISOString().slice(11, 16),
       status: detail.status,
       queue_enabled: detail.queue_enabled,
-      seat_map_mode: detail.venue_layout_id ? 'venue' : 'classic',
+      seat_map_mode: detail.venue_layout_id ? 'venue' : 'free',
+      create_seed_zone: false,
       venue_id: detail.venue_id ? String(detail.venue_id) : '',
       venue_layout_id: detail.venue_layout_id ? String(detail.venue_layout_id) : '',
       hold_minutes: String(detail.hold_minutes),
@@ -363,8 +366,8 @@ export default function AdminEvents() {
       setFormError('Vui lòng chọn venue và layout cho show này.')
       return
     }
-    if (showForm.seat_map_mode === 'classic' && !editingShow && (!showForm.zone_code || !showForm.zone_name)) {
-      setFormError('Vui lòng cấu hình zone khởi tạo cho show classic grid.')
+    if (showForm.seat_map_mode === 'free' && !editingShow && showForm.create_seed_zone && (!showForm.zone_code || !showForm.zone_name)) {
+      setFormError('Vui lòng cấu hình zone khởi tạo cho show chọn chỗ tự do.')
       return
     }
 
@@ -392,16 +395,19 @@ export default function AdminEvents() {
                 zones: [],
               }
             : {
-                zones: [
-                  {
-                    code: showForm.zone_code,
-                    name: showForm.zone_name,
-                    row_count: Number(showForm.row_count),
-                    seats_per_row: Number(showForm.seats_per_row),
-                    price: Number(showForm.zone_price),
-                    color: showForm.zone_color,
-                  },
-                ],
+                zones: showForm.create_seed_zone
+                  ? [
+                      {
+                        code: showForm.zone_code,
+                        name: showForm.zone_name,
+                        row_count: Number(showForm.row_count),
+                        seats_per_row: Number(showForm.seats_per_row),
+                        price: Number(showForm.zone_price),
+                        color: showForm.zone_color,
+                        generate_seats: true,
+                      },
+                    ]
+                  : [],
               }),
       }
 
@@ -641,7 +647,7 @@ export default function AdminEvents() {
                           <div className="flex items-center gap-2">
                             <h3 className="text-lg font-semibold text-white">{show.title}</h3>
                             {statusBadge(show.status)}
-                            <Badge variant="info" size="sm">{show.venue_layout_id ? 'Venue Map' : 'Classic Grid'}</Badge>
+                            <Badge variant="info" size="sm">{show.venue_layout_id ? 'Venue Map' : 'Chọn chỗ tự do'}</Badge>
                           </div>
                           <p className="text-sm text-gray-300">{show.description}</p>
                           <div className="space-y-1 text-sm text-gray-400">
@@ -766,11 +772,11 @@ export default function AdminEvents() {
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <button
                   type="button"
-                  className={`rounded-xl border px-4 py-4 text-left transition ${showForm.seat_map_mode === 'classic' ? 'border-brand-red/40 bg-brand-red/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
-                  onClick={() => setShowForm((prev) => ({ ...prev, seat_map_mode: 'classic', venue_id: '', venue_layout_id: '' }))}
+                  className={`rounded-xl border px-4 py-4 text-left transition ${showForm.seat_map_mode === 'free' ? 'border-brand-red/40 bg-brand-red/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                  onClick={() => setShowForm((prev) => ({ ...prev, seat_map_mode: 'free', venue_id: '', venue_layout_id: '' }))}
                 >
-                  <p className="font-semibold text-white">Classic Grid</p>
-                  <p className="mt-1 text-sm text-slate-400">Khởi tạo zone/ghế trực tiếp cho show.</p>
+                  <p className="font-semibold text-white">Chọn chỗ tự do</p>
+                  <p className="mt-1 text-sm text-slate-400">Dùng một seat plan chung và chỉnh toàn bộ trong Seat Planner.</p>
                 </button>
                 <button
                   type="button"
@@ -805,7 +811,17 @@ export default function AdminEvents() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={showForm.create_seed_zone}
+                      onChange={(event) => setShowForm((prev) => ({ ...prev, create_seed_zone: event.target.checked }))}
+                    />
+                    Tạo zone mẫu khi khởi tạo show
+                  </label>
+                  {showForm.create_seed_zone && (
+                    <>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                       <label className="mb-2 block text-sm font-medium text-gray-300">Zone code</label>
                       <Input value={showForm.zone_code} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_code: event.target.value }))} />
@@ -815,7 +831,7 @@ export default function AdminEvents() {
                       <Input value={showForm.zone_name} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_name: event.target.value }))} />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div>
                       <label className="mb-2 block text-sm font-medium text-gray-300">Rows</label>
                       <Input type="number" min={1} value={showForm.row_count} onChange={(event) => setShowForm((prev) => ({ ...prev, row_count: event.target.value }))} />
@@ -829,10 +845,20 @@ export default function AdminEvents() {
                       <Input type="number" min={1} value={showForm.zone_price} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_price: event.target.value }))} />
                     </div>
                   </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-300">Zone color</label>
-                    <Input value={showForm.zone_color} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_color: event.target.value }))} />
-                  </div>
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-gray-300">Zone color</label>
+                        <div className="grid grid-cols-[68px_1fr] gap-3">
+                          <input
+                            type="color"
+                            value={showForm.zone_color}
+                            onChange={(event) => setShowForm((prev) => ({ ...prev, zone_color: event.target.value }))}
+                            className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 p-1"
+                          />
+                          <Input value={showForm.zone_color} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_color: event.target.value }))} />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

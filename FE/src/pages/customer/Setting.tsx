@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CustomerSidebar } from '@/components/layout/CustomerSidebar'
-import { Navbar } from '@/components/layout/Navbar'
 import { useTheme } from '@/context/ThemeContext'
 import { Menu, Moon, Sun, X } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
@@ -24,7 +23,6 @@ export default function CustomerSettings() {
     if (tab === 'tickets') return navigate('/tickets')
     if (tab === 'profile') return navigate('/profile')
     if (tab === 'favourites') return navigate('/favourites') 
-    if (tab === 'payments') return navigate('/payments')  
     if (tab === "settings") return navigate('/settings') 
     if (tab === 'help') return navigate('/help')  
     if (tab === 'logout') {
@@ -34,9 +32,7 @@ export default function CustomerSettings() {
   }
 
   return (
-    <>
-      <Navbar />
-      <div className="pt-[20px] min-h-screen flex">
+    <div className="app-theme-page pt-[35px] h-auto flex">
         <div className="hidden lg:block">
           <CustomerSidebar
             activeTab="settings"
@@ -142,6 +138,5 @@ export default function CustomerSettings() {
           </div>
         </main>
       </div>
-    </>
   )
 }

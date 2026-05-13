@@ -1,43 +1,33 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Home, ArrowLeft, Satellite } from 'lucide-react';
+import { Home, ArrowLeft, Satellite } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Footer } from '@/components/layout/Footer';
+import LogoSVG from '@/assets/logo.svg'
 
-interface ErrorPageProps {
-  statusCode?: number;
-  title?: string;
-  message?: string;
+export function Logo() {
+  return (
+    <Link to="/" aria-label="TicketRush Home" className="flex items-center gap-2">
+      <img src={LogoSVG} alt="TicketRush Logo" className="h-12 w-auto" />
+    </Link>
+  )
 }
 
-export function ErrorPage({
-  statusCode = 404,
-  title = "Page Not Found",
-  message = "Looks like you're lost in space... The event you're looking for has drifted beyond the event horizon."
-}: ErrorPageProps) {
+export function ErrorPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0a0e27] to-[#1a1f3a] text-[#dee0ff] font-body overflow-hidden">
+    <div className="app-theme-page min-h-screen flex flex-col text-on-background font-body overflow-hidden">
       {/* Top Navigation */}
       <header className="fixed top-0 left-0 w-full z-50 px-6 py-4 flex justify-between items-center bg-slate-950/20 backdrop-blur-sm">
-        <Link to="/" className="text-2xl font-black italic tracking-tighter text-red-500 uppercase font-headline">
-          TicketRush
-        </Link>
-        <nav className="hidden md:flex gap-8 items-center font-headline text-slate-300">
-          <Link to="/search" className="hover:text-white transition-colors">Events</Link>
-          <Link to="/venues" className="hover:text-white transition-colors">Venues</Link>
-          <Link to="/deals" className="hover:text-white transition-colors">Deals</Link>
+        <Logo/>
+        <nav className="hidden md:flex gap-8 items-center font-headline text-gray-500">
+          <Link to="/search" className="hover:text-white transition-colors">Sự kiện</Link>
+          <Link to="/info#ve" className="hover:text-white transition-colors">Thông tin</Link>
         </nav>
       </header>
 
       {/* Main Content */}
-      <main className="flex-grow flex items-center justify-center px-6 relative pt-16">
-        {/* Background Effects */}
-        <div className="absolute inset-0 z-0 opacity-30" style={{
-          backgroundImage: 'radial-gradient(circle, #ffffff 1px, transparent 1px)',
-          backgroundSize: '50px 50px'
-        }}></div>
+      <main className="flex-grow flex items-center justify-center px-6 relative pt-30">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary-container/10 rounded-full blur-[120px]"></div>
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-tertiary-container/5 rounded-full blur-[150px]"></div>
 
@@ -47,9 +37,9 @@ export function ErrorPage({
             <div className="relative w-64 h-64 md:w-96 md:h-96 animate-float">
               <div className="absolute inset-0 glass-panel rounded-full border border-white/10 flex items-center justify-center overflow-hidden">
                 <img
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBujX6dJHvYzmjag9-VzBVgBpIwzwGv2w1JCCXwh53UHcba4hnO3KogJvHdZdSz3QgAR1Zjj3-UbJdYUAHeanGW4xkLqaCJTUE_OPo_aLubaUcbuQ8r98lVSzGpE4hC5U_vbwEuOGwJulterxGaajtAyH394BamuO09tq20YpYWDB7z1NlBWFS8rls7fbUlLMpfcLpOQgyypYX1sYoLcxwqObimzkB1vMWG40BoKaXkoCcyJdmtTILGPIyZ7VBRGQvmdFP_E5Hs_qU"
+                  src={LogoSVG}
                   alt="Lost Astronaut"
-                  className="w-full h-full object-cover grayscale opacity-80"
+                  className="w-100 object-cover "
                 />
               </div>
               {/* Decorative Orbital Ring */}
@@ -64,31 +54,16 @@ export function ErrorPage({
           {/* Textual Content Side */}
           <div className="text-center md:text-left order-2 md:order-1">
             <div className="inline-block px-4 py-1 glass-panel rounded-full mb-6 border border-white/5">
-              <span className="font-headline text-xs font-bold uppercase tracking-[0.2em] text-secondary">Signal Lost</span>
+              <span className="font-headline text-xs font-bold uppercase tracking-[0.2em] text-secondary">Oops!!!</span>
             </div>
 
-            <h1 className="font-headline text-6xl md:text-8xl font-black tracking-tighter text-white mb-2 italic">
-              {statusCode}
+            <h1 className="font-headline text-4xl md:text-6xl font-black tracking-tighter customer-text-header mb-2 italic">
+              Coming soon
             </h1>
 
-            <h2 className="font-headline text-2xl md:text-3xl font-bold tracking-tight text-primary mb-6">
-              {title}
-            </h2>
-
             <p className="font-body text-lg text-on-surface-variant mb-10 max-w-md mx-auto md:mx-0 leading-relaxed">
-              {message}
+              Trang hiện tại chưa khả dụng hoặc sắp được phát triển.
             </p>
-
-            {/* Interactive Search Section */}
-            <div className="relative max-w-md mb-8 group">
-              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-primary transition-colors">
-                <Search className="w-5 h-5" />
-              </div>
-              <Input
-                placeholder="Search for another event..."
-                className="w-full bg-surface-container-highest/50 border-0 focus:ring-1 focus:ring-primary rounded-xl py-4 pl-12 pr-4 text-on-surface placeholder:text-slate-500 glass-panel transition-all"
-              />
-            </div>
 
             {/* Call to Action */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
@@ -98,7 +73,7 @@ export function ErrorPage({
                 onClick={() => navigate('/')}
               >
                 <Home className="w-5 h-5" />
-                Back to Home
+                Trở về Trang chủ
               </Button>
               <Button
                 variant="outline"
@@ -106,7 +81,7 @@ export function ErrorPage({
                 onClick={() => navigate(-1)}
               >
                 <ArrowLeft className="w-5 h-5" />
-                Go Back
+                Quay lại
               </Button>
             </div>
           </div>

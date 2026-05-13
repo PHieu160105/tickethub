@@ -1,12 +1,11 @@
-import type { MouseEventHandler, ReactNode, RefObject, WheelEventHandler } from 'react'
-import { useState } from 'react'
+import { useState, type MouseEventHandler, type ReactNode, type RefObject, type WheelEventHandler } from 'react'
 import { Maximize2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
 import type { SeatMapPolygon, SeatMapResponse, SeatMapSeat } from '@/types'
 
 function isSeatBlocked(seat: SeatMapSeat) {
-  return seat.status === 'sold' || (seat.status === 'locked' && !seat.is_locked_by_me)
+  return seat.status !== 'available'
 }
 
 function seatClassName(seat: SeatMapSeat, isSelected: boolean) {
@@ -17,11 +16,39 @@ function seatClassName(seat: SeatMapSeat, isSelected: boolean) {
   return 'bg-slate-800 border-white/20'
 }
 
-function seatInlineStyle(sectionColor?: string, isSelected = false) {
-  return {
-    backgroundColor: sectionColor ? `${sectionColor}cc` : undefined,
-    borderColor: sectionColor ?? undefined,
+function seatInlineStyle(seat: SeatMapSeat, zoneColor?: string, isSelected = false) {
+  const baseStyle = {
     boxShadow: isSelected ? '0 0 0 3px rgba(59,130,246,0.35)' : undefined,
+  }
+
+  if (seat.status === 'sold') {
+    return {
+      ...baseStyle,
+      backgroundColor: '#334155',
+      borderColor: '#64748b',
+    }
+  }
+
+  if (seat.status === 'locked' && !seat.is_locked_by_me) {
+    return {
+      ...baseStyle,
+      backgroundColor: '#78350f',
+      borderColor: '#f59e0b',
+    }
+  }
+
+  if (seat.is_locked_by_me) {
+    return {
+      ...baseStyle,
+      backgroundColor: '#047857',
+      borderColor: '#34d399',
+    }
+  }
+
+  return {
+    ...baseStyle,
+    backgroundColor: zoneColor ? `${zoneColor}cc` : undefined,
+    borderColor: zoneColor ?? undefined,
   }
 }
 
@@ -144,8 +171,9 @@ export function CustomerSeatMap({
 
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full pointer-events-none">
               {seatMap.polygons.map((polygon) => {
+                const zone = seatMap.zones.find((item) => item.id === polygon.zone_id)
                 const section = seatMap.sections.find((item) => item.id === polygon.section_id)
-                const stroke = section?.color ?? '#94a3b8'
+                const stroke = zone?.color ?? section?.color ?? '#94a3b8'
                 return (
                   <polygon
                     key={polygon.id}
@@ -158,26 +186,28 @@ export function CustomerSeatMap({
                 )
               })}
             </svg>
+
             {seatMap.polygons.map((polygon) => {
+              const zone = seatMap.zones.find((item) => item.id === polygon.zone_id)
               const section = seatMap.sections.find((item) => item.id === polygon.section_id)
               const centroid = computeCentroid(polygon.points)
-              if (!polygon.section_name && !polygon.label) return null
+              if (!polygon.zone_name && !polygon.section_name && !polygon.label) return null
               return (
                 <div
                   key={`clabel-${polygon.id}`}
                   className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded px-2 py-0.5 text-[9px] font-bold whitespace-nowrap"
-                  style={{ left: `${centroid.x}%`, top: `${centroid.y}%`, backgroundColor: section?.color ? `${section.color}cc` : 'rgba(0,0,0,0.6)', color: '#fff' }}
+                  style={{ left: `${centroid.x}%`, top: `${centroid.y}%`, backgroundColor: zone?.color ? `${zone.color}cc` : section?.color ? `${section.color}cc` : 'rgba(0,0,0,0.6)', color: '#fff' }}
                 >
-                  {polygon.section_name ?? polygon.label}
+                  {polygon.zone_name ?? polygon.section_name ?? polygon.label}
                 </div>
               )
             })}
 
             {visibleSeats.map((seat) => {
               const isSelected = selectedSeatIds.includes(seat.id)
-              const seatColor = seatColorMap?.get(seat.id) ?? seatMap.sections.find((item) => item.id === seat.section_id)?.color
+              const zoneColor = seatColorMap?.get(seat.id) ?? seatMap.zones.find((item) => item.id === seat.zone_id)?.color ?? seatMap.sections.find((item) => item.id === seat.section_id)?.color
               const priceLabel = Number(seat.price).toLocaleString('vi-VN')
-              const tooltipContent = `${seat.label} · ${seat.section_name ?? 'General'} · ${priceLabel}đ`
+              const tooltipContent = `${seat.label} · ${seat.zone_name ?? seat.section_name ?? 'General'} · ${priceLabel}đ`
               return (
                 <button
                   key={seat.id}
@@ -187,7 +217,7 @@ export function CustomerSeatMap({
                     if (isSeatBlocked(seat)) return
                     onSeatClick(seat)
                   }}
-                  onMouseEnter={(e) => setTooltip({ x: e.clientX, y: e.clientY, content: tooltipContent })}
+                  onMouseEnter={(event) => setTooltip({ x: event.clientX, y: event.clientY, content: tooltipContent })}
                   onMouseLeave={() => setTooltip(null)}
                   disabled={isSeatBlocked(seat)}
                   className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border transition ${seatClassName(seat, isSelected)}`}
@@ -197,11 +227,12 @@ export function CustomerSeatMap({
                     transform: `translate(-50%, -50%) rotate(${seat.rotation}deg)`,
                     width: `${seatSize}%`,
                     aspectRatio: '1',
-                    ...seatInlineStyle(seatColor, isSelected),
+                    ...seatInlineStyle(seat, zoneColor, isSelected),
                   }}
                 />
               )
             })}
+
             {tooltip && (
               <div
                 className="pointer-events-none fixed z-[9999] max-w-[220px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 shadow-2xl"

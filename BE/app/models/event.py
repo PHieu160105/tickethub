@@ -2,7 +2,7 @@
 
 from datetime import UTC, date, datetime, time
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -85,6 +85,7 @@ class Show(TimestampMixin, Base):
     venue_layout = relationship("VenueLayout")
     zones = relationship("SeatZone", back_populates="show", cascade="all,delete")
     seats = relationship("Seat", back_populates="show", cascade="all,delete")
+    polygons = relationship("ShowPolygon", back_populates="show", cascade="all,delete")
     orders = relationship("Order", back_populates="show", cascade="all,delete")
     queue_entries = relationship("QueueEntry", back_populates="show", cascade="all,delete")
 
@@ -107,3 +108,19 @@ class SeatZone(TimestampMixin, Base):
 
     show = relationship("Show", back_populates="zones")
     seats = relationship("Seat", back_populates="zone", cascade="all,delete")
+    polygons = relationship("ShowPolygon", back_populates="zone", cascade="all,delete")
+
+
+class ShowPolygon(TimestampMixin, Base):
+    """Polygon metadata drawn on top of one show's free-form seat plan."""
+
+    __tablename__ = "show_polygons"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    show_id: Mapped[int] = mapped_column(ForeignKey("shows.id", ondelete="CASCADE"), nullable=False, index=True)
+    zone_id: Mapped[int | None] = mapped_column(ForeignKey("seat_zones.id", ondelete="SET NULL"), nullable=True, index=True)
+    label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    points: Mapped[list[dict[str, float]]] = mapped_column(JSON, nullable=False)
+
+    show = relationship("Show", back_populates="polygons")
+    zone = relationship("SeatZone", back_populates="polygons")

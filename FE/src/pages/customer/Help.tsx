@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { Menu, Send, X } from 'lucide-react'
 
 import { CustomerSidebar } from '@/components/layout/CustomerSidebar'
-import { Navbar } from '@/components/layout/Navbar'
 import { useAuth } from '@/context/AuthContext'
 import { helpApi } from '@/lib/api'
 import { authStorage } from '@/lib/storage'
@@ -26,7 +25,6 @@ export default function Help() {
     if (tab === 'tickets') return navigate('/tickets')
     if (tab === 'profile') return navigate('/profile')
     if (tab === 'favourites') return navigate('/favourites')
-    if (tab === 'payments') return navigate('/payments')
     if (tab === 'settings') return navigate('/settings')
     if (tab === 'help') return navigate('/help')
     if (tab === 'logout') {
@@ -84,9 +82,7 @@ export default function Help() {
     })
 
   return (
-    <>
-      <Navbar />
-      <div className="pt-[20px] min-h-screen customer-bg-page flex">
+    <div className="app-theme-page pt-[35px] h-help flex">
         <div className="hidden lg:block">
           <CustomerSidebar activeTab="help" userName={user?.full_name ?? 'Customer'} onNavigate={onSidebarNavigate} />
         </div>
@@ -148,6 +144,5 @@ export default function Help() {
           </div>
         </main>
       </div>
-    </>
   )
 }

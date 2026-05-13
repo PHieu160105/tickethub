@@ -11,11 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.search import build_ilike_pattern, sanitize_search_query
 from app.models.enums import SeatStatus
-from app.models.event import Event, SeatZone, Show
+from app.models.event import Event, SeatZone, Show, ShowPolygon
 from app.models.order import Order, OrderItem, Ticket
 from app.models.seat import Seat
 from app.models.user import User
-from app.models.venue import Section, Venue, VenueLayout
+from app.models.venue import Polygon, Section, Venue, VenueLayout
 from app.schemas.event import (
     EventCardResponse,
     EventCreateRequest,
@@ -24,6 +24,7 @@ from app.schemas.event import (
     SeatResponse,
     SeatUserInfoResponse,
     SeatZoneCreate,
+    SeatZoneUpdate,
     SeatZoneResponse,
     ShowCreateRequest,
     ShowSummaryResponse,
@@ -93,6 +94,71 @@ def _build_zone_seats(event_id: int, show_id: int, zone: SeatZone, payload: Seat
                 )
             )
     return seat_models
+
+
+def _build_positioned_zone_seats(
+    event_id: int,
+    show_id: int,
+    zone: SeatZone,
+    payload: SeatZoneCreate,
+    *,
+    start_x: float,
+    start_y: float,
+    gap_x: float,
+    gap_y: float,
+) -> list[Seat]:
+    """Generate a seat grid with explicit coordinates for free-form planner bootstrapping."""
+
+    seat_models: list[Seat] = []
+    for row_index in range(1, payload.row_count + 1):
+        row_label = row_label_from_index(row_index)
+        for seat_number in range(1, payload.seats_per_row + 1):
+            seat_label = f"{payload.code}-{row_label}{seat_number}"
+            seat_models.append(
+                Seat(
+                    event_id=event_id,
+                    show_id=show_id,
+                    zone_id=zone.id,
+                    row_index=row_index,
+                    row_label=row_label,
+                    seat_number=seat_number,
+                    seat_label=seat_label,
+                    price=payload.price,
+                    status=SeatStatus.AVAILABLE,
+                    x_coord=round(start_x + (seat_number - 1) * gap_x, 2),
+                    y_coord=round(start_y + (row_index - 1) * gap_y, 2),
+                    rotation=0.0,
+                )
+            )
+    return seat_models
+
+
+def _build_zone_boundary_polygon(zone: SeatZone, seats: list[Seat], *, padding: float, label: str | None = None) -> ShowPolygon:
+    """Create a rectangular polygon around one zone's seeded seats."""
+
+    if not seats:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot build boundary polygon without seats")
+
+    x_values = [float(seat.x_coord) for seat in seats if seat.x_coord is not None]
+    y_values = [float(seat.y_coord) for seat in seats if seat.y_coord is not None]
+    if not x_values or not y_values:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot build boundary polygon without explicit seat coordinates")
+
+    left = max(0.0, round(min(x_values) - padding, 2))
+    top = max(0.0, round(min(y_values) - padding, 2))
+    right = min(100.0, round(max(x_values) + padding, 2))
+    bottom = min(100.0, round(max(y_values) + padding, 2))
+    return ShowPolygon(
+        show_id=zone.show_id or 0,
+        zone_id=zone.id,
+        label=label,
+        points=[
+            {"x": left, "y": top},
+            {"x": right, "y": top},
+            {"x": right, "y": bottom},
+            {"x": left, "y": bottom},
+        ],
+    )
 
 
 async def build_unique_slug(session: AsyncSession, title: str) -> str:
@@ -180,6 +246,13 @@ async def _clone_layout_inventory(session: AsyncSession, event: Event, show: Sho
             .order_by(Seat.section_id.asc().nulls_last(), Seat.seat_label.asc())
         )
     )
+    template_polygons = list(
+        await session.scalars(
+            select(Polygon)
+            .where(Polygon.venue_layout_id == layout.id)
+            .order_by(Polygon.id.asc())
+        )
+    )
 
     zone_map: dict[int | None, SeatZone] = {}
     if sections:
@@ -240,6 +313,22 @@ async def _clone_layout_inventory(session: AsyncSession, event: Event, show: Sho
         session.add_all(cloned_seats)
         await session.flush()
 
+    cloned_polygons: list[ShowPolygon] = []
+    for template_polygon in template_polygons:
+        zone = zone_map.get(template_polygon.section_id) or zone_map.get(None)
+        cloned_polygons.append(
+            ShowPolygon(
+                show_id=show.id,
+                zone_id=zone.id if zone else None,
+                label=template_polygon.label,
+                points=template_polygon.points,
+            )
+        )
+
+    if cloned_polygons:
+        session.add_all(cloned_polygons)
+        await session.flush()
+
 
 async def create_show_with_inventory(session: AsyncSession, event: Event, admin_id: int, payload: ShowCreateRequest) -> Show:
     """Create a sellable show and initialize its seats."""
@@ -276,7 +365,6 @@ async def create_show_with_inventory(session: AsyncSession, event: Event, admin_
         await _clone_layout_inventory(session, event, show, layout)
         return show
 
-    zone_models: list[SeatZone] = []
     seat_models: list[Seat] = []
     for zone_payload in payload.zones:
         zone = SeatZone(
@@ -291,8 +379,8 @@ async def create_show_with_inventory(session: AsyncSession, event: Event, admin_
         )
         session.add(zone)
         await session.flush()
-        zone_models.append(zone)
-        seat_models.extend(_build_zone_seats(event.id, show.id, zone, zone_payload))
+        if zone_payload.generate_seats:
+            seat_models.extend(_build_zone_seats(event.id, show.id, zone, zone_payload))
 
     if seat_models:
         session.add_all(seat_models)
@@ -308,6 +396,28 @@ async def list_event_shows(session: AsyncSession, event_id: int, include_deleted
         stmt = stmt.where(Show.is_deleted.is_(False))
     stmt = stmt.order_by(Show.start_at.asc(), Show.id.asc())
     return list(await session.scalars(stmt))
+
+
+async def list_shows_for_event_ids(
+    session: AsyncSession,
+    event_ids: list[int],
+    *,
+    include_deleted: bool = False,
+) -> dict[int, list[Show]]:
+    """Bulk-load child shows for many events to avoid per-event queries."""
+
+    if not event_ids:
+        return {}
+
+    stmt = select(Show).where(Show.event_id.in_(event_ids))
+    if not include_deleted:
+        stmt = stmt.where(Show.is_deleted.is_(False))
+    stmt = stmt.order_by(Show.event_id.asc(), Show.start_at.asc(), Show.id.asc())
+
+    grouped: dict[int, list[Show]] = defaultdict(list)
+    for show in await session.scalars(stmt):
+        grouped[show.event_id].append(show)
+    return grouped
 
 
 async def get_show_by_id(session: AsyncSession, show_id: int, include_deleted: bool = False) -> Show:
@@ -329,7 +439,7 @@ async def list_show_zones(session: AsyncSession, show_id: int) -> list[SeatZone]
 
 
 async def create_show_zone(session: AsyncSession, show: Show, payload: SeatZoneCreate) -> SeatZone:
-    """Create one zone and generate all seats for it."""
+    """Create one zone and optionally seed seats for it."""
 
     existing = await session.scalar(
         select(func.count(SeatZone.id)).where(SeatZone.show_id == show.id, func.lower(SeatZone.code) == payload.code.lower())
@@ -350,13 +460,53 @@ async def create_show_zone(session: AsyncSession, show: Show, payload: SeatZoneC
     session.add(zone)
     await session.flush()
 
-    session.add_all(_build_zone_seats(show.event_id, show.id, zone, payload))
-    await session.flush()
+    if payload.generate_seats:
+        session.add_all(_build_zone_seats(show.event_id, show.id, zone, payload))
+        await session.flush()
     return zone
 
 
-async def update_show_zone(session: AsyncSession, show: Show, zone_id: int, payload: SeatZoneCreate) -> SeatZone:
-    """Update one zone and regenerate seats when safe."""
+async def create_initial_show_zone(session: AsyncSession, show: Show, payload: SeatZoneCreate) -> SeatZone:
+    """Create one free-form helper zone with seeded seats and one boundary polygon."""
+
+    if show.venue_layout_id is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Initial helper zone is only available for free-form shows")
+
+    start_x = 20.0
+    start_y = 20.0
+    gap_x = 3.0
+    gap_y = 3.0
+    padding = 1.0
+
+    max_x = start_x + (payload.seats_per_row - 1) * gap_x
+    max_y = start_y + (payload.row_count - 1) * gap_y
+    if max_x + padding > 100.0 or max_y + padding > 100.0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Initial helper zone exceeds the canvas bounds with the current rows and seats per row",
+        )
+
+    zone = await create_show_zone(session, show, SeatZoneCreate(**payload.model_dump(), generate_seats=False))
+    seats = _build_positioned_zone_seats(
+        show.event_id,
+        show.id,
+        zone,
+        payload,
+        start_x=start_x,
+        start_y=start_y,
+        gap_x=gap_x,
+        gap_y=gap_y,
+    )
+    if seats:
+        session.add_all(seats)
+        await session.flush()
+        session.add(_build_zone_boundary_polygon(zone, seats, padding=padding, label=zone.name))
+        await session.flush()
+    return zone
+
+
+async def update_show_zone(session: AsyncSession, show: Show, zone_id: int, payload: SeatZoneUpdate) -> SeatZone:
+    """Update one zone and optionally regenerate seats when safe."""
 
     zone = await session.scalar(select(SeatZone).where(SeatZone.id == zone_id, SeatZone.show_id == show.id))
     if not zone:
@@ -372,6 +522,16 @@ async def update_show_zone(session: AsyncSession, show: Show, zone_id: int, payl
     if duplicate:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Zone code already exists in this show")
 
+    zone.code = payload.code
+    zone.name = payload.name
+    zone.row_count = payload.row_count
+    zone.seats_per_row = payload.seats_per_row
+    zone.price = payload.price
+    zone.color = payload.color
+
+    if not payload.regenerate_seats:
+        return zone
+
     blocked = await session.scalar(
         select(func.count(Seat.id)).where(
             Seat.zone_id == zone.id,
@@ -381,19 +541,19 @@ async def update_show_zone(session: AsyncSession, show: Show, zone_id: int, payl
     if blocked:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot update zone while it has sold/locked seats")
 
-    zone.code = payload.code
-    zone.name = payload.name
-    zone.row_count = payload.row_count
-    zone.seats_per_row = payload.seats_per_row
-    zone.price = payload.price
-    zone.color = payload.color
-
     existing_seats = list(await session.scalars(select(Seat).where(Seat.zone_id == zone.id)))
     for seat in existing_seats:
         await session.delete(seat)
     await session.flush()
 
-    session.add_all(_build_zone_seats(show.event_id, show.id, zone, payload))
+    session.add_all(
+        _build_zone_seats(
+            show.event_id,
+            show.id,
+            zone,
+            SeatZoneCreate(**payload.model_dump(exclude={"regenerate_seats"}), generate_seats=True),
+        )
+    )
     await session.flush()
     return zone
 

@@ -1,5 +1,6 @@
 import LottieImport from 'lottie-react'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTheme } from '@/context/ThemeContext'
 import LogoSVG from '@/assets/logo.svg'
 
@@ -14,6 +15,11 @@ export function Logo() {
 export function GlobalLoader() {
   const { theme } = useTheme()
   const [animation, setAnimation] = useState(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     const animationFile = theme === 'light' ? '/loadinglight.json' : '/loadingdark.json'
@@ -23,14 +29,17 @@ export function GlobalLoader() {
       .catch(console.error)
   }, [theme])
 
-  if (!animation) return null
+  if (!animation || !mounted) return null
 
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-40 h-40">
-        <Lottie animationData={animation} />
-      </div>
-      <Logo/>
-    </div>
+  return createPortal(
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+        <div className="h-28 w-28 sm:h-40 sm:w-40">
+          <Lottie animationData={animation} />
+        </div>
+        <div className="hidden md:block">
+          <Logo />
+        </div>
+      </div>,
+    document.body,
   )
 }

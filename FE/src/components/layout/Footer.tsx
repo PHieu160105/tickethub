@@ -1,66 +1,108 @@
-﻿import { Container } from './Container';
-import { CreditCard, Smartphone, } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { SiFacebook, SiInstagram, SiTiktok, SiYoutube } from 'react-icons/si'
 
-const footerLinks = {
-  'Vá» chÃºng tÃ´i': ['/about', '/careers', '/press', '/blog'],
-  'Há»— trá»£': ['/help-center', '/refund-policy', '/contact', '/faq'],
-  'Thá»ƒ loáº¡i': ['/concerts', '/sports', '/theater', '/festivals'],
-  'Há»£p tÃ¡c': ['/organizer-portal', '/advertising', '/partners', '/api'],
-};
+import { siteSettingsApi } from '@/lib/api'
+import { DEFAULT_SITE_SETTINGS } from '@/lib/siteSettings'
+import type { SiteSettings } from '@/types'
+
+import { Container } from './Container'
+
+const infoLinks = [
+  { label: 'Điều khoản', to: '/info#dieu-khoan' },
+  { label: 'Hướng dẫn sử dụng', to: '/info#huong-dan-su-dung' },
+  { label: 'Chính sách', to: '/info#chinh-sach' },
+  { label: 'Về chúng tôi', to: '/info#ve-chung-toi' },
+]
+
+const socialLinks = [
+  { label: 'YouTube', icon: SiYoutube },
+  { label: 'Facebook', icon: SiFacebook },
+  { label: 'TikTok', icon: SiTiktok },
+  { label: 'Instagram', icon: SiInstagram },
+]
 
 export function Footer() {
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS)
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadSiteSettings = async () => {
+      try {
+        const data = await siteSettingsApi.public()
+        if (isMounted) {
+          setSiteSettings(data)
+        }
+      } catch {
+        if (isMounted) {
+          setSiteSettings(DEFAULT_SITE_SETTINGS)
+        }
+      }
+    }
+
+    void loadSiteSettings()
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
   return (
-    <footer className="customer-footer-bg border-t customer-border mt-auto">
+    <footer className="customer-footer-bg mt-auto border-t customer-border">
       <Container className="py-12">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
-          {/* Brand Column */}
-          <div className="col-span-2 md:col-span-1">
-            <span className="text-lg font-display font-bold">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 xl:grid-cols-4">
+          <div className="space-y-3">
+            <p className="font-headline text-2xl font-black tracking-tight">
               <span className="text-brand-red">Ticket</span>
               <span className="text-brand-yellow">Rush</span>
-            </span>
-            <p className="mt-2 text-sm customer-text-muted">
-              Ná»n táº£ng phÃ¢n phá»‘i vÃ© Ä‘iá»‡n tá»­ hÃ ng Ä‘áº§u. Tráº£i nghiá»‡m sá»± kiá»‡n theo cÃ¡ch cá»§a báº¡n.
             </p>
-            {/* <div className="flex gap-3 mt-4">
-              {[Instagram, Twitter, Youtube].map((Icon, i) => (
-                <a key={i} href="#" className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
-                  <Icon className="h-4 w-4 customer-text-muted" />
-                </a>
-              ))}
-            </div> */}
+            <p className="text-sm leading-7 customer-text-muted">
+              TicketRush là nền tảng hỗ trợ khám phá sự kiện, chọn buổi diễn và đặt vé trực tuyến theo trải nghiệm đơn giản, rõ ràng và thuận tiện.
+            </p>
           </div>
 
-          {/* Links Columns */}
-          {Object.entries(footerLinks).map(([title, links]) => (
-            <div key={title}>
-              <h4 className="font-semibold customer-text-header mb-3">{title}</h4>
-              <ul className="space-y-2">
-                {links.map((link) => (
-                  <li key={link}>
-                    <Link to={link} className="text-sm customer-text-muted hover:text-brand-yellow transition-colors">
-                      {link.split('/').pop()?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+          <div className="space-y-3">
+            <h4 className="font-semibold customer-text-header">Thông tin</h4>
+            <div className="space-y-2">
+              {infoLinks.map((item) => (
+                <Link key={item.to} to={item.to} className="block text-sm transition-colors customer-text-muted hover:text-primary">
+                  {item.label}
+                </Link>
+              ))}
             </div>
-          ))}
+          </div>
+
+          <div className="space-y-3">
+            <h4 className="font-semibold customer-text-header">Liên hệ</h4>
+            <div className="space-y-2 text-sm customer-text-muted">
+              <p>{siteSettings.contact_email}</p>
+              <p>{siteSettings.contact_phone}</p>
+              <p>{siteSettings.website}</p>
+              <p>{siteSettings.address}</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h4 className="font-semibold customer-text-header">Phương tiện</h4>
+            <div className="flex flex-wrap gap-2">
+              {socialLinks.map(({ label, icon: Icon }) => (
+                <Link
+                  key={label}
+                  to="/error"
+                  aria-label={label}
+                  className="flex h-12 w-12 items-center justify-center rounded-xl border bg-black/5 text-lg transition-colors customer-border customer-text-muted hover:text-primary dark:bg-white/5"
+                >
+                  <Icon />
+                </Link>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Bottom Bar */}
-        <div className="mt-10 pt-6 border-t customer-border flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm customer-text-muted">Â© 2026 TicketRush. All rights reserved.</p>
-          <div className="flex items-center gap-4">
-            <span className="text-xs customer-text-muted">PhÆ°Æ¡ng thá»©c thanh toÃ¡n:</span>
-            <div className="flex gap-2">
-              <CreditCard className="h-6 w-6 customer-text-muted" />
-              <Smartphone className="h-6 w-6 customer-text-muted" />
-            </div>
-          </div>
+        <div className="mt-10 border-t pt-6 customer-border">
+          <p className="text-sm customer-text-muted">© 2026 TicketRush. Bảo lưu mọi quyền.</p>
         </div>
       </Container>
     </footer>
-  );
+  )
 }

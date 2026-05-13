@@ -47,7 +47,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-on-background">
+    <main className="app-theme-page min-h-screen text-on-background">
       <section className="relative h-[480px] md:h-[480px] overflow-hidden border-b border-white/10">
         {heroEvent ? (
           <>

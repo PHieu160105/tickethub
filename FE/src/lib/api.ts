@@ -24,6 +24,7 @@ import type {
   QueueStatusResponse,
   RevenuePoint,
   SeatMatrixResponse,
+  ShowSeatPolygonItem,
   TicketItem,
   VenuePolygonItem,
   VenueDetail,
@@ -36,6 +37,7 @@ import type {
   HelpMessage,
   HelpThread,
   SearchSuggestionItem,
+  SiteSettings,
 } from '../types'
 
 const apiBaseURL = API_BASE_URL
@@ -53,6 +55,16 @@ type ApiValidationError = {
 type ApiErrorBody = {
   detail?: string | ApiValidationError[] | Record<string, unknown>
   message?: string
+}
+type VenueSeatSyncResponse = {
+  created: Array<{ client_id: number; id: number; label: string; x: number | null; y: number | null }>
+  updated_ids: number[]
+  deleted_ids: number[]
+}
+type EventSeatSyncResponse = {
+  created: Array<{ client_id: number; id: number; seat_label: string; x: number | null; y: number | null }>
+  updated_ids: number[]
+  deleted_ids: number[]
 }
 
 function isRetryableError(error: unknown): boolean {
@@ -142,7 +154,7 @@ export const authApi = {
 }
 
 export const eventApi = {
-  async list(params?: { search?: string; category?: string; start_from?: string; end_to?: string }) {
+  async list(params?: { search?: string; category?: string; start_from?: string; end_to?: string; limit?: number; offset?: number }) {
     return withRetry(() => api.get<EventCard[]>('/events', { params }))
   },
   async detail(eventKey: string) {
@@ -209,7 +221,7 @@ export const bookingApi = {
     })
     return response.data
   },
-  async myTickets(params?: { search?: string; start_from?: string; end_to?: string }) {
+  async myTickets(params?: { search?: string; start_from?: string; end_to?: string; limit?: number; offset?: number }) {
     return withRetry(() => api.get<TicketItem[]>('/bookings/my-tickets', { params }))
   },
   async cancelTicket(ticketId: number) {
@@ -424,6 +436,18 @@ export const adminApi = {
     const response = await api.patch<VenueSeatItem>(`/admin/seats/${seatId}`, payload)
     return response.data
   },
+  async syncVenueSeats(
+    venueId: number,
+    payload: {
+      layout_id?: number | null
+      create: Array<{ client_id: number; label: string; x: number; y: number; rotation: number; section_id: number | null; is_admin_locked: boolean }>
+      update: Array<{ id: number; label: string; x: number; y: number; rotation: number; section_id: number | null; is_admin_locked: boolean }>
+      delete_ids: number[]
+    },
+  ) {
+    const response = await api.post<VenueSeatSyncResponse>(`/admin/venues/${venueId}/seats/sync`, payload)
+    return response.data
+  },
   async deleteVenueSeat(seatId: number) {
     const response = await api.delete<ApiMessage>(`/admin/seats/${seatId}`)
     return response.data
@@ -456,16 +480,52 @@ export const adminApi = {
   async getShowZones(eventKey: string | number, showId: number) {
     return withRetry(() => api.get<SeatZone[]>(`/admin/events/${eventKey}/shows/${showId}/zones`))
   },
-  async createZone(eventKey: string | number, showId: number, payload: Omit<SeatZone, 'id'>) {
+  async createZone(
+    eventKey: string | number,
+    showId: number,
+    payload: Omit<SeatZone, 'id'> & { generate_seats?: boolean },
+  ) {
     const response = await api.post<SeatZone>(`/admin/events/${eventKey}/shows/${showId}/zones`, payload)
     return response.data
   },
-  async updateZone(eventKey: string | number, showId: number, zoneId: number, payload: Omit<SeatZone, 'id'>) {
+  async createInitialZone(
+    eventKey: string | number,
+    showId: number,
+    payload: Omit<SeatZone, 'id'>,
+  ) {
+    const response = await api.post<SeatZone>(`/admin/events/${eventKey}/shows/${showId}/zones/initial`, payload)
+    return response.data
+  },
+  async updateZone(
+    eventKey: string | number,
+    showId: number,
+    zoneId: number,
+    payload: Omit<SeatZone, 'id'> & { regenerate_seats?: boolean },
+  ) {
     const response = await api.patch<SeatZone>(`/admin/events/${eventKey}/shows/${showId}/zones/${zoneId}`, payload)
     return response.data
   },
   async deleteZone(eventKey: string | number, showId: number, zoneId: number) {
     const response = await api.delete(`/admin/events/${eventKey}/shows/${showId}/zones/${zoneId}`)
+    return response.data
+  },
+  async createShowPolygon(
+    eventKey: string | number,
+    showId: number,
+    payload: { zone_id?: number | null; label?: string | null; points: Array<{ x: number; y: number }> },
+  ) {
+    const response = await api.post<ShowSeatPolygonItem>(`/admin/events/${eventKey}/shows/${showId}/polygons`, payload)
+    return response.data
+  },
+  async updateShowPolygon(
+    polygonId: number,
+    payload: Partial<{ zone_id: number | null; label: string | null; points: Array<{ x: number; y: number }> }>,
+  ) {
+    const response = await api.patch<ShowSeatPolygonItem>(`/admin/show-polygons/${polygonId}`, payload)
+    return response.data
+  },
+  async deleteShowPolygon(polygonId: number) {
+    const response = await api.delete<ApiMessage>(`/admin/show-polygons/${polygonId}`)
     return response.data
   },
   async createEventSeatSingle(
@@ -505,8 +565,33 @@ export const adminApi = {
     const response = await api.patch(`/admin/events/${eventKey}/shows/${showId}/seats/${seatId}`, payload)
     return response.data
   },
+  async syncEventSeats(
+    eventKey: string | number,
+    showId: number,
+    payload: {
+      create: Array<{ client_id: number; seat_label: string; x: number; y: number; rotation: number; zone_id: number | null; section_id: number | null; price: number | null; is_admin_locked: boolean }>
+      update: Array<{ id: number; seat_label: string; x: number; y: number; rotation: number; zone_id: number | null; section_id: number | null; price: number | null; is_admin_locked: boolean }>
+      delete_ids: number[]
+    },
+  ) {
+    const response = await api.post<EventSeatSyncResponse>(`/admin/events/${eventKey}/shows/${showId}/seats/sync`, payload)
+    return response.data
+  },
   async deleteEventSeat(eventKey: string | number, showId: number, seatId: number) {
     const response = await api.delete<ApiMessage>(`/admin/events/${eventKey}/shows/${showId}/seats/${seatId}`)
+    return response.data
+  },
+}
+
+export const siteSettingsApi = {
+  async public() {
+    return withRetry(() => api.get<SiteSettings>('/settings/site'))
+  },
+  async admin() {
+    return withRetry(() => api.get<SiteSettings>('/admin/settings/site'))
+  },
+  async update(payload: SiteSettings) {
+    const response = await api.put<SiteSettings>('/admin/settings/site', payload)
     return response.data
   },
 }

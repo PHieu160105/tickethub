@@ -39,22 +39,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white font-body selection:bg-primary-container selection:text-on-primary-container overflow-x-hidden relative">
-      {/* Star Field Background */}
-      <div className="fixed inset-0 opacity-30 pointer-events-none animate-float-slow"
-           style={{
-             backgroundImage: `
-               radial-gradient(2px 2px at 20px 30px, #eee, rgba(0,0,0,0)),
-               radial-gradient(2px 2px at 40px 70px, #fff, rgba(0,0,0,0)),
-               radial-gradient(2px 2px at 50px 160px, #ddd, rgba(0,0,0,0)),
-               radial-gradient(2px 2px at 90px 40px, #fff, rgba(0,0,0,0)),
-               radial-gradient(2px 2px at 130px 80px, #fff, rgba(0,0,0,0)),
-               radial-gradient(2px 2px at 160px 120px, #ddd, rgba(0,0,0,0))
-             `,
-             backgroundRepeat: 'repeat',
-             backgroundSize: '200px 200px'
-           }} />
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,_rgba(252,83,109,0.05)_0%,_transparent_70%)] pointer-events-none" />
+    <div className="app-theme-page min-h-screen text-white font-body selection:bg-primary-container selection:text-on-primary-container overflow-x-hidden relative">
 
       <main className="flex-grow flex items-center justify-center px-6 py-12 relative z-10">
         {/* Auth Container */}
@@ -230,13 +215,6 @@ export default function Login() {
       </footer>
       {/* Custom Animations Style */}
       <style>{`
-        @keyframes float-slow {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
-        }
-        .animate-float-slow {
-          animation: float-slow 6s ease-in-out infinite;
-        }
         @keyframes fade-in-up {
           0% {
             opacity: 0;

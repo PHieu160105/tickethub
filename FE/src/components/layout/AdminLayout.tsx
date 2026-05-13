@@ -147,7 +147,7 @@ export function AdminLayout({ title, actions }: AdminLayoutProps) {
   }
 
   return (
-    <div className="flex h-screen admin-bg-page admin-text-body">
+    <div className="app-theme-page flex h-screen admin-text-body">
       <div className="hidden md:block">
         <AdminSidebar />
       </div>
@@ -241,7 +241,7 @@ export function AdminLayout({ title, actions }: AdminLayoutProps) {
           </div>
         </header>
 
-        <div className="relative z-10 flex-1 overflow-y-auto p-4 admin-bg-page md:p-6">
+        <div className="relative z-10 flex-1 overflow-y-auto p-4 md:p-6">
           <Container size="xl" className="relative z-10 animate-in fade-in duration-300">
             <Outlet />
           </Container>

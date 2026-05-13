@@ -1,31 +1,38 @@
 import { CheckCircle2, Clock3, Lock } from 'lucide-react'
 
-import type { SeatZone } from '@/types'
+import type { SeatMapZone, SeatZone } from '@/types'
 
 interface SeatMapLegendProps {
-  zones?: SeatZone[]
+  zones?: Array<SeatZone | SeatMapZone>
 }
 
 const stateItems = [
   {
-    key: 'selected',
-    label: 'Selected',
-    description: 'Blue ring',
-    className: 'border-sky-300 bg-sky-500 text-slate-950',
+    key: 'available',
+    label: 'Available',
+    description: 'Zone-colored seat',
+    className: 'border-slate-300 bg-slate-100 text-slate-900',
     icon: CheckCircle2,
   },
   {
     key: 'held',
     label: 'Held By You',
-    description: 'Purple ring',
-    className: 'border-violet-300/60 bg-violet-500/20 text-violet-100',
+    description: 'Green seat',
+    className: 'border-emerald-300/70 bg-emerald-700 text-emerald-50',
     icon: Clock3,
   },
   {
     key: 'locked',
-    label: 'Locked / Sold',
-    description: 'Dimmed seat',
-    className: 'border-amber-400/30 bg-slate-800 text-slate-300',
+    label: 'Locked',
+    description: 'Held by another customer',
+    className: 'border-amber-300/70 bg-amber-900 text-amber-100',
+    icon: Lock,
+  },
+  {
+    key: 'sold',
+    label: 'Sold',
+    description: 'No longer purchasable',
+    className: 'border-slate-500 bg-slate-700 text-slate-100',
     icon: Lock,
   },
 ]
@@ -48,7 +55,7 @@ export function SeatMapLegend({ zones = [] }: SeatMapLegendProps) {
                   <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">{zone.code}</p>
                 </div>
               </div>
-              <p className="text-sm font-semibold text-slate-200">${Number(zone.price).toFixed(2)}</p>
+              <p className="text-sm font-semibold text-slate-200">{Number(zone.price).toLocaleString('vi-VN')}đ</p>
             </div>
           ))}
         </div>

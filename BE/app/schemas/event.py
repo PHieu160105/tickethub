@@ -17,6 +17,7 @@ class SeatZoneCreate(BaseModel):
     seats_per_row: int = Field(ge=1, le=60)
     price: Decimal = Field(gt=0)
     color: str = Field(default="#024ddf", max_length=20)
+    generate_seats: bool = True
 
 
 class SeatZoneUpdate(BaseModel):
@@ -28,6 +29,7 @@ class SeatZoneUpdate(BaseModel):
     seats_per_row: int = Field(ge=1, le=60)
     price: Decimal = Field(gt=0)
     color: str = Field(default="#024ddf", max_length=20)
+    regenerate_seats: bool = False
 
 
 class EventCreateRequest(BaseModel):
@@ -86,8 +88,6 @@ class ShowCreateRequest(BaseModel):
             if self.venue_id is None:
                 raise ValueError("venue_id is required when venue_layout_id is provided")
             return self
-        if not self.zones:
-            raise ValueError("zones is required when venue_layout_id is not provided")
         return self
 
 
@@ -298,6 +298,78 @@ class SeatUpdateRequest(BaseModel):
 class SeatBulkCreateResponse(BaseModel):
     created_count: int
     seats: list[SeatCreateResponse]
+
+
+class SeatSyncCreateItem(BaseModel):
+    client_id: int = Field(lt=0)
+    seat_label: str = Field(min_length=1, max_length=100)
+    x: float = Field(ge=0.0, le=100.0)
+    y: float = Field(ge=0.0, le=100.0)
+    rotation: float = Field(default=0.0, ge=0.0, le=360.0)
+    zone_id: int | None = None
+    section_id: int | None = None
+    price: Decimal | None = None
+    is_admin_locked: bool = False
+
+
+class SeatSyncUpdateItem(BaseModel):
+    id: int = Field(ge=1)
+    seat_label: str = Field(min_length=1, max_length=100)
+    x: float = Field(ge=0.0, le=100.0)
+    y: float = Field(ge=0.0, le=100.0)
+    rotation: float = Field(default=0.0, ge=0.0, le=360.0)
+    zone_id: int | None = None
+    section_id: int | None = None
+    price: Decimal | None = None
+    is_admin_locked: bool = False
+
+
+class SeatSyncRequest(BaseModel):
+    create: list[SeatSyncCreateItem] = Field(default_factory=list)
+    update: list[SeatSyncUpdateItem] = Field(default_factory=list)
+    delete_ids: list[int] = Field(default_factory=list)
+
+
+class SeatSyncCreatedItem(BaseModel):
+    client_id: int
+    id: int
+    seat_label: str
+    x: float | None
+    y: float | None
+
+
+class SeatSyncResponse(BaseModel):
+    created: list[SeatSyncCreatedItem]
+    updated_ids: list[int]
+    deleted_ids: list[int]
+
+
+class ShowPolygonPoint(BaseModel):
+    x: float = Field(ge=0.0, le=100.0)
+    y: float = Field(ge=0.0, le=100.0)
+
+
+class ShowPolygonCreateRequest(BaseModel):
+    zone_id: int | None = None
+    label: str | None = Field(default=None, max_length=100)
+    points: list[ShowPolygonPoint] = Field(min_length=3)
+
+
+class ShowPolygonUpdateRequest(BaseModel):
+    zone_id: int | None = None
+    label: str | None = Field(default=None, max_length=100)
+    points: list[ShowPolygonPoint] | None = Field(default=None, min_length=3)
+
+
+class ShowPolygonResponse(BaseModel):
+    id: int
+    show_id: int
+    zone_id: int | None
+    zone_name: str | None = None
+    label: str | None
+    points: list[ShowPolygonPoint]
+    created_at: datetime
+    updated_at: datetime
 
 
 ShowDetailResponse.model_rebuild()

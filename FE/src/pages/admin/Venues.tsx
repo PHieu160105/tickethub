@@ -300,21 +300,6 @@ export default function AdminVenues() {
         return Number((Math.round(value / SNAP_STEP) * SNAP_STEP).toFixed(2))
     }
 
-    async function persistSeatPositions(seatsToPersist: VenueSeatItem[]) {
-        await Promise.all(
-            seatsToPersist.map((seat) =>
-                adminApi.updateVenueSeat(seat.id, {
-                    x: seat.x ?? 0,
-                    y: seat.y ?? 0,
-                    rotation: seat.rotation,
-                    section_id: seat.section_id,
-                    label: seat.label,
-                    is_admin_locked: seat.is_admin_locked,
-                }),
-            ),
-        )
-    }
-
     async function loadVenues(nextSelectedId?: number | null) {
         setLoading(true)
         setError(null)
@@ -1454,27 +1439,31 @@ export default function AdminVenues() {
                 )
             })
 
-            const createdSeatPairs = await Promise.all(
-                newSeats.map(async (seat) => {
-                    const created = await adminApi.createVenueSeatSingle(selectedVenueId, {
-                        layout_id: selectedLayoutId,
+            const seatSyncResult = (newSeats.length > 0 || changedSeats.length > 0 || pendingDeletedSeatIds.length > 0)
+                ? await adminApi.syncVenueSeats(selectedVenueId, {
+                    layout_id: selectedLayoutId,
+                    create: newSeats.map((seat) => ({
+                        client_id: seat.id,
                         label: seat.label,
                         section_id: seat.section_id,
                         x: seat.x ?? 0,
                         y: seat.y ?? 0,
                         rotation: seat.rotation,
                         is_admin_locked: seat.is_admin_locked,
-                    })
-                    return [seat.id, created] as const
-                }),
-            )
-            const createdSeatMap = new Map(createdSeatPairs)
-            if (changedSeats.length > 0) {
-                await persistSeatPositions(changedSeats)
-            }
-            if (pendingDeletedSeatIds.length > 0) {
-                await Promise.all(pendingDeletedSeatIds.map((seatId) => adminApi.deleteVenueSeat(seatId)))
-            }
+                    })),
+                    update: changedSeats.map((seat) => ({
+                        id: seat.id,
+                        label: seat.label,
+                        section_id: seat.section_id,
+                        x: seat.x ?? 0,
+                        y: seat.y ?? 0,
+                        rotation: seat.rotation,
+                        is_admin_locked: seat.is_admin_locked,
+                    })),
+                    delete_ids: pendingDeletedSeatIds,
+                })
+                : null
+            const createdSeatMap = new Map((seatSyncResult?.created ?? []).map((seat) => [seat.client_id, seat]))
             const createdPolygonPairs = await Promise.all(
                 newPolygons.map(async (polygon) => {
                     const created = await adminApi.createVenuePolygon(selectedVenueId, {
@@ -1504,7 +1493,18 @@ export default function AdminVenues() {
 
             const finalSeats = venueSeats
                 .filter((seat) => !pendingDeletedSeatIds.includes(seat.id))
-                .map((seat) => createdSeatMap.get(seat.id) ?? seat)
+                .map((seat) => {
+                    const created = createdSeatMap.get(seat.id)
+                    return created
+                        ? {
+                            ...seat,
+                            id: created.id,
+                            label: created.label,
+                            x: created.x,
+                            y: created.y,
+                        }
+                        : seat
+                })
             const finalPolygons = venuePolygons
                 .filter((polygon) => !pendingDeletedPolygonIds.includes(polygon.id))
                 .map((polygon) => createdPolygonMap.get(polygon.id) ?? polygon)

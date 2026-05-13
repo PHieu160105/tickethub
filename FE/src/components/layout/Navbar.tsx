@@ -90,7 +90,10 @@ export function Navbar() {
 
     const loadNotifications = async () => {
       try {
-        const [tickets, events] = await Promise.all([bookingApi.myTickets(), eventApi.list()])
+        const [tickets, events] = await Promise.all([
+          bookingApi.myTickets({ limit: 8 }),
+          eventApi.list({ limit: 8 }),
+        ])
         if (!isMounted) return
 
         const now = new Date()

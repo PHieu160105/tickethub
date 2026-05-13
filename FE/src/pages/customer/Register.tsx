@@ -90,15 +90,7 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] flex flex-col relative overflow-hidden">
-      {/* Star Field Background */}
-      <div className="fixed inset-0 opacity-30 pointer-events-none animate-float-slow"
-        style={{
-          backgroundImage: `radial-gradient(2px 2px at 20px 30px, #eee, rgba(0,0,0,0)), radial-gradient(2px 2px at 40px 70px, #fff, rgba(0,0,0,0)), radial-gradient(2px 2px at 50px 160px, #ddd, rgba(0,0,0,0)), radial-gradient(2px 2px at 90px 40px, #fff, rgba(0,0,0,0)), radial-gradient(2px 2px at 130px 80px, #fff, rgba(0,0,0,0)), radial-gradient(2px 2px at 160px 120px, #ddd, rgba(0,0,0,0))`,
-          backgroundRepeat: 'repeat',
-          backgroundSize: '200px 200px'
-        }} 
-      />
+    <div className="app-theme-page min-h-screen flex flex-col relative overflow-hidden">
 
       <main className="flex-grow flex items-center justify-center px-6 py-12 relative z-10">
         {/* Auth Container */}
@@ -402,13 +394,6 @@ export default function Register() {
 
       {/* Custom Animations Style */}
       <style>{`
-        @keyframes float-slow {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
-        }
-        .animate-float-slow {
-          animation: float-slow 6s ease-in-out infinite;
-        }
         @keyframes fade-in-up {
           0% {
             opacity: 0;

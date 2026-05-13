@@ -13,6 +13,15 @@ export interface User {
   age: number
 }
 
+export interface SiteSettings {
+  site_name: string
+  contact_email: string
+  contact_phone: string
+  website: string
+  address: string
+  description: string
+}
+
 export interface AuthResponse {
   access_token: string
   token_type: string
@@ -197,6 +206,14 @@ export interface SeatMapSection {
   price_base: number
 }
 
+export interface SeatMapZone {
+  id: number
+  name: string
+  code: string
+  color: string
+  price: number
+}
+
 export interface SeatMapBackground {
   source: string | null
   type: 'svg' | 'raster' | 'unknown' | null
@@ -211,6 +228,8 @@ export interface SeatMapPolygonPoint {
 
 export interface SeatMapPolygon {
   id: number
+  zone_id: number | null
+  zone_name: string | null
   section_id: number | null
   section_name: string | null
   label: string | null
@@ -223,6 +242,8 @@ export interface SeatMapSeat {
   x: number | null
   y: number | null
   rotation: number
+  zone_id: number | null
+  zone_name: string | null
   section_id: number | null
   section_name: string | null
   price: number
@@ -230,6 +251,12 @@ export interface SeatMapSeat {
   lock_expires_at: string | null
   is_locked_by_me: boolean
   is_admin_locked: boolean
+}
+
+export interface ShowSeatPolygonItem extends SeatMapPolygon {
+  show_id: number
+  created_at: string
+  updated_at: string
 }
 
 export interface SeatMapResponse {
@@ -241,6 +268,7 @@ export interface SeatMapResponse {
   venue_name: string
   queue_enabled: boolean
   background: SeatMapBackground | null
+  zones: SeatMapZone[]
   sections: SeatMapSection[]
   polygons: SeatMapPolygon[]
   seats: SeatMapSeat[]

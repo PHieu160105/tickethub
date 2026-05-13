@@ -1,7 +1,7 @@
 """ORM model package exports."""
 
 from app.models.base import Base
-from app.models.event import Event, SeatZone, Show
+from app.models.event import Event, SeatZone, Show, ShowPolygon
 from app.models.help import HelpMessage, HelpThread
 from app.models.order import Order, OrderItem, Ticket, TicketCancellation
 from app.models.queue import QueueEntry
@@ -15,6 +15,7 @@ __all__ = [
     "Event",
     "Show",
     "SeatZone",
+    "ShowPolygon",
     "HelpThread",
     "HelpMessage",
     "Seat",

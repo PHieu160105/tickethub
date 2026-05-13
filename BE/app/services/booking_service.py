@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.cache import public_api_cache, show_seat_cache_namespace
+from app.core.cache import public_api_cache, show_seat_cache_namespace, user_ticket_cache_namespace
 from app.core.search import build_ilike_pattern
 from app.models.enums import OrderStatus, SeatStatus
 from app.models.event import Event, SeatZone, Show
@@ -223,14 +223,15 @@ async def checkout_locked_seats(
         session.add(order)
         await session.flush()
 
-        for seat in valid_seats:
-            order_item = OrderItem(order_id=order.id, seat_id=seat.id, price=seat.price)
-            session.add(order_item)
-            await session.flush()
+        order_items = [OrderItem(order_id=order.id, seat_id=seat.id, price=seat.price) for seat in valid_seats]
+        session.add_all(order_items)
+        await session.flush()
 
+        tickets: list[Ticket] = []
+        for seat, order_item in zip(valid_seats, order_items, strict=False):
             ticket_code = f"TR-{now.strftime('%Y%m%d')}-{uuid4().hex[:12].upper()}"
             qr_payload = f"ticketrush://ticket/{ticket_code}"
-            session.add(
+            tickets.append(
                 Ticket(
                     order_item_id=order_item.id,
                     ticket_code=ticket_code,
@@ -262,6 +263,8 @@ async def checkout_locked_seats(
                 }
             )
 
+        session.add_all(tickets)
+
         await mark_queue_completed(session, show_id=show_id, user_id=user_id, queue_token=queue_token)
         await session.commit()
     except Exception:
@@ -271,6 +274,7 @@ async def checkout_locked_seats(
     if changed_seats:
         await public_api_cache.invalidate_namespace(show_seat_cache_namespace(show_id))
         await seat_ws_manager.broadcast_seat_changes(show_id=show_id, payload=changed_seats)
+    await public_api_cache.invalidate_namespace(user_ticket_cache_namespace(user_id))
 
     return CheckoutResponse(
         order_id=order.id,
@@ -461,6 +465,7 @@ async def cancel_ticket(session: AsyncSession, user_id: int, ticket_id: int) -> 
         await session.rollback()
         raise
 
+    await public_api_cache.invalidate_namespace(user_ticket_cache_namespace(user_id))
     await seat_ws_manager.broadcast_seat_changes(show_id=seat.show_id or 0, payload=[changed_seat])
     await public_api_cache.invalidate_namespace(show_seat_cache_namespace(seat.show_id or 0))
 

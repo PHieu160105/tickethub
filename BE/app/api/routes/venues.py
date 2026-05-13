@@ -32,6 +32,9 @@ from app.schemas.venue import (
     VenueListResponse,
     VenueSeatResponse,
     VenueSeatSingleCreateRequest,
+    VenueSeatSyncCreatedItem,
+    VenueSeatSyncRequest,
+    VenueSeatSyncResponse,
     VenueSeatUpdateRequest,
     VenueUpdateRequest,
 )
@@ -130,6 +133,17 @@ def _apply_admin_lock_state(seat: Seat, is_admin_locked: bool) -> None:
     if seat.status == SeatStatus.LOCKED and seat.locked_by_user_id is None:
         seat.status = SeatStatus.AVAILABLE
         seat.lock_expires_at = None
+
+
+def _validate_unique_ids(values: list[int], detail: str) -> None:
+    if len(values) != len(set(values)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+
+def _validate_unique_labels(values: list[str], detail: str) -> None:
+    lowered = [value.strip().lower() for value in values]
+    if len(lowered) != len(set(lowered)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
 def _generate_bulk_layout_seats(
@@ -760,6 +774,123 @@ async def create_venue_seat_bulk(
         created_count=len(created_seats),
         seats=created_seats,
     )
+
+
+@router.post("/{venue_id}/seats/sync", response_model=VenueSeatSyncResponse)
+async def sync_venue_seats(
+    venue_id: int,
+    payload: VenueSeatSyncRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _: User = Depends(get_current_active_admin),
+) -> VenueSeatSyncResponse:
+    """Synchronize many template seat changes for one venue layout in a single transaction."""
+
+    await _get_venue_or_404(session, venue_id)
+    layout = await _resolve_layout_for_venue(session, venue_id, payload.layout_id)
+    sections = list(await session.scalars(select(Section).where(Section.venue_layout_id == layout.id)))
+    section_map = {section.id: section for section in sections}
+    existing_seats = list(
+        await session.scalars(
+            select(Seat)
+            .where(Seat.venue_layout_id == layout.id, Seat.show_id.is_(None))
+            .order_by(Seat.id.asc())
+        )
+    )
+    seat_map = {seat.id: seat for seat in existing_seats}
+
+    update_ids = [item.id for item in payload.update]
+    delete_ids = list(payload.delete_ids)
+    client_ids = [item.client_id for item in payload.create]
+
+    _validate_unique_ids(update_ids, "Duplicate seat ids in update payload")
+    _validate_unique_ids(delete_ids, "Duplicate seat ids in delete payload")
+    _validate_unique_ids(client_ids, "Duplicate client ids in create payload")
+
+    delete_id_set = set(delete_ids)
+    if delete_id_set.intersection(update_ids):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A seat cannot be updated and deleted in the same request")
+
+    if any(seat_id not in seat_map for seat_id in update_ids):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template seat not found")
+    if any(seat_id not in seat_map for seat_id in delete_ids):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template seat not found")
+
+    invalid_section = next(
+        (
+            item.section_id
+            for item in [*payload.create, *payload.update]
+            if item.section_id is not None and item.section_id not in section_map
+        ),
+        None,
+    )
+    if invalid_section is not None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Section not found for this layout")
+
+    final_labels: list[str] = []
+    update_map = {item.id: item for item in payload.update}
+    for seat in existing_seats:
+        if seat.id in delete_id_set:
+            continue
+        candidate = update_map.get(seat.id)
+        final_labels.append(candidate.label if candidate else seat.seat_label)
+    final_labels.extend(item.label for item in payload.create)
+    _validate_unique_labels(final_labels, "Seat label already exists for this layout")
+
+    created_pairs: list[tuple[int, Seat]] = []
+    try:
+        for item in payload.update:
+            seat = seat_map[item.id]
+            seat.seat_label = item.label
+            seat.x_coord = round(item.x, 2)
+            seat.y_coord = round(item.y, 2)
+            seat.rotation = round(item.rotation, 2)
+            seat.section_id = item.section_id
+            _apply_admin_lock_state(seat, item.is_admin_locked)
+
+        for item in payload.create:
+            seat = Seat(
+                event_id=None,
+                zone_id=None,
+                row_index=0,
+                row_label="",
+                seat_number=0,
+                seat_label=item.label,
+                price=0,
+                status=SeatStatus.LOCKED if item.is_admin_locked else SeatStatus.AVAILABLE,
+                x_coord=round(item.x, 2),
+                y_coord=round(item.y, 2),
+                rotation=round(item.rotation, 2),
+                section_id=item.section_id,
+                venue_layout_id=layout.id,
+                is_admin_locked=item.is_admin_locked,
+            )
+            session.add(seat)
+            created_pairs.append((item.client_id, seat))
+
+        for seat_id in delete_ids:
+            await session.delete(seat_map[seat_id])
+
+        await session.flush()
+        response = VenueSeatSyncResponse(
+            created=[
+                VenueSeatSyncCreatedItem(
+                    client_id=client_id,
+                    id=seat.id,
+                    label=seat.seat_label,
+                    x=float(seat.x_coord) if seat.x_coord is not None else None,
+                    y=float(seat.y_coord) if seat.y_coord is not None else None,
+                )
+                for client_id, seat in created_pairs
+            ],
+            updated_ids=update_ids,
+            deleted_ids=delete_ids,
+        )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+    return response
 
 
 # ── Venue Builder: Polygons ──

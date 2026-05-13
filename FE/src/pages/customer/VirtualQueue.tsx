@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
-import { Navbar } from '@/components/layout/Navbar'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
 import { queueApi } from '@/features/booking/api/queueApi'
@@ -139,9 +138,7 @@ export default function VirtualQueue() {
   }, [eventKey, isAuthenticated, navigate, showId, status])
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <Navbar />
-
+    <div className="min-h-screen text-white">
       <main className="max-w-3xl mx-auto px-6 py-20">
         <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-8 space-y-6">
           <div>

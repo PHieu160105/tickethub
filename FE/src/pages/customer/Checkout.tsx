@@ -2,8 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useAuth } from '@/context/AuthContext'
-import { Navbar } from '@/components/layout/Navbar'
-import { Footer } from '@/components/layout/Footer'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useCheckout, useReleaseSeats } from '@/features/booking/hooks/useBooking'
@@ -15,6 +13,7 @@ import { AlertCircle, CreditCard, MapPin, QrCode, Rocket, Timer } from 'lucide-r
 
 interface CheckoutLocationState {
   lockedSeatIds?: number[]
+  lockedSeats?: Seat[]
 }
 
 export default function Checkout() {
@@ -29,7 +28,6 @@ export default function Checkout() {
   const eventKey = searchParams.get('eventKey') ?? undefined
   const state = (location.state ?? {}) as CheckoutLocationState
 
-  const [termsAccepted, setTermsAccepted] = useState(false)
   const [formData, setFormData] = useState({
     fullName: user?.full_name ?? '',
     email: user?.email ?? '',
@@ -39,13 +37,19 @@ export default function Checkout() {
   const [selectedDiscountCode, setSelectedDiscountCode] = useState<string>('')
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
 
-  const { seats: matrix } = useShowSeats(showId)
+  const stateLockedSeats = useMemo(() => state.lockedSeats ?? [], [state.lockedSeats])
+  const shouldFetchMatrix = !stateLockedSeats.length
+  const { seats: matrix } = useShowSeats(shouldFetchMatrix ? showId : undefined)
   const checkoutCompletedRef = useRef(false)
   const locksReleasedRef = useRef(false)
   const latestShowIdRef = useRef<number | null>(null)
   const latestLockedSeatIdsRef = useRef<number[]>([])
 
   const lockedSeats = useMemo(() => {
+    if (stateLockedSeats.length > 0) {
+      return stateLockedSeats
+    }
+
     const allSeats = matrix?.seats ?? []
 
     if (state.lockedSeatIds && state.lockedSeatIds.length > 0) {
@@ -53,7 +57,7 @@ export default function Checkout() {
     }
 
     return allSeats.filter((seat) => seat.is_locked_by_me)
-  }, [matrix?.seats, state.lockedSeatIds])
+  }, [matrix?.seats, state.lockedSeatIds, stateLockedSeats])
 
   const subtotal = lockedSeats.reduce((sum, seat) => sum + Number(seat.price), 0)
   const total = subtotal
@@ -69,6 +73,14 @@ export default function Checkout() {
   const countdownLabel = remainingSeconds === null
     ? '--:--'
     : `${String(Math.floor(remainingSeconds / 60)).padStart(2, '0')}:${String(remainingSeconds % 60).padStart(2, '0')}`
+  const isProfileComplete = useMemo(() => {
+    return (
+      formData.fullName.trim().length > 0 &&
+      formData.email.trim().length > 0 &&
+      formData.phone.trim().length > 0
+    )
+  }, [formData.email, formData.fullName, formData.phone])
+  const isCheckoutDisabled = lockedSeats.length === 0 || remainingSeconds === 0 || !isProfileComplete
 
   useEffect(() => {
     latestShowIdRef.current = Number.isNaN(showId) ? null : showId
@@ -138,8 +150,8 @@ export default function Checkout() {
       return
     }
 
-    if (!termsAccepted) {
-      setErrorMessage('Please accept terms before checkout.')
+    if (!formData.fullName.trim() || !formData.email.trim() || !formData.phone.trim()) {
+      setErrorMessage('Please fill in full name, email, and phone number before checkout.')
       return
     }
 
@@ -166,9 +178,7 @@ export default function Checkout() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white font-body">
-      <Navbar />
-
+    <div className="min-h-screen text-white font-body">
       <main className="max-w-screen-2xl mx-auto px-6 py-12">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
           <form className="lg:col-span-7 space-y-8" onSubmit={handleSubmit}>
@@ -213,19 +223,6 @@ export default function Checkout() {
               <p className="text-sm text-slate-400">This demo uses server-side checkout. No card info is processed.</p>
             </section>
 
-            <div className="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/5">
-              <input
-                className="mt-1 rounded bg-slate-800 border-white/10 text-primary focus:ring-primary"
-                id="terms"
-                type="checkbox"
-                checked={termsAccepted}
-                onChange={(e) => setTermsAccepted(e.target.checked)}
-              />
-              <label className="text-sm text-slate-400 leading-relaxed" htmlFor="terms">
-                I agree to the terms and confirm this purchase.
-              </label>
-            </div>
-
             {errorMessage && (
               <div className="flex items-center gap-2 text-sm text-amber-300">
                 <AlertCircle className="w-4 h-4" />
@@ -236,7 +233,7 @@ export default function Checkout() {
             <Button
               type="submit"
               className="w-full py-6 rounded-2xl bg-gradient-to-r from-primary to-primary-container text-on-primary-container font-headline font-black uppercase tracking-widest text-lg flex items-center justify-center gap-3"
-              disabled={!termsAccepted || lockedSeats.length === 0 || remainingSeconds === 0}
+              disabled={isCheckoutDisabled}
               isLoading={isSubmitting}
             >
               Complete Purchase
@@ -315,8 +312,6 @@ export default function Checkout() {
           </aside>
         </div>
       </main>
-
-      <Footer />
     </div>
   )
 }

@@ -201,6 +201,47 @@ class VenueSeatBulkCreateResponse(BaseModel):
     seats: list[VenueSeatResponse]
 
 
+class VenueSeatSyncCreateItem(BaseModel):
+    client_id: int = Field(lt=0)
+    label: str = Field(min_length=1, max_length=100)
+    x: float = Field(ge=0.0, le=100.0)
+    y: float = Field(ge=0.0, le=100.0)
+    rotation: float = Field(default=0.0, ge=0.0, le=360.0)
+    section_id: int | None = Field(default=None, ge=1)
+    is_admin_locked: bool = False
+
+
+class VenueSeatSyncUpdateItem(BaseModel):
+    id: int = Field(ge=1)
+    label: str = Field(min_length=1, max_length=100)
+    x: float = Field(ge=0.0, le=100.0)
+    y: float = Field(ge=0.0, le=100.0)
+    rotation: float = Field(default=0.0, ge=0.0, le=360.0)
+    section_id: int | None = Field(default=None, ge=1)
+    is_admin_locked: bool = False
+
+
+class VenueSeatSyncRequest(BaseModel):
+    layout_id: int | None = Field(default=None, ge=1)
+    create: list[VenueSeatSyncCreateItem] = Field(default_factory=list)
+    update: list[VenueSeatSyncUpdateItem] = Field(default_factory=list)
+    delete_ids: list[int] = Field(default_factory=list)
+
+
+class VenueSeatSyncCreatedItem(BaseModel):
+    client_id: int
+    id: int
+    label: str
+    x: float | None
+    y: float | None
+
+
+class VenueSeatSyncResponse(BaseModel):
+    created: list[VenueSeatSyncCreatedItem]
+    updated_ids: list[int]
+    deleted_ids: list[int]
+
+
 class PolygonCreateRequest(BaseModel):
     layout_id: int | None = Field(default=None, ge=1)
     section_id: int | None = Field(default=None, ge=1)

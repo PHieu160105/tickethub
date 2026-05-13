@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_customer
+from app.core.cache import public_api_cache, user_ticket_cache_namespace
 from app.core.db import get_db_session
 from app.core.rate_limit import rate_limit
 from app.models.user import User
@@ -86,7 +87,18 @@ async def my_tickets(
 ) -> list[MyTicketResponse]:
     """List current user's purchased e-tickets with QR payload."""
 
-    return await fetch_my_tickets(
+    cache_key = (
+        search or "",
+        start_from.isoformat() if start_from else "",
+        end_to.isoformat() if end_to else "",
+        limit,
+        offset,
+    )
+    cached = await public_api_cache.get(user_ticket_cache_namespace(current_user.id), cache_key)
+    if cached is not None and isinstance(cached, list):
+        return cached
+
+    response = await fetch_my_tickets(
         session,
         user_id=current_user.id,
         search=search,
@@ -95,6 +107,7 @@ async def my_tickets(
         limit=limit,
         offset=offset,
     )
+    return await public_api_cache.set(user_ticket_cache_namespace(current_user.id), cache_key, response, ttl_seconds=30)
 
 
 @router.delete("/my-tickets/{ticket_id}", response_model=APIMessage)

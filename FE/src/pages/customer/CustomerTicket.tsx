@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { CustomerSidebar } from '@/components/layout/CustomerSidebar'
-import { Navbar } from '@/components/layout/Navbar'
 //import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { TicketCard } from '@/components/ui/TicketCard'
 import { useAuth } from '@/context/AuthContext'
@@ -77,7 +76,6 @@ const CustomerTicket: React.FC = () => {
     if (tab === 'tickets') return navigate('/tickets')
     if (tab === 'profile') return navigate('/profile')
     if (tab === 'favourites') return navigate('/favourites') 
-    if (tab === 'payments') return navigate('/payments')  
     if (tab === "settings") return navigate('/settings') 
     if (tab === 'help') return navigate('/help')  
     if (tab === 'logout') {
@@ -111,9 +109,7 @@ const CustomerTicket: React.FC = () => {
   }
 
   return (
-    <>
-      <Navbar />
-      <div className="min-h-screen customer-bg-page flex">
+      <div className="app-theme-page pt-[35px] h-auto flex">
         <div className="hidden lg:block">
           <CustomerSidebar
             activeTab="tickets"
@@ -209,8 +205,6 @@ const CustomerTicket: React.FC = () => {
           {cancelError && <p className="text-amber-300 text-sm mt-4">{cancelError}</p>}
         </main>
       </div>
-
-    </>
   )
 }
 

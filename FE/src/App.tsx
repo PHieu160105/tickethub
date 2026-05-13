@@ -17,9 +17,9 @@ import ErrorPage from './pages/customer/Error'
 import VirtualQueue from './pages/customer/VirtualQueue'
 import Register from './pages/customer/Register'
 import Favourites from './pages/customer/Favourites'
-import Payments from './pages/customer/Payments'
 import Help from './pages/customer/Help'
 import CustomerSettings from './pages/customer/Setting'
+import InfoPage from './pages/customer/Info'
 import AdminDashboard from './pages/admin/Dashboard'
 import AdminEvents from './pages/admin/Events'
 import AdminVenues from './pages/admin/Venues'
@@ -74,13 +74,16 @@ function AppRoutes() {
           <Route path="profile" element={<CustomerProfile />} />
           <Route path="tickets" element={<CustomerTicket />} />
           <Route path="favourites" element={<Favourites />} />
-          <Route path="payments" element={<Payments />} />
+          <Route path="payments" element={<Navigate to="/settings" replace />} />
           <Route path="help" element={<Help />} />
+          <Route path="info" element={<InfoPage />} />
           <Route path="settings" element={<CustomerSettings />} />
           <Route path="search" element={<Search />} />
           <Route path="shows/:showId/seats" element={<SeatSelection />} />
           <Route path="*" element={<ErrorPage />} />
         </Route>
+
+        <Route path="/error" element={<ErrorPage />} />
 
         <Route
           path="/admin"

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-import { Navbar } from '@/components/layout/Navbar'
 import { Button } from '@/components/ui/Button'
 import { EventCard } from '@/components/ui/EventCard'
 //import { GlobalLoader } from '@/components/ui/GlobalLoader'
@@ -104,9 +103,7 @@ export default function Search() {
 
   return (
     <div className="min-h-screen text-white">
-      <Navbar />
-
-      <main className="customer-bg-page max-w-screen-2xl mx-auto px-6 py-12">
+      <main className="app-theme-page max-w-screen-2xl mx-auto px-6 py-12">
         <div className="mb-16 max-w-3xl mx-auto text-center">
           <h1 className="text-4xl md:text-5xl font-headline font-black tracking-tighter mb-6 customer-text-header">Tìm sự kiện</h1>
           <div className="relative group">

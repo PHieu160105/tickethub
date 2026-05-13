@@ -15,6 +15,18 @@ class SeatMapSectionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SeatMapZoneResponse(BaseModel):
+    """Zone metadata for one show's seat plan."""
+
+    id: int
+    code: str
+    name: str
+    color: str
+    price: float
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class SeatMapSeatResponse(BaseModel):
     """Seat with coordinates for map rendering."""
 
@@ -23,6 +35,8 @@ class SeatMapSeatResponse(BaseModel):
     x: float | None
     y: float | None
     rotation: float
+    zone_id: int | None = None
+    zone_name: str | None = None
     section_id: int | None
     section_name: str | None
     price: float
@@ -45,6 +59,8 @@ class SeatMapPolygonResponse(BaseModel):
     """Polygon overlay metadata for customer map rendering."""
 
     id: int
+    zone_id: int | None = None
+    zone_name: str | None = None
     section_id: int | None
     section_name: str | None
     label: str | None
@@ -75,6 +91,7 @@ class SeatMapResponse(BaseModel):
     venue_name: str
     queue_enabled: bool
     background: SeatMapBackgroundResponse | None = None
+    zones: list[SeatMapZoneResponse]
     sections: list[SeatMapSectionResponse]
     polygons: list[SeatMapPolygonResponse]
     seats: list[SeatMapSeatResponse]

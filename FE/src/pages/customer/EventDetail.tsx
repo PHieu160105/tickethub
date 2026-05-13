@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { Footer } from '@/components/layout/Footer'
-import { Navbar } from '@/components/layout/Navbar'
 import { Button } from '@/components/ui/Button'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { eventsApi } from '@/features/events/api/eventsApi'
@@ -43,6 +41,14 @@ export default function EventDetail() {
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [fav, setFav] = useState(false)
+  const [hasLoadedReviews, setHasLoadedReviews] = useState(false)
+
+  useEffect(() => {
+    setReviews([])
+    setReviewOffset(0)
+    setReviewError(null)
+    setHasLoadedReviews(false)
+  }, [eventKey])
 
   async function fetchReviews(nextOffset = 0, append = false) {
     if (!eventKey) return
@@ -60,10 +66,12 @@ export default function EventDetail() {
   }
 
   useEffect(() => {
-    if (eventKey) {
+    if (activeTab === 'reviews' && eventKey && !hasLoadedReviews) {
       void fetchReviews(0, false)
+      setHasLoadedReviews(true)
     }
-  }, [eventKey])
+  }, [activeTab, eventKey, hasLoadedReviews])
+
   useEffect(() => {
     if (!event) return
     setFav(isFavourite(user?.id, event.slug || event.id))
@@ -122,8 +130,7 @@ export default function EventDetail() {
 
   if (error || !event) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white">
-        <Navbar />
+      <div className="min-h-screen text-white">
         <main className="max-w-7xl mx-auto px-4 py-24 text-center">
           <h1 className="text-3xl font-bold mb-3">Event Not Found</h1>
           <p className="text-slate-400 mb-6">{error ?? 'This event does not exist or is unavailable.'}</p>
@@ -136,9 +143,7 @@ export default function EventDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <Navbar />
-
+    <div className="min-h-screen text-white">
       <section className="relative h-[340px] md:h-[420px] overflow-hidden">
         <img src={event.cover_image_url || FALLBACK_IMAGE} alt={event.title} className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-black/40" />
@@ -332,7 +337,6 @@ export default function EventDetail() {
         </aside>
       </main>
 
-      <Footer />
     </div>
   )
 }

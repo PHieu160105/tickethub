@@ -1,7 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
 
-import { Navbar } from '@/components/layout/Navbar'
-import { Footer } from '@/components/layout/Footer'
 import { Button } from '@/components/ui/Button'
 import type { CheckoutResponse, Seat } from '@/types'
 import { Calendar, CheckCircle, Download, MapPin, QrCode, Ticket } from 'lucide-react'
@@ -32,8 +30,7 @@ export default function Confirmation() {
 
   if (!order) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white">
-        <Navbar />
+      <div className="app-theme-page min-h-screen text-white">
         <main className="max-w-4xl mx-auto px-6 py-20 text-center">
           <h1 className="text-3xl font-bold mb-4">No confirmation data found</h1>
           <p className="text-slate-400 mb-6">Please complete checkout first.</p>
@@ -41,15 +38,12 @@ export default function Confirmation() {
             <Button>Back to Search</Button>
           </Link>
         </main>
-        <Footer />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white font-body">
-      <Navbar />
-
+    <div className="app-theme-page min-h-screen text-white font-body">
       <main className="max-w-screen-2xl mx-auto px-6 py-12">
         <div className="text-center mb-12">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/20 mb-6">
@@ -171,7 +165,6 @@ export default function Confirmation() {
         </div>
       </main>
 
-      <Footer />
     </div>
   )
 }

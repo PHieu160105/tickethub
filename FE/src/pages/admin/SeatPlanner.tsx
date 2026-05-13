@@ -1,13 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from 'react'
 import { Copy, FileUp, Hand, MapPin, MousePointer2, Plus, Redo2, RefreshCw, Save, Shapes, Ticket, Trash2, Undo2, Wand2 } from 'lucide-react'
-
-function computeCentroid(points: { x: number; y: number }[]) {
-    if (points.length === 0) return { x: 50, y: 50 }
-    return {
-        x: points.reduce((s, p) => s + p.x, 0) / points.length,
-        y: points.reduce((s, p) => s + p.y, 0) / points.length,
-    }
-}
 import { useParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/Button'
@@ -47,7 +39,35 @@ const DEFAULT_BULK_FORM = {
 
 const DEFAULT_POLYGON_FORM = {
     label: '',
-    section_id: '',
+    zone_id: '',
+}
+
+const DEFAULT_ZONE_FORM = {
+    code: '',
+    name: '',
+    row_count: '1',
+    seats_per_row: '1',
+    price: '0',
+    color: '#ef4444',
+}
+
+function computeCentroid(points: { x: number; y: number }[]) {
+    if (points.length === 0) return { x: 50, y: 50 }
+    return {
+        x: points.reduce((s, p) => s + p.x, 0) / points.length,
+        y: points.reduce((s, p) => s + p.y, 0) / points.length,
+    }
+}
+
+function zoneFormFromZone(zone: SeatZone) {
+    return {
+        code: zone.code,
+        name: zone.name,
+        row_count: String(zone.row_count),
+        seats_per_row: String(zone.seats_per_row),
+        price: String(zone.price),
+        color: zone.color,
+    }
 }
 
 function seatColor(seat: Pick<SeatMapSeat, 'status' | 'is_locked_by_me' | 'is_admin_locked'> | Pick<Seat, 'status' | 'is_locked_by_me' | 'is_admin_locked'>) {
@@ -106,6 +126,8 @@ export default function AdminSeatPlanner() {
     const [panStartOffset, setPanStartOffset] = useState<{ x: number; y: number } | null>(null)
     const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null)
     const [selectionCurrent, setSelectionCurrent] = useState<{ x: number; y: number } | null>(null)
+    const [zoneForm, setZoneForm] = useState(DEFAULT_ZONE_FORM)
+    const [editingZoneId, setEditingZoneId] = useState<number | null>(null)
     const [polygonForm, setPolygonForm] = useState(DEFAULT_POLYGON_FORM)
     const [editingPolygonId, setEditingPolygonId] = useState<number | null>(null)
     const [draftPolygonPoints, setDraftPolygonPoints] = useState<Array<{ x: number; y: number }>>([])
@@ -124,10 +146,20 @@ export default function AdminSeatPlanner() {
         () => zones.find((zone) => zone.id === selectedZoneId) ?? zones[0] ?? null,
         [zones, selectedZoneId],
     )
-    const seatZoneMap = useMemo(() => new Map(matrix?.seats.map((seat) => [seat.id, seat.zone_id]) ?? []), [matrix?.seats])
+    const seatZoneMap = useMemo(() => new Map(seatMap?.seats.map((seat) => [seat.id, seat.zone_id]) ?? []), [seatMap?.seats])
     const zoneMap = useMemo(() => new Map(zones.map((zone) => [zone.id, zone])), [zones])
+    const zoneSectionMap = useMemo(() => {
+        const next = new Map<number, number>()
+        seatMap?.seats.forEach((seat) => {
+            if (seat.zone_id !== null && seat.section_id !== null && !next.has(seat.zone_id)) {
+                next.set(seat.zone_id, seat.section_id)
+            }
+        })
+        return next
+    }, [seatMap?.seats])
     const selectedSeat = useMemo(() => seatMap?.seats.find((seat) => seat.id === selectedSeatIds[0]) ?? null, [seatMap?.seats, selectedSeatIds])
-    const canEditPolygons = Boolean(showDetail?.venue_id && showDetail.venue_layout_id)
+    const canEditPolygons = zones.length > 0
+    const canCreateInitialZone = showDetail?.venue_layout_id == null
     const seatPositionMap = useMemo(() => {
         const next = new Map<number, { x: number; y: number }>()
         seatMap?.seats.forEach((seat) => {
@@ -211,7 +243,7 @@ export default function AdminSeatPlanner() {
     }
 
     function seatStyle(seat: SeatMapSeat) {
-        const zoneId = seatZoneMap.get(seat.id)
+        const zoneId = seat.zone_id ?? seatZoneMap.get(seat.id)
         const zoneColor = zoneId ? zoneMap.get(zoneId)?.color : undefined
         return {
             backgroundColor: seat.is_admin_locked ? undefined : (zoneColor ? `${zoneColor}cc` : undefined),
@@ -224,9 +256,25 @@ export default function AdminSeatPlanner() {
         setPlannerTool('polygon')
         setPolygonForm({
             label: polygon.label ?? '',
-            section_id: polygon.section_id ? String(polygon.section_id) : '',
+            zone_id: polygon.zone_id ? String(polygon.zone_id) : '',
         })
         setDraftPolygonPoints(polygon.points.map((point) => ({ x: point.x, y: point.y })))
+    }
+
+    function startEditZone(zone: SeatZone) {
+        setEditingZoneId(zone.id)
+        setSelectedZoneId(zone.id)
+        setZoneForm(zoneFormFromZone(zone))
+    }
+
+    function resetZoneForm(nextZoneId?: number | null) {
+        setEditingZoneId(null)
+        setZoneForm(DEFAULT_ZONE_FORM)
+        if (nextZoneId !== undefined) {
+            setSelectedZoneId(nextZoneId)
+            setSingleForm((previous) => ({ ...previous, zone_id: nextZoneId ? String(nextZoneId) : '' }))
+            setBulkForm((previous) => ({ ...previous, zone_id: nextZoneId ? String(nextZoneId) : '' }))
+        }
     }
 
     function cancelPolygonEditing() {
@@ -237,6 +285,114 @@ export default function AdminSeatPlanner() {
         setDragPolygonStartCursor(null)
         setDragPolygonStartPoints(null)
         setPolygonForm(DEFAULT_POLYGON_FORM)
+    }
+
+    async function handleSaveZone() {
+        if (!eventKey || !showId) return
+        if (!zoneForm.code.trim() || !zoneForm.name.trim()) {
+            pushNotice('error', 'Zone cần có code và tên.')
+            return
+        }
+        if (plannerDirty && !window.confirm('Lưu zone sẽ tải lại planner. Các thay đổi ghế chưa lưu sẽ bị mất. Tiếp tục?')) {
+            return
+        }
+
+        setBusySingle(true)
+        setError(null)
+        setMessage(null)
+        try {
+            const payload = {
+                code: zoneForm.code.trim(),
+                name: zoneForm.name.trim(),
+                row_count: Math.max(1, Number(zoneForm.row_count) || 1),
+                seats_per_row: Math.max(1, Number(zoneForm.seats_per_row) || 1),
+                price: Math.max(0, Number(zoneForm.price) || 0),
+                color: zoneForm.color.trim() || '#ef4444',
+            }
+            if (editingZoneId) {
+                await adminApi.updateZone(eventKey, showId, editingZoneId, { ...payload, regenerate_seats: false })
+                pushNotice('success', 'Đã cập nhật zone.')
+                await loadData()
+                setSelectedZoneId(editingZoneId)
+            } else {
+                const created = await adminApi.createZone(eventKey, showId, { ...payload, generate_seats: false })
+                pushNotice('success', 'Đã tạo zone mới.')
+                await loadData()
+                setSelectedZoneId(created.id)
+                setSingleForm((previous) => ({ ...previous, zone_id: String(created.id) }))
+                setBulkForm((previous) => ({ ...previous, zone_id: String(created.id) }))
+            }
+            resetZoneForm()
+        } catch (errorValue) {
+            pushNotice('error', extractApiErrorMessage(errorValue, 'Không thể lưu zone.'))
+        } finally {
+            setBusySingle(false)
+        }
+    }
+
+    async function handleCreateInitialZone() {
+        if (!eventKey || !showId) return
+        if (!zoneForm.code.trim() || !zoneForm.name.trim()) {
+            pushNotice('error', 'Zone cần có code và tên.')
+            return
+        }
+        if (!canCreateInitialZone) {
+            pushNotice('error', 'Zone khởi tạo chỉ áp dụng cho show dạng chỗ tự do.')
+            return
+        }
+        if (plannerDirty && !window.confirm('Tạo zone khởi tạo sẽ tải lại planner. Các thay đổi ghế hoặc polygon chưa lưu sẽ bị mất. Tiếp tục?')) {
+            return
+        }
+
+        setBusySingle(true)
+        setError(null)
+        setMessage(null)
+        try {
+            const payload = {
+                code: zoneForm.code.trim(),
+                name: zoneForm.name.trim(),
+                row_count: Math.max(1, Number(zoneForm.row_count) || 1),
+                seats_per_row: Math.max(1, Number(zoneForm.seats_per_row) || 1),
+                price: Math.max(0, Number(zoneForm.price) || 0),
+                color: zoneForm.color.trim() || '#ef4444',
+            }
+            const created = await adminApi.createInitialZone(eventKey, showId, payload)
+            pushNotice('success', 'Đã tạo zone khởi tạo cùng ghế mặc định và polygon bao quanh.')
+            await loadData()
+            setSelectedZoneId(created.id)
+            setSingleForm((previous) => ({ ...previous, zone_id: String(created.id) }))
+            setBulkForm((previous) => ({ ...previous, zone_id: String(created.id) }))
+            resetZoneForm()
+        } catch (errorValue) {
+            pushNotice('error', extractApiErrorMessage(errorValue, 'Không thể tạo zone khởi tạo.'))
+        } finally {
+            setBusySingle(false)
+        }
+    }
+
+    async function handleDeleteZone(zoneId: number) {
+        if (!eventKey || !showId) return
+        if (!window.confirm('Xóa zone này?')) return
+        if (plannerDirty && !window.confirm('Xóa zone sẽ tải lại planner. Các thay đổi ghế chưa lưu sẽ bị mất. Tiếp tục?')) {
+            return
+        }
+
+        setBusySingle(true)
+        setError(null)
+        setMessage(null)
+        try {
+            await adminApi.deleteZone(eventKey, showId, zoneId)
+            pushNotice('success', 'Đã xóa zone.')
+            await loadData()
+            resetZoneForm()
+            if (selectedZoneId === zoneId) {
+                setSelectedZoneId(null)
+            }
+        } catch (errorValue) {
+            pushNotice('error', extractApiErrorMessage(errorValue, 'Không thể xóa zone.'))
+        } finally {
+            setBusySingle(false)
+        }
     }
 
     async function loadData() {
@@ -276,6 +432,7 @@ export default function AdminSeatPlanner() {
             setDragSelectedSeatStartPositions(null)
             const nextZoneId = selectedZoneId ?? matrixResponse.zones[0]?.id ?? null
             setSelectedZoneId(nextZoneId)
+            resetZoneForm(nextZoneId)
             setSingleForm((previous) => ({ ...previous, zone_id: String(nextZoneId ?? ''), seat_label: previous.seat_label || `${matrixResponse.zones[0]?.code ?? 'A'}1` }))
             setBulkForm((previous) => ({ ...previous, zone_id: String(nextZoneId ?? '') }))
         } catch (errorValue) {
@@ -437,6 +594,8 @@ export default function AdminSeatPlanner() {
     function appendSingleSeatLocally(created: { id: number; seat_label: string; x: number | null; y: number | null }) {
         const zone = zones.find((item) => item.id === Number(singleForm.zone_id))
         if (!zone) return
+        const nextSectionId = zoneSectionMap.get(zone.id) ?? null
+        const nextSectionName = nextSectionId ? seatMap?.sections.find((section) => section.id === nextSectionId)?.name ?? null : null
         setSeatMap((previous) =>
             previous
                 ? {
@@ -450,8 +609,10 @@ export default function AdminSeatPlanner() {
                             x: created.x,
                             y: created.y,
                             rotation: Number(singleForm.rotation),
-                            section_id: null,
-                            section_name: zone.name,
+                            zone_id: zone.id,
+                            zone_name: zone.name,
+                            section_id: nextSectionId,
+                            section_name: nextSectionName,
                             price: singleForm.price ? Number(singleForm.price) : zone.price,
                             status: singleForm.is_admin_locked ? 'locked' : 'available',
                             lock_expires_at: null,
@@ -490,6 +651,8 @@ export default function AdminSeatPlanner() {
     function appendBulkSeatsLocally(createdSeats: Array<{ id: number; seat_label: string; x: number | null; y: number | null }>) {
         const zone = zones.find((item) => item.id === Number(bulkForm.zone_id))
         if (!zone || createdSeats.length === 0) return
+        const nextSectionId = zoneSectionMap.get(zone.id) ?? null
+        const nextSectionName = nextSectionId ? seatMap?.sections.find((section) => section.id === nextSectionId)?.name ?? null : null
         setSeatMap((previous) =>
             previous
                 ? {
@@ -503,8 +666,10 @@ export default function AdminSeatPlanner() {
                             x: seat.x,
                             y: seat.y,
                             rotation: 0,
-                            section_id: null,
-                            section_name: zone.name,
+                            zone_id: zone.id,
+                            zone_name: zone.name,
+                            section_id: nextSectionId,
+                            section_name: nextSectionName,
                             price: zone.price,
                             status: 'available' as const,
                             lock_expires_at: null,
@@ -546,6 +711,8 @@ export default function AdminSeatPlanner() {
             const zone = zones.find((item) => item.id === Number(singleForm.zone_id))
             if (!zone) return
             const nextStatus = selectedSeat?.status === 'sold' ? 'sold' : (singleForm.is_admin_locked ? 'locked' : 'available')
+            const nextSectionId = zoneSectionMap.get(zone.id) ?? null
+            const nextSectionName = nextSectionId ? seatMap?.sections.find((section) => section.id === nextSectionId)?.name ?? null : null
             pushHistorySnapshot()
             setSeatMap((previous) =>
                 previous
@@ -559,7 +726,10 @@ export default function AdminSeatPlanner() {
                                     x: Number(singleForm.x),
                                     y: Number(singleForm.y),
                                     rotation: Number(singleForm.rotation),
-                                    section_name: zone.name,
+                                    zone_id: zone.id,
+                                    zone_name: zone.name,
+                                    section_id: nextSectionId,
+                                    section_name: nextSectionName,
                                     price: singleForm.price ? Number(singleForm.price) : zone.price,
                                     is_admin_locked: singleForm.is_admin_locked,
                                     status: nextStatus,
@@ -873,6 +1043,8 @@ export default function AdminSeatPlanner() {
         const nextRotation = Number(singleForm.rotation)
         const nextZoneId = singleForm.zone_id ? Number(singleForm.zone_id) : null
         const zone = nextZoneId ? zoneMap.get(nextZoneId) : null
+        const nextSectionId = nextZoneId ? zoneSectionMap.get(nextZoneId) ?? null : null
+        const nextSectionName = nextSectionId ? seatMap?.sections.find((section) => section.id === nextSectionId)?.name ?? null : null
         pushHistorySnapshot()
         setSeatMap((previous) =>
             previous
@@ -882,6 +1054,10 @@ export default function AdminSeatPlanner() {
                         selectedSeatIds.includes(seat.id)
                             ? {
                                 ...seat,
+                                zone_id: zone?.id ?? seat.zone_id,
+                                zone_name: zone?.name ?? seat.zone_name,
+                                section_id: nextSectionId ?? seat.section_id,
+                                section_name: nextSectionName ?? seat.section_name,
                                 rotation: Number.isNaN(nextRotation) ? seat.rotation : nextRotation,
                                 price: zone ? zone.price : seat.price,
                                 is_admin_locked: singleForm.is_admin_locked,
@@ -924,10 +1100,14 @@ export default function AdminSeatPlanner() {
 
     function handleSavePolygon() {
         if (!canEditPolygons || !draftPolygonPoints.length || draftPolygonPoints.length < 3 || !seatMap) return
-        const nextSectionId = polygonForm.section_id ? Number(polygonForm.section_id) : null
-        const nextSectionName = seatMap.sections.find((section) => section.id === nextSectionId)?.name ?? null
+        const nextZoneId = polygonForm.zone_id ? Number(polygonForm.zone_id) : null
+        const nextZoneName = zones.find((zone) => zone.id === nextZoneId)?.name ?? null
+        const nextSectionId = nextZoneId ? zoneSectionMap.get(nextZoneId) ?? null : null
+        const nextSectionName = nextSectionId ? seatMap.sections.find((section) => section.id === nextSectionId)?.name ?? null : null
         const nextPolygon: SeatMapPolygon = {
             id: editingPolygonId ?? nextTempPolygonId(),
+            zone_id: nextZoneId,
+            zone_name: nextZoneName,
             section_id: nextSectionId,
             section_name: nextSectionName,
             label: polygonForm.label.trim() || null,
@@ -1005,6 +1185,7 @@ export default function AdminSeatPlanner() {
                 const currentSeat = currentMap.get(seat.id)
                 if (!savedSeat || !savedMatrixSeat || !currentSeat) return false
                 return (
+                    savedSeat.label !== currentSeat.label ||
                     savedSeat.x !== currentSeat.x ||
                     savedSeat.y !== currentSeat.y ||
                     savedSeat.rotation !== currentSeat.rotation ||
@@ -1013,151 +1194,129 @@ export default function AdminSeatPlanner() {
                     savedMatrixSeat.price !== seat.price
                 )
             })
-            const createdSeatPairs = await Promise.all(
-                newSeats.map(async (seat) => {
-                    const matrixSeat = matrix?.seats.find((item) => item.id === seat.id)
-                    const created = await adminApi.createEventSeatSingle(eventKey, showId, {
-                        seat_label: seat.label,
-                        x: seat.x ?? 0,
-                        y: seat.y ?? 0,
-                        rotation: seat.rotation,
-                        zone_id: matrixSeat?.zone_id ?? null,
-                        price: matrixSeat?.price ?? seat.price,
-                        is_admin_locked: seat.is_admin_locked,
-                    })
-                    return [seat.id, created] as const
-                }),
-            )
-            const createdSeatMap = new Map(createdSeatPairs)
-            await Promise.all(
-                changedSeats.map((seat) =>
-                    adminApi.updateEventSeat(eventKey, showId, seat.id, {
-                        x: currentMap.get(seat.id)?.x ?? 0,
-                        y: currentMap.get(seat.id)?.y ?? 0,
-                        rotation: currentMap.get(seat.id)?.rotation ?? 0,
-                        zone_id: seatZoneMap.get(seat.id) ?? null,
-                        price: seat.price,
-                        is_admin_locked: currentMap.get(seat.id)?.is_admin_locked ?? false,
+            const seatSyncResult = (newSeats.length > 0 || changedSeats.length > 0 || pendingDeletedSeatIds.length > 0)
+                ? await adminApi.syncEventSeats(eventKey, showId, {
+                    create: newSeats.map((seat) => {
+                        const matrixSeat = matrix?.seats.find((item) => item.id === seat.id)
+                        return {
+                            client_id: seat.id,
+                            seat_label: seat.label,
+                            x: seat.x ?? 0,
+                            y: seat.y ?? 0,
+                            rotation: seat.rotation,
+                            zone_id: matrixSeat?.zone_id ?? null,
+                            section_id: seat.section_id,
+                            price: matrixSeat?.price ?? seat.price,
+                            is_admin_locked: seat.is_admin_locked,
+                        }
                     }),
-                ),
-            )
-            await Promise.all(pendingDeletedSeatIds.map((seatId) => adminApi.deleteEventSeat(eventKey, showId, seatId)))
+                    update: changedSeats.map((seat) => {
+                        const currentSeat = currentMap.get(seat.id)
+                        return {
+                            id: seat.id,
+                            seat_label: currentSeat?.label ?? seat.seat_label,
+                            x: currentSeat?.x ?? 0,
+                            y: currentSeat?.y ?? 0,
+                            rotation: currentSeat?.rotation ?? 0,
+                            zone_id: seat.zone_id,
+                            section_id: currentSeat?.section_id ?? null,
+                            price: seat.price,
+                            is_admin_locked: currentSeat?.is_admin_locked ?? false,
+                        }
+                    }),
+                    delete_ids: pendingDeletedSeatIds,
+                })
+                : null
+
+            const createdSeatMap = new Map((seatSyncResult?.created ?? []).map((seat) => [seat.client_id, seat]))
             const newPolygons = seatMap.polygons.filter((polygon) => polygon.id < 0)
             const changedPolygons = seatMap.polygons.filter((polygon) => {
                 if (polygon.id < 0) return false
                 const savedPolygon = savedPolygonMap.get(polygon.id)
                 if (!savedPolygon) return false
                 return (
+                    savedPolygon.zone_id !== polygon.zone_id ||
                     savedPolygon.section_id !== polygon.section_id ||
                     savedPolygon.label !== polygon.label ||
                     JSON.stringify(savedPolygon.points) !== JSON.stringify(polygon.points)
                 )
             })
-            if (showDetail?.venue_id && showDetail.venue_layout_id) {
-                const createdPolygonPairs = await Promise.all(
-                    newPolygons.map(async (polygon) => {
-                        const created = await adminApi.createVenuePolygon(showDetail.venue_id!, {
-                            layout_id: showDetail.venue_layout_id!,
-                            section_id: polygon.section_id,
-                            label: polygon.label,
-                            points: polygon.points,
-                        })
-                        return [polygon.id, created] as const
+            const buildFinalSeatMapSeats = () =>
+                seatMap.seats
+                    .filter((seat) => !pendingDeletedSeatIds.includes(seat.id))
+                    .map((seat) => {
+                        const created = createdSeatMap.get(seat.id)
+                        const nextZone = zoneMap.get(seat.zone_id ?? -1)
+                        return created
+                            ? {
+                                id: created.id,
+                                label: created.seat_label,
+                                x: created.x,
+                                y: created.y,
+                                rotation: seat.rotation,
+                                zone_id: seat.zone_id,
+                                zone_name: nextZone?.name ?? seat.zone_name,
+                                section_id: seat.section_id,
+                                section_name: seat.section_name,
+                                price: seat.price,
+                                status: seat.status,
+                                lock_expires_at: seat.lock_expires_at,
+                                is_locked_by_me: seat.is_locked_by_me,
+                                is_admin_locked: seat.is_admin_locked,
+                            }
+                            : seat
+                    })
+            const buildFinalMatrixSeats = () =>
+                (matrix?.seats ?? [])
+                    .filter((seat) => !pendingDeletedSeatIds.includes(seat.id))
+                    .map((seat) => {
+                        const created = createdSeatMap.get(seat.id)
+                        return created
+                            ? {
+                                ...seat,
+                                id: created.id,
+                                seat_label: created.seat_label,
+                            }
+                            : seat
+                    })
+
+            const createdPolygonPairs = await Promise.all(
+                newPolygons.map(async (polygon) => {
+                    const created = await adminApi.createShowPolygon(eventKey, showId, {
+                        zone_id: polygon.zone_id,
+                        label: polygon.label,
+                        points: polygon.points,
+                    })
+                    return [polygon.id, {
+                        ...created,
+                        section_id: polygon.section_id,
+                        section_name: polygon.section_name,
+                    } satisfies SeatMapPolygon] as const
+                }),
+            )
+            const createdPolygonMap = new Map(createdPolygonPairs)
+            await Promise.all(
+                changedPolygons.map((polygon) =>
+                    adminApi.updateShowPolygon(polygon.id, {
+                        zone_id: polygon.zone_id,
+                        label: polygon.label,
+                        points: polygon.points,
                     }),
-                )
-                const createdPolygonMap = new Map(createdPolygonPairs)
-                await Promise.all(
-                    changedPolygons.map((polygon) =>
-                        adminApi.updateVenuePolygon(polygon.id, {
-                            section_id: polygon.section_id,
-                            label: polygon.label,
-                            points: polygon.points,
-                        }),
-                    ),
-                )
-                await Promise.all(pendingDeletedPolygonIds.map((polygonId) => adminApi.deleteVenuePolygon(polygonId)))
+                ),
+            )
+            await Promise.all(pendingDeletedPolygonIds.map((polygonId) => adminApi.deleteShowPolygon(polygonId)))
 
-                const finalSeatMapSeats = seatMap.seats
-                    .filter((seat) => !pendingDeletedSeatIds.includes(seat.id))
-                    .map((seat) => {
-                        const created = createdSeatMap.get(seat.id)
-                        return created
-                            ? {
-                                id: created.id,
-                                label: created.seat_label,
-                                x: created.x,
-                                y: created.y,
-                                rotation: seat.rotation,
-                                section_id: seat.section_id,
-                                section_name: seat.section_name,
-                                price: seat.price,
-                                status: seat.status,
-                                lock_expires_at: seat.lock_expires_at,
-                                is_locked_by_me: seat.is_locked_by_me,
-                                is_admin_locked: seat.is_admin_locked,
-                            }
-                            : seat
-                    })
-                const finalMatrixSeats = (matrix?.seats ?? [])
-                    .filter((seat) => !pendingDeletedSeatIds.includes(seat.id))
-                    .map((seat) => {
-                        const created = createdSeatMap.get(seat.id)
-                        return created
-                            ? {
-                                ...seat,
-                                id: created.id,
-                                seat_label: created.seat_label,
-                            }
-                            : seat
-                    })
-                const finalPolygons = seatMap.polygons
-                    .filter((polygon) => !pendingDeletedPolygonIds.includes(polygon.id))
-                    .map((polygon) => createdPolygonMap.get(polygon.id) ?? polygon)
+            const finalSeatMapSeats = buildFinalSeatMapSeats()
+            const finalMatrixSeats = buildFinalMatrixSeats()
+            const finalPolygons = seatMap.polygons
+                .filter((polygon) => !pendingDeletedPolygonIds.includes(polygon.id))
+                .map((polygon) => createdPolygonMap.get(polygon.id) ?? polygon)
 
-                setSeatMap((previous) => (previous ? { ...previous, seats: finalSeatMapSeats, polygons: finalPolygons, seat_count: finalSeatMapSeats.length } : previous))
-                setMatrix((previous) => (previous ? { ...previous, seats: finalMatrixSeats } : previous))
-                syncSavedSeats(finalSeatMapSeats)
-                syncSavedMatrixSeats(finalMatrixSeats)
-                syncSavedPolygons(finalPolygons)
-            } else {
-                const finalSeatMapSeats = seatMap.seats
-                    .filter((seat) => !pendingDeletedSeatIds.includes(seat.id))
-                    .map((seat) => {
-                        const created = createdSeatMap.get(seat.id)
-                        return created
-                            ? {
-                                id: created.id,
-                                label: created.seat_label,
-                                x: created.x,
-                                y: created.y,
-                                rotation: seat.rotation,
-                                section_id: seat.section_id,
-                                section_name: seat.section_name,
-                                price: seat.price,
-                                status: seat.status,
-                                lock_expires_at: seat.lock_expires_at,
-                                is_locked_by_me: seat.is_locked_by_me,
-                                is_admin_locked: seat.is_admin_locked,
-                            }
-                            : seat
-                    })
-                const finalMatrixSeats = (matrix?.seats ?? [])
-                    .filter((seat) => !pendingDeletedSeatIds.includes(seat.id))
-                    .map((seat) => {
-                        const created = createdSeatMap.get(seat.id)
-                        return created
-                            ? {
-                                ...seat,
-                                id: created.id,
-                                seat_label: created.seat_label,
-                            }
-                            : seat
-                    })
-                setSeatMap((previous) => (previous ? { ...previous, seats: finalSeatMapSeats, seat_count: finalSeatMapSeats.length } : previous))
-                setMatrix((previous) => (previous ? { ...previous, seats: finalMatrixSeats } : previous))
-                syncSavedSeats(finalSeatMapSeats)
-                syncSavedMatrixSeats(finalMatrixSeats)
-            }
+            setSeatMap((previous) => (previous ? { ...previous, seats: finalSeatMapSeats, polygons: finalPolygons, seat_count: finalSeatMapSeats.length } : previous))
+            setMatrix((previous) => (previous ? { ...previous, seats: finalMatrixSeats } : previous))
+            syncSavedSeats(finalSeatMapSeats)
+            syncSavedMatrixSeats(finalMatrixSeats)
+            syncSavedPolygons(finalPolygons)
             setPendingDeletedSeatIds([])
             setPendingDeletedPolygonIds([])
             setPlannerDirty(false)
@@ -1325,8 +1484,9 @@ export default function AdminSeatPlanner() {
                                     )
                                 )}
                             {seatMap.polygons.map((polygon) => {
-                                const polySection = seatMap.sections.find((s) => s.id === polygon.section_id)
-                                const polyColor = polySection?.color ?? '#fbbf24'
+                                const polyZone = zones.find((zone) => zone.id === polygon.zone_id)
+                                const polySection = seatMap.sections.find((section) => section.id === polygon.section_id)
+                                const polyColor = polyZone?.color ?? polySection?.color ?? '#fbbf24'
                                 const polyPts = editingPolygonId === polygon.id ? draftPolygonPoints : polygon.points
                                 const centroid = computeCentroid(polyPts)
                                 return (
@@ -1342,13 +1502,13 @@ export default function AdminSeatPlanner() {
                                                 className={editingPolygonId === polygon.id ? 'cursor-move' : 'cursor-pointer'}
                                             />
                                         </svg>
-                                        {(polygon.section_name ?? polygon.label) && (
+                                        {(polygon.zone_name ?? polygon.section_name ?? polygon.label) && (
                                             <div
                                                 key={`clabel-${polygon.id}`}
                                                 className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded bg-black/60 px-2 py-0.5 text-[9px] font-semibold text-white whitespace-nowrap"
                                                 style={{ left: `${centroid.x}%`, top: `${centroid.y}%` }}
                                             >
-                                                {polygon.section_name ?? polygon.label}
+                                                {polygon.zone_name ?? polygon.section_name ?? polygon.label}
                                             </div>
                                         )}
                                     </>
@@ -1396,7 +1556,7 @@ export default function AdminSeatPlanner() {
                                         key={seat.id}
                                         type="button"
                                         onMouseDown={(event) => handleSeatPointerDown(event, seat)}
-                                        onMouseEnter={(event) => setTooltip({ x: event.clientX, y: event.clientY, content: `${seat.label} · ${seat.section_name ?? 'Chưa gán khu'} · ${seat.is_admin_locked ? 'Admin khóa' : Number(seat.price).toLocaleString('vi-VN')}` })}
+                                        onMouseEnter={(event) => setTooltip({ x: event.clientX, y: event.clientY, content: `${seat.label} · ${seat.zone_name ?? seat.section_name ?? 'Chưa gán khu'} · ${seat.is_admin_locked ? 'Admin khóa' : Number(seat.price).toLocaleString('vi-VN')}` })}
                                         onMouseLeave={() => setTooltip(null)}
                                         className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-lg ${seatColor(seat)}`}
                                         style={{ left: `${seatPositionMap.get(seat.id)?.x ?? seat.x}%`, top: `${seatPositionMap.get(seat.id)?.y ?? seat.y}%`, transform: `translate(-50%, -50%) rotate(${seat.rotation}deg)`, width: `${seatSize}%`, aspectRatio: '1', ...seatStyle(seat), boxShadow: selectedSeatIds.includes(seat.id) ? '0 0 0 3px rgba(59,130,246,0.35)' : undefined }}
@@ -1504,6 +1664,95 @@ export default function AdminSeatPlanner() {
                             )}
                             <div className="text-xs text-slate-400">
                                 Công cụ đang chọn sẽ được tô nền đỏ. Ghế khóa bởi admin hiển thị màu đỏ đậm và khách vẫn thấy nhưng không thể mua.
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-space-900/90 border-white/10">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-white">
+                                <MapPin className="h-5 w-5 text-sky-400" /> Zone management
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Code</label>
+                                    <Input value={zoneForm.code} onChange={(event) => setZoneForm({ ...zoneForm, code: event.target.value })} placeholder="VIP-A" />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Tên zone</label>
+                                    <Input value={zoneForm.name} onChange={(event) => setZoneForm({ ...zoneForm, name: event.target.value })} placeholder="Khu A" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Rows</label>
+                                    <Input type="number" min={1} value={zoneForm.row_count} onChange={(event) => setZoneForm({ ...zoneForm, row_count: event.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Seats / row</label>
+                                    <Input type="number" min={1} value={zoneForm.seats_per_row} onChange={(event) => setZoneForm({ ...zoneForm, seats_per_row: event.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Price</label>
+                                    <Input type="number" min={0} step="0.01" value={zoneForm.price} onChange={(event) => setZoneForm({ ...zoneForm, price: event.target.value })} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Color</label>
+                                <div className="grid grid-cols-[68px_1fr] gap-3">
+                                    <input
+                                        type="color"
+                                        value={zoneForm.color}
+                                        onChange={(event) => setZoneForm({ ...zoneForm, color: event.target.value })}
+                                        className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 p-1"
+                                    />
+                                    <Input value={zoneForm.color} onChange={(event) => setZoneForm({ ...zoneForm, color: event.target.value })} />
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                {editingZoneId && (
+                                    <Button variant="outline" onClick={() => resetZoneForm(selectedZoneId)} disabled={busySingle}>
+                                        Hủy sửa
+                                    </Button>
+                                )}
+                                <Button className="flex-1" onClick={() => void handleSaveZone()} isLoading={busySingle}>
+                                    <Save className="h-4 w-4" /> {editingZoneId ? 'Cập nhật zone' : 'Tạo zone'}
+                                </Button>
+                            </div>
+                            {!editingZoneId && (
+                                <Button variant="outline" className="w-full" onClick={() => void handleCreateInitialZone()} disabled={busySingle || !canCreateInitialZone}>
+                                    <Wand2 className="h-4 w-4" /> Tạo zone khởi tạo
+                                </Button>
+                            )}
+                            <div className="text-xs text-slate-400">
+                                Show chỗ tự do có thể dùng zone khởi tạo để sinh nhanh ghế mặc định và polygon bao quanh. Để tạo stage, hãy tạo zone không sinh ghế rồi vẽ polygon riêng.
+                            </div>
+                            <div className="space-y-2 border-t border-white/10 pt-3">
+                                {zones.length === 0 ? (
+                                    <p className="text-sm text-slate-400">Show này chưa có zone. Hãy tạo zone trước khi thêm ghế hoặc polygon.</p>
+                                ) : (
+                                    zones.map((zone) => (
+                                        <div key={zone.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="h-3 w-3 rounded-full border border-white/20" style={{ backgroundColor: zone.color }} />
+                                                    <p className="truncate font-semibold text-white">{zone.name}</p>
+                                                </div>
+                                                <p className="text-xs text-slate-400">{zone.code} · {Number(zone.price).toLocaleString('vi-VN')} · {zone.row_count} x {zone.seats_per_row}</p>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={() => startEditZone(zone)}>
+                                                    <Shapes className="h-4 w-4 text-cyan-300" />
+                                                </button>
+                                                <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={() => void handleDeleteZone(zone.id)}>
+                                                    <Trash2 className="h-4 w-4 text-red-400" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </CardContent>
                     </Card>
@@ -1678,16 +1927,16 @@ export default function AdminSeatPlanner() {
                         <CardContent className="space-y-3">
                             <Input placeholder="Tên vùng" value={polygonForm.label} onChange={(event) => setPolygonForm({ ...polygonForm, label: event.target.value })} />
                             <div>
-                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Gán section</label>
+                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Gán zone</label>
                                 <select
                                     className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 px-3 text-white outline-none"
-                                    value={polygonForm.section_id}
-                                    onChange={(event) => setPolygonForm({ ...polygonForm, section_id: event.target.value })}
+                                    value={polygonForm.zone_id}
+                                    onChange={(event) => setPolygonForm({ ...polygonForm, zone_id: event.target.value })}
                                 >
-                                    <option value="">Chưa gán section</option>
-                                    {seatMap.sections.map((section) => (
-                                        <option key={section.id} value={section.id}>
-                                            {section.code} · {section.name}
+                                    <option value="">Chưa gán zone</option>
+                                    {zones.map((zone) => (
+                                        <option key={zone.id} value={zone.id}>
+                                            {zone.code} · {zone.name}
                                         </option>
                                     ))}
                                 </select>
@@ -1718,7 +1967,7 @@ export default function AdminSeatPlanner() {
                                         <div key={polygon.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                                             <div>
                                                 <p className="font-semibold text-white">{polygon.label || `Vùng #${polygon.id}`}</p>
-                                                <p className="text-xs text-slate-400">{polygon.section_name ?? 'Chưa gán section'} · {polygon.points.length} điểm</p>
+                                                <p className="text-xs text-slate-400">{polygon.zone_name ?? polygon.section_name ?? 'Chưa gán zone'} · {polygon.points.length} điểm</p>
                                             </div>
                                             <div className="flex gap-1">
                                                 <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={() => startEditPolygon(polygon)}>
@@ -1771,3 +2020,4 @@ export default function AdminSeatPlanner() {
         </div>
     )
 }
+

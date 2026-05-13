@@ -107,6 +107,7 @@ class TTLCacheStore:
 public_api_cache = TTLCacheStore()
 
 EVENT_LIST_CACHE_NAMESPACE = "events:list"
+EVENT_DETAIL_CACHE_NAMESPACE = "events:detail"
 
 
 def show_seat_cache_namespace(show_id: int) -> str:
@@ -119,3 +120,9 @@ def event_seat_cache_namespace(event_id: int) -> str:
     """Backward-compatible alias kept for older call sites during refactor."""
 
     return show_seat_cache_namespace(event_id)
+
+
+def user_ticket_cache_namespace(user_id: int) -> str:
+    """Namespace for one user's ticket list cache."""
+
+    return f"users:{user_id}:tickets"

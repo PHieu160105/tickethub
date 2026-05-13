@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { Heart, Menu, X } from 'lucide-react'
 
 import { CustomerSidebar } from '@/components/layout/CustomerSidebar'
-import { Navbar } from '@/components/layout/Navbar'
 import { useAuth } from '@/context/AuthContext'
 import { listFavourites, removeFavourite, type FavouriteItem } from '@/lib/favourites'
 
@@ -29,7 +28,6 @@ export default function Favourites() {
     if (tab === 'tickets') return navigate('/tickets')
     if (tab === 'profile') return navigate('/profile')
     if (tab === 'favourites') return navigate('/favourites')
-    if (tab === 'payments') return navigate('/payments')
     if (tab === 'settings') return navigate('/settings')
     if (tab === 'help') return navigate('/help')
     if (tab === 'logout') {
@@ -39,9 +37,7 @@ export default function Favourites() {
   }
 
   return (
-    <>
-      <Navbar />
-      <div className="pt-[20px] min-h-screen bg-background flex">
+    <div className="app-theme-page pt-[35px] h-auto flex">
         <div className="hidden lg:block">
           <CustomerSidebar
             activeTab="favourites"
@@ -109,6 +105,5 @@ export default function Favourites() {
           )}
         </main>
       </div>
-    </>
   )
 }
