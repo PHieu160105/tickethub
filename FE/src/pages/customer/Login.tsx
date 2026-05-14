@@ -1,11 +1,12 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { ArrowLeft, Eye, EyeOff, Mail, Lock, Rocket } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import LogoSVG from '@/assets/logo.svg'
 import { FcGoogle } from 'react-icons/fc'
-import { FaFacebook } from 'react-icons/fa'
+import { SiDiscord } from 'react-icons/si'
+import type { User as ApiUser } from '@/types'
 
 export function Logo() {
   return (
@@ -21,8 +22,33 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const { login, loginWithGoogle, loginWithFacebook } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { login, loginWithGoogle, startDiscordLogin, acceptExternalAuth } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const accessToken = searchParams.get('access_token')
+    const userParam = searchParams.get('user')
+    const oauthError = searchParams.get('oauth_error')
+
+    if (oauthError) {
+      setErrorMessage(oauthError)
+      setSearchParams({}, { replace: true })
+      return
+    }
+
+    if (!accessToken || !userParam) return
+
+    try {
+      const parsedUser = JSON.parse(userParam) as ApiUser
+      const user = acceptExternalAuth({ access_token: accessToken, user: parsedUser })
+      setSearchParams({}, { replace: true })
+      navigate(user.role === 'admin' ? '/admin' : '/', { replace: true })
+    } catch {
+      setErrorMessage('Discord login completed, but the response could not be processed.')
+      setSearchParams({}, { replace: true })
+    }
+  }, [acceptExternalAuth, navigate, searchParams, setSearchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -159,22 +185,14 @@ export default function Login() {
                 </button>
                 <button
                   className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc"
-                  onClick={async () => {
-                    setIsLoading(true)
+                  onClick={() => {
                     setErrorMessage('')
-                    try {
-                      const user = await loginWithFacebook()
-                      navigate(user.role === 'admin' ? '/admin' : '/', { replace: true })
-                    } catch (error) {
-                      setErrorMessage(error instanceof Error ? error.message : 'Facebook login failed. Please try again.')
-                    } finally {
-                      setIsLoading(false)
-                    }
+                    startDiscordLogin()
                   }}
                   disabled={isLoading}
                 >
-                  <FaFacebook className="w-5 h-5 text-[#1877F2]" />
-                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-white">Facebook</span>
+                  <SiDiscord className="w-5 h-5 text-[#5865F2]" />
+                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-white">Discord</span>
                 </button>
               </div>
 

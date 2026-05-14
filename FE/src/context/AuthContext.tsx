@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { signInWithFacebook, signInWithGoogle } from '@/lib/firebase'
+import { signInWithGoogle } from '@/lib/firebase'
 import { authApi, extractApiErrorMessage } from '@/lib/api'
 import { authStorage } from '@/lib/storage'
+import { API_BASE_URL } from '@/constants'
 import type { User as ApiUser } from '@/types'
 
 export interface User extends ApiUser {
@@ -18,7 +19,8 @@ interface AuthContextType {
   isAdmin: boolean
   login: (email: string, password: string) => Promise<User>
   loginWithGoogle: () => Promise<User>
-  loginWithFacebook: () => Promise<User>
+  startDiscordLogin: () => void
+  acceptExternalAuth: (payload: { access_token: string; user: ApiUser }) => User
   register: (
     email: string,
     password: string,
@@ -104,21 +106,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const loginWithFacebook = async () => {
-    setIsLoading(true)
-    try {
-      const idToken = await signInWithFacebook()
-      const response = await authApi.firebaseTokenLogin(idToken)
-      authStorage.setToken(response.access_token)
-      authStorage.setUser(response.user)
-      const enrichedUser = enrichUser(response.user)
-      setUser(enrichedUser)
-      return enrichedUser
-    } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Facebook login failed. Please try again.'))
-    } finally {
-      setIsLoading(false)
-    }
+  const startDiscordLogin = () => {
+    window.location.assign(`${API_BASE_URL}/auth/discord/login`)
+  }
+
+  const acceptExternalAuth = (payload: { access_token: string; user: ApiUser }) => {
+    authStorage.setToken(payload.access_token)
+    authStorage.setUser(payload.user)
+    const enrichedUser = enrichUser(payload.user)
+    setUser(enrichedUser)
+    return enrichedUser
   }
 
   const register = async (
@@ -169,7 +166,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin,
       login,
       loginWithGoogle,
-      loginWithFacebook,
+      startDiscordLogin,
+      acceptExternalAuth,
       register,
       updateProfile,
       logout,

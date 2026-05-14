@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     firebase_project_id: str = ""
     firebase_private_key: str = ""
     firebase_client_email: str = ""
+    frontend_app_url: str = "http://localhost:5173"
+    discord_client_id: str = ""
+    discord_client_secret: str = ""
+    discord_redirect_uri: str = "http://localhost:8000/api/auth/discord/callback"
 
     @property
     def allowed_origins(self) -> list[str]:

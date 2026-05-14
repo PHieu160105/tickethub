@@ -93,6 +93,7 @@ async def _ensure_user_auth_columns() -> None:
                 ALTER TABLE IF EXISTS ticket_rush.users
                 ADD COLUMN IF NOT EXISTS firebase_uid VARCHAR(255),
                 ADD COLUMN IF NOT EXISTS google_id VARCHAR(255),
+                ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255),
                 ADD COLUMN IF NOT EXISTS facebook_id VARCHAR(255)
                 """
             )
@@ -112,6 +113,15 @@ async def _ensure_user_auth_columns() -> None:
                 CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_id
                 ON ticket_rush.users (google_id)
                 WHERE google_id IS NOT NULL
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_users_discord_id
+                ON ticket_rush.users (discord_id)
+                WHERE discord_id IS NOT NULL
                 """
             )
         )

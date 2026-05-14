@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider, FacebookAuthProvider, signInWithPopup } from 'firebase/auth'
+import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -14,14 +14,8 @@ const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 
 const googleProvider = new GoogleAuthProvider()
-const facebookProvider = new FacebookAuthProvider()
 
 export async function signInWithGoogle() {
   const result = await signInWithPopup(auth, googleProvider)
-  return result.user.getIdToken()
-}
-
-export async function signInWithFacebook() {
-  const result = await signInWithPopup(auth, facebookProvider)
   return result.user.getIdToken()
 }

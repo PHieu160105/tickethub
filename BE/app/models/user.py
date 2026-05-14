@@ -18,6 +18,7 @@ class User(TimestampMixin, Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     firebase_uid: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
     google_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
+    discord_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
     facebook_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole, native_enum=False), default=UserRole.CUSTOMER, nullable=False)
     gender: Mapped[Gender] = mapped_column(Enum(Gender, native_enum=False), default=Gender.OTHER, nullable=False)
