@@ -1,4 +1,4 @@
-"""Review schemas for event detail page."""
+"""Schema đánh giá sự kiện trên trang chi tiết."""
 
 from datetime import datetime
 
@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class EventReviewCreateRequest(BaseModel):
-    """Payload to create one event review."""
+    """Payload tạo một đánh giá sự kiện."""
 
     rating: int = Field(ge=1, le=5)
     content: str = Field(min_length=1, max_length=2000)
@@ -14,7 +14,7 @@ class EventReviewCreateRequest(BaseModel):
 
 
 class EventReviewResponse(BaseModel):
-    """Serialized review row."""
+    """Một dòng đánh giá đã serialize để trả về frontend."""
 
     id: int
     event_id: int

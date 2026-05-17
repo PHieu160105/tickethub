@@ -1,4 +1,4 @@
-"""SVG/Image processing to extract seat coordinates."""
+"""Xử lý SVG/ảnh nền để trích xuất tọa độ ghế."""
 
 import re
 import xml.etree.ElementTree as ET
@@ -16,48 +16,48 @@ MAX_SVG_SIZE_BYTES = 10 * 1024 * 1024
 
 @dataclass
 class ExtractedSeat:
-    """One extracted seat from SVG."""
+    """Một ghế đã trích xuất từ file SVG."""
 
-    seat_id: str  # From SVG element ID
+    seat_id: str  # Lấy từ ID của phần tử SVG.
     label: str
-    x: float  # Normalized 0-100%
-    y: float  # Normalized 0-100%
-    rotation: float  # degrees
-    section: str | None  # Section name from group
+    x: float  # Tọa độ X đã chuẩn hóa về phần trăm 0-100.
+    y: float  # Tọa độ Y đã chuẩn hóa về phần trăm 0-100.
+    rotation: float  # Góc xoay tính theo độ.
+    section: str | None  # Tên khu vực lấy từ nhóm SVG chứa ghế.
 
 
 @dataclass
 class ProcessingResult:
-    """Result from map processing."""
+    """Kết quả sau khi xử lý sơ đồ SVG."""
 
     seats: list[ExtractedSeat]
-    sections: list[dict[str, Any]]  # Detected sections
+    sections: list[dict[str, Any]]  # Danh sách khu vực phát hiện được.
     width: int
     height: int
-    svg_processed: str  # SVG with seat markers added
+    svg_processed: str  # SVG đã được gắn thêm metadata nhận diện ghế.
 
 
 class MapProcessor:
-    """Process SVG files to extract seat coordinates."""
+    """Xử lý file SVG để lấy tọa độ ghế và metadata khu vực."""
 
     def _sanitize_svg(self, svg_content: str) -> str:
-        """Remove dangerous elements from SVG to prevent XSS."""
-        # Remove script tags
+        """Loại bỏ thành phần nguy hiểm khỏi SVG để giảm rủi ro XSS."""
+        # Xóa thẻ script vì có thể chạy mã JavaScript khi render SVG.
         svg_content = re.sub(r"<script[^>]*>.*?</script>", "", svg_content, flags=re.DOTALL | re.IGNORECASE)
-        # Remove event handlers
+        # Xóa các handler dạng onclick/onload để SVG không tự thực thi hành vi.
         svg_content = re.sub(r"\s+on\w+\s*=\s*\"[^\"]*\"", "", svg_content, flags=re.IGNORECASE)
         svg_content = re.sub(r"\s+on\w+\s*=\s*'[^']*'", "", svg_content, flags=re.IGNORECASE)
-        # Remove external references
+        # Xóa tham chiếu ngoài để tránh tải tài nguyên không kiểm soát.
         svg_content = re.sub(r"xlink:href\s*=\s*\"[^\"]*\"", "", svg_content, flags=re.IGNORECASE)
         svg_content = re.sub(r"href\s*=\s*\"[^\"]*\"", "", svg_content, flags=re.IGNORECASE)
         return svg_content
 
     def _validate_svg(self, svg_content: str) -> None:
-        """Validate SVG before processing."""
+        """Kiểm tra SVG trước khi phân tích để chặn file quá lớn hoặc cấu trúc không hợp lệ."""
         if len(svg_content.encode("utf-8")) > MAX_SVG_SIZE_BYTES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="SVG file exceeds maximum size of 10MB",
+                detail="File SVG vượt quá dung lượng tối đa 10MB",
             )
 
         try:
@@ -65,19 +65,19 @@ class MapProcessor:
         except ET.ParseError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid SVG format: {str(e)}",
+                detail=f"Định dạng SVG không hợp lệ: {str(e)}",
             )
 
-        # Check allowed elements and depth
+        # Kiểm tra danh sách phần tử được phép và độ sâu lồng nhau.
         depth = 0
         for elem in root.iter():
             tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
             if tag not in ALLOWED_SVG_ELEMENTS:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"SVG contains disallowed element: {tag}",
+                    detail=f"SVG chứa phần tử không được phép: {tag}",
                 )
-            # Estimate depth via parent traversal
+            # Ước lượng độ sâu bằng cách lần ngược cây cha.
             d = 0
             parent = elem
             while parent is not None:
@@ -88,21 +88,21 @@ class MapProcessor:
         if depth > MAX_SVG_DEPTH:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"SVG nesting depth exceeds {MAX_SVG_DEPTH}",
+                detail=f"Độ sâu lồng nhau của SVG vượt quá {MAX_SVG_DEPTH}",
             )
 
-        # Check viewBox or width/height
+        # SVG phải có viewBox hoặc cặp width/height để quy đổi tọa độ.
         viewbox = root.get("viewBox", "").split()
         width_attr = root.get("width")
         height_attr = root.get("height")
         if len(viewbox) != 4 and (not width_attr or not height_attr):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="SVG must have viewBox or width/height attributes",
+                detail="SVG phải có thuộc tính viewBox hoặc width/height",
             )
 
     def _get_parent(self, root: ET.Element, child: ET.Element) -> ET.Element | None:
-        """Find parent of an element."""
+        """Tìm phần tử cha trực tiếp của một phần tử SVG."""
         for parent in root.iter():
             for c in parent:
                 if c is child:
@@ -110,7 +110,7 @@ class MapProcessor:
         return None
 
     def _get_dimensions(self, root: ET.Element) -> tuple[int, int]:
-        """Extract width and height from SVG."""
+        """Trích xuất chiều rộng và chiều cao làm hệ quy chiếu tọa độ SVG."""
         viewbox = root.get("viewBox", "").split()
         if len(viewbox) == 4:
             width = int(float(viewbox[2]))
@@ -122,22 +122,22 @@ class MapProcessor:
         if width < MIN_VIEWBOX_SIZE or height < MIN_VIEWBOX_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"SVG dimensions must be at least {MIN_VIEWBOX_SIZE}x{MIN_VIEWBOX_SIZE}",
+                detail=f"Kích thước SVG phải tối thiểu {MIN_VIEWBOX_SIZE}x{MIN_VIEWBOX_SIZE}",
             )
 
         return width, height
 
     def process_svg(self, svg_content: str) -> ProcessingResult:
         """
-        Parse SVG and extract seat positions.
+        Phân tích SVG và trích xuất vị trí ghế.
 
-        Expected SVG format:
-        - Seats represented as <circle> or <rect> elements
-        - Groups <g> with id="section_name" to identify zones
-        - Each seat element has id="seat_label" or data-seat-id
+        Input:
+        - SVG có ghế biểu diễn bằng circle, rect hoặc ellipse.
+        - Mỗi ghế có `id` hoặc `data-seat-id`.
+        - Nhóm `g` hoặc thuộc tính `data-section` được dùng để nhận diện khu vực.
 
-        Returns:
-            ProcessingResult with extracted seats and metadata
+        Output:
+        - `ProcessingResult` gồm danh sách ghế, khu vực, kích thước và SVG đã làm sạch.
         """
         svg_content = self._sanitize_svg(svg_content)
         self._validate_svg(svg_content)
@@ -145,22 +145,22 @@ class MapProcessor:
         root = ET.fromstring(svg_content)
         width, height = self._get_dimensions(root)
 
-        # Extract seats from SVG elements
+        # Chuẩn bị danh sách ghế và khu vực được phát hiện trong SVG.
         seats: list[ExtractedSeat] = []
         sections: dict[str, dict[str, Any]] = {}
 
-        # Build parent map for efficient lookup
+        # Tạo bản đồ cha-con để xác định ghế thuộc nhóm/khu vực nào mà không phải duyệt lại nhiều lần.
         parent_map: dict[ET.Element, ET.Element] = {}
         for parent in root.iter():
             for child in parent:
                 parent_map[child] = parent
 
-        # Find all seat elements (circles, rects with data-seat attribute or id pattern)
+        # Tìm mọi phần tử có thể đại diện cho ghế.
         for elem in root.iter():
             tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
             seat_id = elem.get("id") or elem.get("data-seat-id")
 
-            # Also treat circle/rect/ellipse with id matching seat pattern as seats
+            # Nếu thiếu data-seat-id, vẫn nhận diện phần tử theo mẫu nhãn ghế như A1 hoặc B12.
             if not seat_id and tag in ("circle", "rect", "ellipse"):
                 elem_id = elem.get("id", "")
                 if elem_id and re.match(r"^[A-Z]\d+$", elem_id):
@@ -169,7 +169,7 @@ class MapProcessor:
             if not seat_id:
                 continue
 
-            # Get position from cx/cy or x/y
+            # Lấy tọa độ từ cx/cy hoặc x/y tùy loại phần tử SVG.
             cx = elem.get("cx")
             cy = elem.get("cy")
             if cx is None or cy is None:
@@ -178,18 +178,18 @@ class MapProcessor:
             if cx is None or cy is None:
                 continue
 
-            # Calculate normalized coordinates
+            # Quy đổi tọa độ tuyệt đối sang phần trăm để frontend render độc lập kích thước.
             try:
                 x_norm = (float(cx) / width) * 100
                 y_norm = (float(cy) / height) * 100
             except ValueError:
                 continue
 
-            # Get rotation from transform
+            # Lấy góc xoay từ thuộc tính transform nếu có.
             transform = elem.get("transform", "")
             rotation = self._extract_rotation(transform)
 
-            # Determine section from parent group
+            # Xác định khu vực từ nhóm cha gần nhất.
             section_name = None
             parent = parent_map.get(elem)
             while parent is not None:
@@ -201,7 +201,7 @@ class MapProcessor:
                         break
                 parent = parent_map.get(parent)
 
-            # Override section from data-section attribute
+            # Thuộc tính data-section có độ ưu tiên cao hơn nhóm cha.
             data_section = elem.get("data-section")
             if data_section:
                 section_name = data_section
@@ -217,7 +217,7 @@ class MapProcessor:
                 )
             )
 
-            # Track sections
+            # Ghi nhận khu vực mới để frontend tạo danh sách section gợi ý.
             if section_name and section_name not in sections:
                 sections[section_name] = {
                     "name": section_name,
@@ -228,10 +228,10 @@ class MapProcessor:
         if not seats:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No seat elements found in SVG",
+                detail="Không tìm thấy phần tử ghế trong SVG",
             )
 
-        # Generate processed SVG with markers
+        # Sinh SVG đã gắn metadata ghế để có thể kiểm tra/hiển thị lại.
         svg_processed = self._add_seat_markers(root, seats)
 
         return ProcessingResult(
@@ -243,14 +243,14 @@ class MapProcessor:
         )
 
     def _extract_rotation(self, transform: str) -> float:
-        """Extract rotation angle from SVG transform attribute."""
+        """Trích xuất góc xoay từ thuộc tính transform của SVG."""
         if not transform:
             return 0.0
         match = re.search(r"rotate\((-?\d+(?:\.\d+)?)", transform)
         return float(match.group(1)) if match else 0.0
 
     def _add_seat_markers(self, root: ET.Element, seats: list[ExtractedSeat]) -> str:
-        """Add data attributes to SVG for seat identification."""
+        """Gắn thêm data attribute để SVG sau xử lý nhận diện được từng ghế."""
         seat_map = {s.seat_id: s for s in seats}
         for elem in root.iter():
             elem_id = elem.get("id") or elem.get("data-seat-id")
@@ -265,6 +265,6 @@ class MapProcessor:
 
 
 async def process_venue_svg(venue_id: int, svg_content: str) -> ProcessingResult:
-    """Main entry point for SVG processing."""
+    """Điểm vào chính khi API cần xử lý SVG của một địa điểm."""
     processor = MapProcessor()
     return processor.process_svg(svg_content)

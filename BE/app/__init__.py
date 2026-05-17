@@ -1,1 +1,1 @@
-"""TicketRush backend application package."""
+"""Gói ứng dụng backend TicketRush."""

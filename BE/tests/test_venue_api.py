@@ -1,4 +1,4 @@
-"""Tests for venue management API routes."""
+"""Kiểm thử các route API quản lý địa điểm."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -8,17 +8,73 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.main import app
-from app.models.event import Event
+from app.models.event import Event, Show
 from app.models.seat import Seat
 from app.models.venue import Polygon, Section, Venue, VenueLayout
-from app.schemas.event import EventCreateRequest
-from app.schemas.venue import VenueCreateRequest
-from app.services.event_service import create_event_with_matrix
+from app.schemas.event import EventCreateRequest, SeatZoneCreate, ShowCreateRequest
+from app.services.event_service import create_event, create_show_with_inventory
+
+
+async def _create_event_and_show(
+    db_session,
+    admin_user_id: int,
+    *,
+    event_title: str,
+    event_description: str,
+    category: str,
+    venue_name: str,
+    show_date: datetime,
+    venue_id: int | None = None,
+    venue_layout_id: int | None = None,
+    queue_enabled: bool = False,
+    zones: list[SeatZoneCreate] | None = None,
+) -> tuple[Event, Show]:
+    """Tạo một sự kiện cha kèm một buổi diễn theo quy ước dựa trên buổi diễn hiện tại."""
+
+    normalized_show_date = show_date.date()
+    event = await create_event(
+        db_session,
+        admin_user_id,
+        EventCreateRequest(
+            title=event_title,
+            description=event_description,
+            category=category,
+            start_date=normalized_show_date,
+            end_date=normalized_show_date,
+            cover_image_url="",
+            status="live",
+        ),
+    )
+    show = await create_show_with_inventory(
+        db_session,
+        event,
+        admin_user_id,
+        ShowCreateRequest(
+            title=f"{event_title} Show",
+            description=event_description,
+            venue=venue_name,
+            show_date=normalized_show_date,
+            start_time=show_date.time().replace(hour=18, minute=0, second=0, microsecond=0),
+            end_time=show_date.time().replace(hour=20, minute=0, second=0, microsecond=0),
+            status="live",
+            hold_minutes=10,
+            queue_enabled=queue_enabled,
+            queue_release_batch=50,
+            max_active_queue_tokens=100,
+            venue_id=venue_id,
+            venue_layout_id=venue_layout_id,
+            zones=zones or [],
+        ),
+    )
+    await db_session.commit()
+    await db_session.refresh(event)
+    await db_session.refresh(show)
+    return event, show
 
 
 @pytest.mark.asyncio
 async def test_create_venue(db_session, admin_user):
-    """Test creating a venue."""
+    """Kiểm thử tạo địa điểm."""
     from app.api.deps import get_db_session
 
     async def override_get_db():
@@ -62,7 +118,7 @@ async def test_create_venue(db_session, admin_user):
 
 @pytest.mark.asyncio
 async def test_list_venues(db_session, admin_user):
-    """Test listing venues."""
+    """Kiểm thử liệt kê địa điểm."""
     from app.api.deps import get_db_session, get_current_active_admin
 
     venue = Venue(
@@ -99,7 +155,7 @@ async def test_list_venues(db_session, admin_user):
 
 @pytest.mark.asyncio
 async def test_create_layout(db_session, admin_user):
-    """Test creating a layout for a venue."""
+    """Kiểm thử tạo bố cục cho địa điểm."""
     from app.api.deps import get_db_session, get_current_active_admin
 
     venue = Venue(
@@ -143,7 +199,7 @@ async def test_create_layout(db_session, admin_user):
 
 @pytest.mark.asyncio
 async def test_upload_raster_background_and_block_svg_parse(db_session, admin_user):
-    """Raster backgrounds should upload successfully but not be parseable as SVG."""
+    """Ảnh nền raster được upload được nhưng không được xử lý như SVG."""
     from app.api.deps import get_current_active_admin, get_db_session
 
     venue = Venue(
@@ -187,7 +243,7 @@ async def test_upload_raster_background_and_block_svg_parse(db_session, admin_us
         assert upload_response.status_code == status.HTTP_200_OK
         assert upload_response.json()["background_type"] == "raster"
         assert process_response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "only available" in process_response.json()["detail"]
+        assert "Chỉ có thể phân tích SVG" in process_response.json()["detail"]
         assert detail_response.status_code == status.HTTP_200_OK
         detail = detail_response.json()
         assert detail["background_type"] == "raster"
@@ -199,7 +255,7 @@ async def test_upload_raster_background_and_block_svg_parse(db_session, admin_us
 
 @pytest.mark.asyncio
 async def test_upload_svg_background_clears_processed_state(db_session, admin_user):
-    """Uploading a new SVG should replace the source and clear any stale processed background."""
+    """Tải SVG mới phải thay nguồn và xóa nền đã xử lý cũ."""
     from app.api.deps import get_current_active_admin, get_db_session
 
     venue = Venue(
@@ -248,7 +304,7 @@ async def test_upload_svg_background_clears_processed_state(db_session, admin_us
 
 @pytest.mark.asyncio
 async def test_event_seatmap_includes_background_and_polygons(db_session, admin_user):
-    """Customer seatmap should expose venue background and polygon overlays."""
+    """Seatmap khách hàng phải trả ảnh nền địa điểm và lớp phủ polygon."""
     from app.api.deps import get_db_session
 
     venue = Venue(
@@ -289,39 +345,35 @@ async def test_event_seatmap_includes_background_and_polygons(db_session, admin_
         points=[{"x": 10, "y": 10}, {"x": 30, "y": 10}, {"x": 20, "y": 25}],
     )
     db_session.add(polygon)
+    db_session.add(
+        Seat(
+            event_id=None,
+            zone_id=None,
+            row_index=1,
+            row_label="A",
+            seat_number=1,
+            seat_label="A1",
+            price=0,
+            x_coord=22.5,
+            y_coord=33.5,
+            rotation=15,
+            section_id=section.id,
+            venue_layout_id=layout.id,
+        )
+    )
 
-    event = Event(
-        slug="seatmap-arena-live",
-        title="Seatmap Arena Live",
-        description="Seat map payload test event",
+    event, show = await _create_event_and_show(
+        db_session,
+        admin_user.id,
+        event_title="Seatmap Arena Live",
+        event_description="Seat map payload test event",
         category="concert",
-        venue="Seatmap Arena",
-        start_at=datetime.now(UTC) + timedelta(days=2),
-        end_at=datetime.now(UTC) + timedelta(days=2, hours=3),
-        created_by_user_id=admin_user.id,
+        venue_name=venue.name,
+        show_date=datetime.now(UTC) + timedelta(days=2),
         venue_id=venue.id,
         venue_layout_id=layout.id,
         queue_enabled=True,
     )
-    db_session.add(event)
-    await db_session.flush()
-
-    seat = Seat(
-        event_id=event.id,
-        zone_id=None,
-        row_index=1,
-        row_label="A",
-        seat_number=1,
-        seat_label="A1",
-        price=150,
-        x_coord=22.5,
-        y_coord=33.5,
-        rotation=15,
-        section_id=section.id,
-        venue_layout_id=layout.id,
-    )
-    db_session.add(seat)
-    await db_session.commit()
 
     async def override_get_db():
         yield db_session
@@ -333,7 +385,7 @@ async def test_event_seatmap_includes_background_and_polygons(db_session, admin_
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.get(f"/api/events/{event.slug}/seatmap")
+            response = await client.get(f"/api/shows/{show.id}/seatmap")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -343,7 +395,7 @@ async def test_event_seatmap_includes_background_and_polygons(db_session, admin_
         assert data["background"]["width"] == 1000
         assert data["background"]["height"] == 600
         assert data["polygons"][0]["label"] == "VIP Zone"
-        assert data["polygons"][0]["section_name"] == "VIP"
+        assert data["polygons"][0]["zone_name"] == "VIP"
         assert data["seats"][0]["label"] == "A1"
         assert data["seats"][0]["x"] == 22.5
         assert data["seats"][0]["y"] == 33.5
@@ -353,7 +405,7 @@ async def test_event_seatmap_includes_background_and_polygons(db_session, admin_
 
 @pytest.mark.asyncio
 async def test_create_section(db_session, admin_user):
-    """Test creating a section within a layout."""
+    """Kiểm thử tạo khu vực trong bố cục."""
     from app.api.deps import get_db_session, get_current_active_admin
 
     venue = Venue(
@@ -410,7 +462,7 @@ async def test_create_section(db_session, admin_user):
 
 @pytest.mark.asyncio
 async def test_create_and_list_layout_seats(db_session, admin_user):
-    """Test creating venue template seats and listing them by layout."""
+    """Kiểm thử tạo ghế mẫu địa điểm và liệt kê theo bố cục."""
     from app.api.deps import get_current_active_admin, get_db_session
 
     venue = Venue(
@@ -486,7 +538,7 @@ async def test_create_and_list_layout_seats(db_session, admin_user):
 
 @pytest.mark.asyncio
 async def test_create_event_from_venue_layout_clones_template_seats(db_session, admin_user):
-    """Event creation should support venue-layout seat maps without classic zones."""
+    """Tạo sự kiện phải hỗ trợ sơ đồ ghế từ bố cục địa điểm dù không dùng khu vực ghế kiểu cũ."""
 
     venue = Venue(
         name="Venue Mode Arena",
@@ -553,34 +605,31 @@ async def test_create_event_from_venue_layout_clones_template_seats(db_session, 
     )
     await db_session.commit()
 
-    payload = EventCreateRequest(
-        title="Venue Seatmap Event",
-        description="Event that uses a venue layout template",
+    event, show = await _create_event_and_show(
+        db_session,
+        admin_user.id,
+        event_title="Venue Seatmap Event",
+        event_description="Event that uses a venue layout template",
         category="Concert",
-        venue=venue.name,
-        start_at=datetime.now(UTC) + timedelta(days=1),
-        end_at=datetime.now(UTC) + timedelta(days=1, hours=2),
+        venue_name=venue.name,
+        show_date=datetime.now(UTC) + timedelta(days=1),
         venue_id=venue.id,
         venue_layout_id=layout.id,
         zones=[],
     )
 
-    event = await create_event_with_matrix(db_session, admin_user.id, payload)
-    await db_session.commit()
-    await db_session.refresh(event)
-
     created_event = await db_session.scalar(select(Event).where(Event.id == event.id))
     assert created_event is not None
-    assert created_event.venue_id == venue.id
-    assert created_event.venue_layout_id == layout.id
+    assert show.venue_id == venue.id
+    assert show.venue_layout_id == layout.id
 
     event_seats = list(
         await db_session.scalars(
-            select(Seat).where(Seat.event_id == event.id).order_by(Seat.seat_label.asc())
+            select(Seat).where(Seat.show_id == show.id).order_by(Seat.seat_label.asc())
         )
     )
     assert [seat.seat_label for seat in event_seats] == ["A1", "A2"]
-    assert all(seat.zone_id is None for seat in event_seats)
+    assert all(seat.zone_id is not None for seat in event_seats)
     assert all(seat.venue_layout_id == layout.id for seat in event_seats)
     assert all(float(seat.price) == 750.0 for seat in event_seats)
     assert event_seats[0].is_admin_locked is True
@@ -591,7 +640,7 @@ async def test_create_event_from_venue_layout_clones_template_seats(db_session, 
 
 @pytest.mark.asyncio
 async def test_create_event_with_venue_id_only_uses_venue(db_session, admin_user):
-    """Event creation should validate venue_id even when no layout is provided."""
+    """Tạo sự kiện phải kiểm tra venue_id kể cả khi không truyền layout."""
 
     venue = Venue(
         name="Venue Only Arena",
@@ -602,36 +651,24 @@ async def test_create_event_with_venue_id_only_uses_venue(db_session, admin_user
     await db_session.commit()
     await db_session.refresh(venue)
 
-    payload = EventCreateRequest(
-        title="Venue Only Event",
-        description="Event created with venue_id but without a venue layout",
+    event, show = await _create_event_and_show(
+        db_session,
+        admin_user.id,
+        event_title="Venue Only Event",
+        event_description="Event created with venue_id but without a venue layout",
         category="Concert",
-        venue=venue.name,
-        start_at=datetime.now(UTC) + timedelta(days=1),
-        end_at=datetime.now(UTC) + timedelta(days=1, hours=2),
+        venue_name=venue.name,
+        show_date=datetime.now(UTC) + timedelta(days=1),
         venue_id=venue.id,
-        zones=[
-            {
-                "code": "GEN",
-                "name": "General",
-                "row_count": 2,
-                "seats_per_row": 2,
-                "price": 100,
-                "color": "#00ff00",
-            }
-        ],
+        zones=[SeatZoneCreate(code="GEN", name="General", row_count=2, seats_per_row=2, price=100, color="#00ff00")],
     )
 
-    event = await create_event_with_matrix(db_session, admin_user.id, payload)
-    await db_session.commit()
-    await db_session.refresh(event)
-
-    assert event.venue_id == venue.id
-    assert event.venue_layout_id is None
+    assert show.venue_id == venue.id
+    assert show.venue_layout_id is None
 
     event_seats = list(
         await db_session.scalars(
-            select(Seat).where(Seat.event_id == event.id).order_by(Seat.seat_label.asc())
+            select(Seat).where(Seat.show_id == show.id).order_by(Seat.seat_label.asc())
         )
     )
     assert len(event_seats) == 4
@@ -640,35 +677,48 @@ async def test_create_event_with_venue_id_only_uses_venue(db_session, admin_user
 
 @pytest.mark.asyncio
 async def test_create_event_with_invalid_venue_id_fails(db_session, admin_user):
-    """Invalid venue_id should be rejected when creating an event."""
+    """venue_id không hợp lệ phải bị từ chối khi tạo sự kiện."""
 
-    payload = EventCreateRequest(
-        title="Invalid Venue Event",
-        description="Event with a non-existing venue_id should fail",
-        category="Concert",
-        venue="Ghost Venue",
-        start_at=datetime.now(UTC) + timedelta(days=1),
-        end_at=datetime.now(UTC) + timedelta(days=1, hours=2),
-        venue_id=999999,
-        zones=[
-            {
-                "code": "GEN",
-                "name": "General",
-                "row_count": 1,
-                "seats_per_row": 1,
-                "price": 10,
-                "color": "#000000",
-            }
-        ],
+    event = await create_event(
+        db_session,
+        admin_user.id,
+        EventCreateRequest(
+            title="Invalid Venue Event",
+            description="Event with a non-existing venue_id should fail",
+            category="Concert",
+            start_date=(datetime.now(UTC) + timedelta(days=1)).date(),
+            end_date=(datetime.now(UTC) + timedelta(days=1)).date(),
+            cover_image_url="",
+            status="live",
+        ),
     )
 
     with pytest.raises(Exception):
-        await create_event_with_matrix(db_session, admin_user.id, payload)
+        await create_show_with_inventory(
+            db_session,
+            event,
+            admin_user.id,
+            ShowCreateRequest(
+                title="Invalid Venue Event Show",
+                description="Show with a non-existing venue_id should fail",
+                venue="Ghost Venue",
+                show_date=(datetime.now(UTC) + timedelta(days=1)).date(),
+                start_time=datetime.now(UTC).time().replace(hour=18, minute=0, second=0, microsecond=0),
+                end_time=datetime.now(UTC).time().replace(hour=20, minute=0, second=0, microsecond=0),
+                status="live",
+                hold_minutes=10,
+                queue_enabled=False,
+                queue_release_batch=50,
+                max_active_queue_tokens=100,
+                venue_id=999999,
+                zones=[SeatZoneCreate(code="GEN", name="General", row_count=1, seats_per_row=1, price=10, color="#000000")],
+            ),
+        )
 
 
 @pytest.mark.asyncio
 async def test_create_and_list_polygons(db_session, admin_user):
-    """Test saving polygon zones for a venue layout."""
+    """Kiểm thử lưu vùng polygon cho bố cục địa điểm."""
     from app.api.deps import get_current_active_admin, get_db_session
 
     venue = Venue(

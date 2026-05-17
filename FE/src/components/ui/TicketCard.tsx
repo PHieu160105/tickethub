@@ -41,14 +41,14 @@ export const TicketCard: React.FC<TicketCardProps> = ({
         isFeatured ? 'xl:col-span-2 border-primary-container/30' : ''
       }`}
     >
-      {/* Image Section */}
+      {/* Khu vực hiển thị ảnh đại diện của sự kiện. */}
       <div
         className={`w-full md:w-48 h-64 md:h-auto overflow-hidden relative ${
           isFeatured ? 'md:w-72' : ''
         }`}
       >
         <img
-          alt="Event Poster"
+            alt="Ảnh đại diện sự kiện"
           src={imageUrl}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
         />
@@ -60,13 +60,13 @@ export const TicketCard: React.FC<TicketCardProps> = ({
         {isFeatured && (
           <div className="absolute top-4 left-4">
             <span className="px-4 py-1 bg-secondary text-background font-black text-xs uppercase tracking-[0.2em] rounded-full">
-              Legendary Tier
+              Hạng đặc biệt
             </span>
           </div>
         )}
       </div>
 
-      {/* Content Section */}
+      {/* Khu vực hiển thị thông tin chính của vé. */}
       <div
         className={`flex-1 p-8 flex flex-col justify-between ${
           isFeatured ? 'p-8 md:p-12 flex flex-col justify-center' : ''
@@ -77,7 +77,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
             <span
               className={`px-3 py-1 border rounded-full text-[10px] font-black uppercase tracking-widest ${statusColors[status]}`}
             >
-              {status === 'confirmed' ? 'Confirmed' : status}
+              {status === 'confirmed' ? 'Đã xác nhận' : status === 'pending' ? 'Đang xử lý' : 'Đã hủy'}
             </span>
           </div>
           <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-slate-500">{ticketNumber}</p>
@@ -91,8 +91,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
 
           {isFeatured && additionalInfo.length > 0 && (
             <p className="text-on-surface-variant mb-8 max-w-lg">
-              You are invited to the edge of space for the annual interstellar gathering.
-              Includes open bar at the Milky Way Lounge and private shuttle service.
+              Vé đặc biệt bao gồm quyền ưu tiên check-in và các tiện ích cao cấp của sự kiện.
             </p>
           )}
 
@@ -144,7 +143,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
                   }
             }
           >
-            {isFeatured ? 'Claim Voyager Perks' : 'CHI TIẾT'}
+            {isFeatured ? 'Nhận quyền lợi đặc biệt' : 'CHI TIẾT'}
           </button>
 
           <button

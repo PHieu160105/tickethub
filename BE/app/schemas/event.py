@@ -1,4 +1,4 @@
-"""Event, show, seat, and admin planning schemas."""
+"""Schema sự kiện, buổi diễn, ghế và planner admin."""
 
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -9,7 +9,7 @@ from app.models.enums import EventStatus, Gender, SeatStatus
 
 
 class SeatZoneCreate(BaseModel):
-    """Seat zone matrix config payload for show creation."""
+    """Payload cấu hình ma trận ghế khi tạo buổi diễn."""
 
     code: str = Field(min_length=1, max_length=30)
     name: str = Field(min_length=1, max_length=100)
@@ -21,7 +21,7 @@ class SeatZoneCreate(BaseModel):
 
 
 class SeatZoneUpdate(BaseModel):
-    """Admin payload for editing one show zone matrix."""
+    """Payload admin chỉnh sửa ma trận một khu vực ghế của buổi diễn."""
 
     code: str = Field(min_length=1, max_length=30)
     name: str = Field(min_length=1, max_length=100)
@@ -33,7 +33,7 @@ class SeatZoneUpdate(BaseModel):
 
 
 class EventCreateRequest(BaseModel):
-    """Admin payload to create a parent event."""
+    """Payload admin tạo sự kiện cha."""
 
     title: str = Field(min_length=3, max_length=255)
     description: str = Field(min_length=10)
@@ -46,12 +46,12 @@ class EventCreateRequest(BaseModel):
     @model_validator(mode="after")
     def validate_range(self) -> "EventCreateRequest":
         if self.end_date < self.start_date:
-            raise ValueError("end_date must be on or after start_date")
+            raise ValueError("Ngày kết thúc phải bằng hoặc sau ngày bắt đầu")
         return self
 
 
 class EventUpdateRequest(BaseModel):
-    """Admin payload to update event metadata only."""
+    """Payload admin cập nhật metadata của sự kiện."""
 
     title: str | None = Field(default=None, min_length=3, max_length=255)
     description: str | None = Field(default=None, min_length=10)
@@ -63,7 +63,7 @@ class EventUpdateRequest(BaseModel):
 
 
 class ShowCreateRequest(BaseModel):
-    """Admin payload to create a sellable show."""
+    """Payload admin tạo buổi diễn có thể bán vé."""
 
     title: str = Field(min_length=3, max_length=255)
     description: str = Field(min_length=10)
@@ -83,16 +83,16 @@ class ShowCreateRequest(BaseModel):
     @model_validator(mode="after")
     def validate_show_source(self) -> "ShowCreateRequest":
         if self.end_time <= self.start_time:
-            raise ValueError("end_time must be later than start_time")
+            raise ValueError("Giờ kết thúc phải sau giờ bắt đầu")
         if self.venue_layout_id is not None:
             if self.venue_id is None:
-                raise ValueError("venue_id is required when venue_layout_id is provided")
+                raise ValueError("Phải truyền venue_id khi truyền venue_layout_id")
             return self
         return self
 
 
 class ShowUpdateRequest(BaseModel):
-    """Admin payload to update one show."""
+    """Payload admin cập nhật một buổi diễn."""
 
     title: str | None = Field(default=None, min_length=3, max_length=255)
     description: str | None = Field(default=None, min_length=10)
@@ -110,7 +110,7 @@ class ShowUpdateRequest(BaseModel):
 
 
 class ShowSummaryResponse(BaseModel):
-    """Short show shape for event detail and admin lists."""
+    """Payload tóm tắt buổi diễn cho trang chi tiết sự kiện và danh sách admin."""
 
     id: int
     event_id: int
@@ -128,7 +128,7 @@ class ShowSummaryResponse(BaseModel):
 
 
 class EventCardResponse(BaseModel):
-    """Short event shape for listings."""
+    """Payload tóm tắt sự kiện cho danh sách public/admin."""
 
     id: int
     slug: str
@@ -145,13 +145,13 @@ class EventCardResponse(BaseModel):
 
 
 class EventDetailResponse(EventCardResponse):
-    """Detailed event payload with child shows."""
+    """Payload chi tiết sự kiện kèm các buổi diễn con."""
 
     shows: list[ShowSummaryResponse]
 
 
 class ShowDetailResponse(ShowSummaryResponse):
-    """Detailed show payload for admin and booking clients."""
+    """Payload chi tiết buổi diễn cho admin và màn đặt vé."""
 
     event_slug: str
     event_title: str
@@ -162,7 +162,7 @@ class ShowDetailResponse(ShowSummaryResponse):
 
 
 class SeatZoneResponse(BaseModel):
-    """Read-only zone payload."""
+    """Payload khu vực ghế dạng chỉ đọc."""
 
     id: int
     code: str
@@ -176,7 +176,7 @@ class SeatZoneResponse(BaseModel):
 
 
 class SeatUserInfoResponse(BaseModel):
-    """Basic user info shown to admin in seat inspector."""
+    """Thông tin người dùng cơ bản hiển thị trong seat inspector của admin."""
 
     user_id: int
     full_name: str
@@ -186,7 +186,7 @@ class SeatUserInfoResponse(BaseModel):
 
 
 class SeatPurchaseInfoResponse(BaseModel):
-    """Purchase details for sold seats."""
+    """Thông tin đơn mua của ghế đã bán."""
 
     user: SeatUserInfoResponse
     order_id: int
@@ -195,7 +195,7 @@ class SeatPurchaseInfoResponse(BaseModel):
 
 
 class SeatResponse(BaseModel):
-    """Serializable seat object for matrix rendering."""
+    """Đối tượng ghế có thể serialize để render ma trận ghế."""
 
     id: int
     zone_id: int | None = None
@@ -213,7 +213,7 @@ class SeatResponse(BaseModel):
 
 
 class SeatMatrixResponse(BaseModel):
-    """Seats and zones returned to one show booking screen."""
+    """Danh sách ghế và khu vực trả về màn đặt vé của một buổi diễn."""
 
     show_id: int
     show_title: str
@@ -226,7 +226,7 @@ class SeatMatrixResponse(BaseModel):
 
 
 class EventOccupancyResponse(BaseModel):
-    """Per-show occupancy totals for admin dashboards."""
+    """Tổng hợp lấp đầy ghế theo từng buổi diễn cho dashboard admin."""
 
     event_id: int
     event_title: str
@@ -239,7 +239,7 @@ class EventOccupancyResponse(BaseModel):
 
 
 class SeatSingleCreateRequest(BaseModel):
-    """Create a single seat for a show with coordinates (percent 0-100)."""
+    """Payload tạo một ghế theo tọa độ phần trăm 0-100 của buổi diễn."""
 
     seat_label: str = Field(min_length=1, max_length=100)
     x: float = Field(ge=0.0, le=100.0)
@@ -260,7 +260,7 @@ class ArcConfig(BaseModel):
 
 
 class SeatBulkCreateRequest(BaseModel):
-    """Bulk generate seats for a show using supported patterns."""
+    """Payload sinh ghế hàng loạt theo các mẫu bố trí được hỗ trợ."""
 
     zone_id: int | None = None
     section_id: int | None = None
@@ -283,7 +283,7 @@ class SeatCreateResponse(BaseModel):
 
 
 class SeatUpdateRequest(BaseModel):
-    """Update a show's editable seat geometry and sale metadata."""
+    """Payload cập nhật hình học ghế và metadata bán vé của buổi diễn."""
 
     seat_label: str | None = Field(default=None, min_length=1, max_length=100)
     x: float | None = Field(default=None, ge=0.0, le=100.0)

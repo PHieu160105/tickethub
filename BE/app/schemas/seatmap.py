@@ -1,10 +1,10 @@
-"""Seat map response schemas."""
+"""Schema phản hồi sơ đồ ghế cho màn chọn ghế."""
 
 from pydantic import BaseModel, ConfigDict
 
 
 class SeatMapSectionResponse(BaseModel):
-    """Section metadata for seat map."""
+    """Metadata khu vực lấy từ venue layout."""
 
     id: int
     name: str
@@ -16,7 +16,7 @@ class SeatMapSectionResponse(BaseModel):
 
 
 class SeatMapZoneResponse(BaseModel):
-    """Zone metadata for one show's seat plan."""
+    """Metadata khu giá vé của một buổi diễn."""
 
     id: int
     code: str
@@ -28,7 +28,7 @@ class SeatMapZoneResponse(BaseModel):
 
 
 class SeatMapSeatResponse(BaseModel):
-    """Seat with coordinates for map rendering."""
+    """Ghế có tọa độ để frontend render trên canvas."""
 
     id: int
     label: str
@@ -49,14 +49,14 @@ class SeatMapSeatResponse(BaseModel):
 
 
 class SeatMapPolygonPointResponse(BaseModel):
-    """A single polygon point in percentage coordinates."""
+    """Một điểm polygon theo hệ tọa độ phần trăm."""
 
     x: float
     y: float
 
 
 class SeatMapPolygonResponse(BaseModel):
-    """Polygon overlay metadata for customer map rendering."""
+    """Metadata polygon overlay để vẽ vùng ghế trên bản đồ khách hàng."""
 
     id: int
     zone_id: int | None = None
@@ -70,7 +70,7 @@ class SeatMapPolygonResponse(BaseModel):
 
 
 class SeatMapBackgroundResponse(BaseModel):
-    """Venue background metadata for rendering the map base layer."""
+    """Metadata ảnh nền địa điểm dùng làm lớp nền sơ đồ ghế."""
 
     source: str | None
     type: str | None
@@ -81,7 +81,7 @@ class SeatMapBackgroundResponse(BaseModel):
 
 
 class SeatMapResponse(BaseModel):
-    """Full seat map payload for frontend."""
+    """Payload đầy đủ của sơ đồ ghế cho frontend."""
 
     show_id: int
     show_title: str

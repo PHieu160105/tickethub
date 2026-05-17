@@ -41,7 +41,7 @@ const INFO_SECTIONS = [
 
 export default function InfoPage() {
   const location = useLocation()
-  const [activeId, setActiveId] = useState(INFO_SECTIONS[0].id)
+  const [activeId, setActiveId] = useState(() => location.hash.replace('#', '') || INFO_SECTIONS[0].id)
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({})
 
   const sectionIds = useMemo(() => INFO_SECTIONS.map((section) => section.id), [])
@@ -75,10 +75,7 @@ export default function InfoPage() {
 
   useEffect(() => {
     const hash = location.hash.replace('#', '')
-    if (!hash) {
-      setActiveId(INFO_SECTIONS[0].id)
-      return
-    }
+    if (!hash) return
 
     const target = sectionRefs.current[hash]
     if (!target) return

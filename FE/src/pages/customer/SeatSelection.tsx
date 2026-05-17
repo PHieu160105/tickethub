@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import axios from 'axios'
 
 import { CustomerSeatMap } from '@/components/customer/CustomerSeatMap'
 import { SeatMapLegend } from '@/components/customer/SeatMapLegend'
@@ -7,11 +8,13 @@ import { Button } from '@/components/ui/Button'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { WS_BASE_URL } from '@/constants'
 import { useAuth } from '@/context/AuthContext'
+import { queueApi } from '@/features/booking/api/queueApi'
 import { useLockSeats, useReleaseSeats } from '@/features/booking/hooks/useBooking'
 import { useShowSeats } from '@/features/events/hooks/useEvents'
 import { useWebSocketHeartbeat } from '@/hooks/useWebSocketHeartbeat'
-import { eventApi, seatmapApi } from '@/lib/api'
+import { eventApi, extractApiErrorMessage, seatmapApi } from '@/lib/api'
 import { authStorage, queueStorage } from '@/lib/storage'
+import { formatCurrencyVnd } from '@/lib/utils'
 import type { Seat, SeatMapResponse, SeatMapSeat, SeatZone } from '@/types'
 import { AlertCircle, MapPin, Ticket } from 'lucide-react'
 
@@ -34,6 +37,15 @@ function groupSeatsByZone(seats: Seat[]) {
 const DEFAULT_VIEWPORT = { scale: 1, offsetX: 0, offsetY: 0 }
 const MATRIX_REFRESH_INTERVAL_MS = 3000
 
+function isRecoverableQueueTokenError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) {
+    return false
+  }
+
+  const statusCode = error.response?.status
+  return statusCode === 403 || statusCode === 404 || statusCode === 410 || statusCode === 429
+}
+
 export default function SeatSelection() {
   const { showId: showIdParam } = useParams<{ showId: string }>()
   const navigate = useNavigate()
@@ -51,11 +63,15 @@ export default function SeatSelection() {
   const [isPanning, setIsPanning] = useState(false)
   const [panStartCursor, setPanStartCursor] = useState<{ x: number; y: number } | null>(null)
   const [panStartOffset, setPanStartOffset] = useState<{ x: number; y: number } | null>(null)
+  const [queueAccessStatus, setQueueAccessStatus] = useState<'checking' | 'admitted' | 'blocked'>('checking')
+  const [queueAccessMessage, setQueueAccessMessage] = useState('')
   const canvasRef = useRef<HTMLDivElement>(null)
 
   const queueToken = showId ? queueStorage.getToken(showId) : null
   const authToken = authStorage.getToken()
   const wsUrl = showId && authToken ? `${WS_BASE_URL}/shows/${showId}/seats?token=${encodeURIComponent(authToken)}` : null
+  const matrixShowId = matrix?.show_id
+  const matrixQueueEnabled = Boolean(matrix?.queue_enabled)
 
   const refreshSeatMap = useCallback(async () => {
     if (!showId || Number.isNaN(showId)) return
@@ -94,6 +110,67 @@ export default function SeatSelection() {
   }, [showId])
 
   useEffect(() => {
+    let disposed = false
+
+    async function verifyQueueAccess() {
+      if (!matrixShowId) return
+
+      if (!matrixQueueEnabled || !isAuthenticated) {
+        setQueueAccessStatus('admitted')
+        setQueueAccessMessage('')
+        return
+      }
+
+      if (!queueToken) {
+        setQueueAccessStatus('blocked')
+        setQueueAccessMessage('Sự kiện này yêu cầu vào hàng đợi trước khi chọn ghế.')
+        return
+      }
+
+      setQueueAccessStatus('checking')
+      setQueueAccessMessage('Đang kiểm tra quyền vào từ hàng đợi...')
+
+      try {
+        const queueStatus = await queueApi.status(matrixShowId, queueToken)
+        if (disposed) return
+
+        if (queueStatus.status === 'admitted') {
+          setQueueAccessStatus('admitted')
+          setQueueAccessMessage('')
+          return
+        }
+
+        if (queueStatus.status === 'waiting') {
+          setQueueAccessStatus('blocked')
+          setQueueAccessMessage(
+            `Bạn đang ở vị trí thứ ${queueStatus.position ?? '-'} trong hàng đợi. Vui lòng chờ đến lượt trước khi chọn ghế.`,
+          )
+          return
+        }
+
+        queueStorage.clearToken(matrixShowId)
+        setQueueAccessStatus('blocked')
+        setQueueAccessMessage('Token hàng đợi đã hết hạn. Vui lòng tham gia lại phòng chờ để nhận lượt mới.')
+      } catch (queueError) {
+        if (disposed) return
+
+        if (isRecoverableQueueTokenError(queueError)) {
+          queueStorage.clearToken(matrixShowId)
+        }
+
+        setQueueAccessStatus('blocked')
+        setQueueAccessMessage(extractApiErrorMessage(queueError, 'Không thể kiểm tra quyền vào từ hàng đợi.'))
+      }
+    }
+
+    void verifyQueueAccess()
+
+    return () => {
+      disposed = true
+    }
+  }, [isAuthenticated, matrixQueueEnabled, matrixShowId, queueToken])
+
+  useEffect(() => {
     if (!isPanning || !panStartCursor || !panStartOffset) return
 
     const onMove = (event: MouseEvent) => {
@@ -121,12 +198,16 @@ export default function SeatSelection() {
   useEffect(() => {
     if (!matrix) return
 
-    setSelectedSeatIds((previous) =>
-      previous.filter((seatId) => {
-        const seat = matrix.seats.find((item) => item.id === seatId)
-        return Boolean(seat && seat.status === 'available')
-      }),
-    )
+    const frameId = window.requestAnimationFrame(() => {
+      setSelectedSeatIds((previous) =>
+        previous.filter((seatId) => {
+          const seat = matrix.seats.find((item) => item.id === seatId)
+          return Boolean(seat && seat.status === 'available')
+        }),
+      )
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
   }, [matrix])
 
   const seatsByZone = useMemo(() => groupSeatsByZone(matrix?.seats ?? []), [matrix?.seats])
@@ -190,6 +271,11 @@ export default function SeatSelection() {
 
     setStatusMessage('')
 
+    if (matrix.queue_enabled && queueAccessStatus !== 'admitted') {
+      navigate(`/queue?showId=${matrix.show_id}&eventKey=${encodeURIComponent(matrix.event_slug)}`)
+      return
+    }
+
     try {
       const result = await lockSeats(matrix.show_id, selectedSeatIds, queueToken ?? undefined)
 
@@ -225,19 +311,34 @@ export default function SeatSelection() {
         state: { lockedSeatIds: result.locked_seat_ids, lockedSeats },
       })
     } catch (checkoutError) {
-      setStatusMessage(checkoutError instanceof Error ? checkoutError.message : 'Không thể giữ ghế để thanh toán.')
+      if (matrix.queue_enabled && isRecoverableQueueTokenError(checkoutError)) {
+        queueStorage.clearToken(matrix.show_id)
+        setSelectedSeatIds([])
+        setStatusMessage('Phiên hàng đợi không còn hợp lệ. Hệ thống sẽ đưa bạn quay lại hàng đợi để cấp token mới.')
+        await refetch(false)
+        await refreshSeatMap()
+        navigate(`/queue?showId=${matrix.show_id}&eventKey=${encodeURIComponent(matrix.event_slug)}`)
+        return
+      }
+
+      setStatusMessage(extractApiErrorMessage(checkoutError, 'Không thể giữ ghế để thanh toán.'))
       await refetch(false)
       await refreshSeatMap()
     }
-  }, [isAuthenticated, lockSeats, matrix, navigate, queueToken, refetch, refreshSeatMap, releaseSeats, selectedSeatIds])
+  }, [isAuthenticated, lockSeats, matrix, navigate, queueAccessStatus, queueToken, refetch, refreshSeatMap, releaseSeats, selectedSeatIds])
 
   const handleCanvasMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.button === 1 || event.shiftKey) {
-      event.preventDefault()
-      setIsPanning(true)
-      setPanStartCursor({ x: event.clientX, y: event.clientY })
-      setPanStartOffset({ x: viewport.offsetX, y: viewport.offsetY })
+    if (event.button !== 0 && event.button !== 1) return
+
+    const target = event.target
+    if (target instanceof Element && target.closest('button, a, input, select, textarea, [data-no-pan="true"]')) {
+      return
     }
+
+    event.preventDefault()
+    setIsPanning(true)
+    setPanStartCursor({ x: event.clientX, y: event.clientY })
+    setPanStartOffset({ x: viewport.offsetX, y: viewport.offsetY })
   }, [viewport.offsetX, viewport.offsetY])
 
   const handleCanvasMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
@@ -278,7 +379,7 @@ export default function SeatSelection() {
         void refreshSeatMap()
       }
     } catch {
-      // Ignore malformed heartbeat payloads.
+      // Bỏ qua gói tin WebSocket không đúng định dạng để luồng cập nhật ghế tiếp tục ổn định.
     }
   }, [refetch, refreshSeatMap])
 
@@ -299,13 +400,17 @@ export default function SeatSelection() {
     )
   }
 
-  if (matrix.queue_enabled && !queueToken) {
+  if (matrix.queue_enabled && isAuthenticated && queueAccessStatus === 'checking') {
+    return <GlobalLoader />
+  }
+
+  if (matrix.queue_enabled && isAuthenticated && queueAccessStatus !== 'admitted') {
     return (
       <div className="min-h-screen text-white">
         <main className="mx-auto max-w-3xl space-y-4 px-6 py-24 text-center">
-          <p className="text-amber-300">Sự kiện này yêu cầu vào hàng đợi trước khi chọn ghế.</p>
+          <p className="text-amber-300">{queueAccessMessage || 'Sự kiện này yêu cầu vào hàng đợi trước khi chọn ghế.'}</p>
           <Link to={`/queue?showId=${matrix.show_id}&eventKey=${matrix.event_slug}`}>
-            <Button>Tham gia hàng đợi</Button>
+            <Button>{queueToken ? 'Quay lại phòng chờ' : 'Tham gia hàng đợi'}</Button>
           </Link>
         </main>
       </div>
@@ -322,9 +427,14 @@ export default function SeatSelection() {
               <h1 className="mt-2 text-3xl font-black">{seatMap?.show_title ?? 'Chọn ghế trên sơ đồ'}</h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-400">
                 {useCanvas
-                  ? 'Click vào ghế trống để chọn. Ghế chỉ được giữ khi bạn bấm tiếp tục thanh toán.'
+                  ? 'Click vào ghế trống để xem giá và chọn thử. Ghế chỉ được giữ khi bạn đăng nhập, qua hàng đợi hợp lệ và bấm tiếp tục thanh toán.'
                   : 'Hiện chưa có sơ đồ chỗ ngồi cho show này.'}
               </p>
+              {matrix.queue_enabled && !isAuthenticated && (
+                <p className="mt-2 max-w-2xl text-xs text-amber-300">
+                  Bạn đang xem ở chế độ khách. Hệ thống chỉ yêu cầu đăng nhập và hàng đợi khi bạn bắt đầu giữ ghế để thanh toán.
+                </p>
+              )}
             </div>
             <Link to={`/event/${matrix.event_slug}`}>
               <Button variant="outline" size="sm">Quay lại sự kiện</Button>
@@ -368,7 +478,7 @@ export default function SeatSelection() {
                       <div>
                         <h3 className="font-semibold">{zone.name}</h3>
                         <p className="text-xs text-slate-400">
-                          {zone.code} | {Number(zone.price).toLocaleString('vi-VN')}đ
+                          {zone.code} | {formatCurrencyVnd(zone.price)}
                         </p>
                       </div>
                       <span className="text-xs text-slate-400">{zoneSeats.length} ghế</span>
@@ -384,7 +494,7 @@ export default function SeatSelection() {
                             onClick={() => handleSeatClick(seat)}
                             className={`rounded border px-2 py-1.5 text-xs transition-colors ${seatClass(seat, isSelected)}`}
                             disabled={seat.status !== 'available'}
-                            title={`${seat.seat_label} - ${Number(seat.price).toLocaleString('vi-VN')}đ`}
+                            title={`${seat.seat_label} - ${formatCurrencyVnd(seat.price)}`}
                           >
                             {seat.seat_label}
                           </button>
@@ -415,7 +525,7 @@ export default function SeatSelection() {
                   <div key={seat.id} className="flex items-center justify-between rounded-lg bg-slate-800/60 px-3 py-2">
                     <div>
                       <p className="text-sm font-medium">{seat.seat_label}</p>
-                      <p className="text-xs text-slate-400">{Number(seat.price).toLocaleString('vi-VN')}đ</p>
+                      <p className="text-xs text-slate-400">{formatCurrencyVnd(seat.price)}</p>
                     </div>
                     <button
                       type="button"
@@ -433,7 +543,7 @@ export default function SeatSelection() {
           <div className="space-y-4 rounded-3xl border border-white/10 bg-slate-900/70 p-6">
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Tổng cộng</span>
-              <span className="font-bold">{subtotal.toLocaleString('vi-VN')}đ</span>
+              <span className="font-bold">{formatCurrencyVnd(subtotal)}</span>
             </div>
             <div className="flex justify-between text-xs text-slate-500">
               <span>{selectedSeats.length} ghế đã chọn</span>
@@ -467,7 +577,7 @@ export default function SeatSelection() {
           {!useCanvas && (
             <div className="space-y-1 rounded-xl border border-white/10 bg-slate-900/70 p-4 text-xs text-slate-400">
               <p className="font-medium">Chú thích:</p>
-              <p>Available: xanh theo zone | Locked: cam | Held by you: xanh lá | Sold: xám</p>
+              <p>Còn trống: màu theo khu vực | Đang giữ: cam | Bạn đang giữ: xanh lá | Đã bán: xám</p>
             </div>
           )}
         </aside>

@@ -1,4 +1,4 @@
-"""Venue and layout ORM models."""
+"""Khai báo các mô hình ORM cho venue, layout, section và polygon."""
 
 from datetime import datetime
 from decimal import Decimal
@@ -10,7 +10,18 @@ from app.models.base import Base, TimestampMixin
 
 
 class Venue(TimestampMixin, Base):
-    """Represents a physical venue (stadium, theater, arena)."""
+    """Đại diện cho địa điểm vật lý nơi show được tổ chức.
+
+    Input:
+    - Tên venue, địa chỉ, loại venue, sức chứa và dữ liệu nền sơ đồ.
+
+    Output:
+    - Một bản ghi `venues` là gốc cha cho nhiều `VenueLayout`.
+
+    Cách hoạt động:
+    - Venue chứa metadata vật lý chung.
+    - Các layout con mô tả nhiều mặt sàn hoặc cấu hình chỗ ngồi khác nhau của cùng một venue.
+    """
 
     __tablename__ = "venues"
 
@@ -18,10 +29,10 @@ class Venue(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     address: Mapped[str] = mapped_column(Text, nullable=True)
     city: Mapped[str] = mapped_column(String(100), nullable=True)
-    venue_type: Mapped[str] = mapped_column(String(50), nullable=False)  # stadium, theater, arena, custom
+    venue_type: Mapped[str] = mapped_column(String(50), nullable=False)  # Loại venue như sân vận động, nhà hát, arena hoặc cấu hình tùy biến.
     capacity: Mapped[int] = mapped_column(Integer, nullable=True)
-    svg_source: Mapped[str] = mapped_column(Text, nullable=True)  # Original SVG
-    svg_processed: Mapped[str] = mapped_column(Text, nullable=True)  # Processed with markers
+    svg_source: Mapped[str] = mapped_column(Text, nullable=True)  # Dữ liệu nền gốc được tải lên.
+    svg_processed: Mapped[str] = mapped_column(Text, nullable=True)  # Dữ liệu nền đã qua tiền xử lý để gắn marker hoặc parse.
     width: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
     height: Mapped[int] = mapped_column(Integer, default=600, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -55,7 +66,17 @@ class Venue(TimestampMixin, Base):
 
 
 class VenueLayout(TimestampMixin, Base):
-    """Configuration/layout for a venue (main floor, mezzanine, etc.)."""
+    """Đại diện cho một cấu hình layout cụ thể của venue.
+
+    Input:
+    - `venue_id`, tên layout, mô tả, dữ liệu SVG và thứ tự sắp xếp.
+
+    Output:
+    - Một bản ghi `venue_layouts` để quản lý nhiều mặt sàn hoặc biến thể cấu hình.
+
+    Cách hoạt động:
+    - Một venue có thể có nhiều layout như main floor, balcony, mezzanine.
+    """
 
     __tablename__ = "venue_layouts"
 
@@ -73,7 +94,17 @@ class VenueLayout(TimestampMixin, Base):
 
 
 class Section(TimestampMixin, Base):
-    """Zone/section within a layout (VIP, Premium, Standard)."""
+    """Đại diện cho một section bên trong một layout của venue.
+
+    Input:
+    - Tên section, mã section, màu hiển thị và giá nền.
+
+    Output:
+    - Một bản ghi `sections` dùng để nhóm ghế trong venue builder.
+
+    Cách hoạt động:
+    - Section thường ánh xạ sang khái niệm khu vực như VIP, Premium, Standard.
+    """
 
     __tablename__ = "sections"
 
@@ -90,7 +121,17 @@ class Section(TimestampMixin, Base):
 
 
 class Polygon(TimestampMixin, Base):
-    """Polygon zone metadata drawn on top of a venue layout."""
+    """Đại diện cho metadata polygon vẽ trên layout của venue.
+
+    Input:
+    - `venue_id`, `venue_layout_id`, `section_id` tùy chọn và danh sách điểm polygon.
+
+    Output:
+    - Một bản ghi `polygons` dùng để tô vùng trực quan trong venue builder.
+
+    Cách hoạt động:
+    - Polygon có thể được gắn với section để phản ánh biên khu vực trên sơ đồ.
+    """
 
     __tablename__ = "polygons"
 

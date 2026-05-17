@@ -1,5 +1,5 @@
 /**
- * Events API functions
+ * Các hàm gọi API sự kiện.
  */
 
 import { api, withRetry } from '../../../lib/api'
@@ -16,7 +16,7 @@ export interface EventListParams {
 
 export const eventsApi = {
   /**
-   * List all events with optional filters
+   * Lấy danh sách sự kiện kèm bộ lọc tùy chọn.
    */
   async list(params?: EventListParams): Promise<EventCard[]> {
     const response = await withRetry(() => api.get<EventCard[]>('/events', { params }))
@@ -24,7 +24,7 @@ export const eventsApi = {
   },
 
   /**
-   * Get event detail by slug or ID
+   * Lấy chi tiết sự kiện bằng slug hoặc id.
    */
   async detail(eventKey: string): Promise<EventDetail> {
     const response = await withRetry(() => api.get<EventDetail>(`/events/${eventKey}`))
@@ -32,7 +32,7 @@ export const eventsApi = {
   },
 
   /**
-   * Get seat matrix for an event
+   * Lấy chi tiết một buổi diễn.
    */
   async show(showId: number): Promise<ShowDetail> {
     const response = await withRetry(() => api.get<ShowDetail>(`/shows/${showId}`))

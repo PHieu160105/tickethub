@@ -1,9 +1,18 @@
-"""Seat map and coordinate-based seat browsing routes."""
+"""Các route xem sơ đồ ghế theo tọa độ.
 
+Ghi chú:
+- Route trong file này là public-friendly: guest có thể xem ghế và giá.
+- Quyền giữ ghế/thanh toán không nằm ở đây mà nằm ở `bookings.py` và `booking_service.py`.
+"""
+
+# FastAPI dùng `APIRouter` để gom route và `Depends` để inject dependency.
 from fastapi import APIRouter, Depends
+
+# SQLAlchemy dùng `select` để tạo câu SQL đọc section/venue layout.
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Các import dưới đây là module tự viết trong TicketRush.
 from app.api.deps import get_optional_current_user
 from app.core.cache import public_api_cache, show_seat_cache_namespace
 from app.core.db import get_db_session
@@ -15,6 +24,7 @@ from app.schemas.seatmap import SeatMapResponse, SeatMapSectionResponse
 from app.services.event_service import get_show_by_id, get_show_seat_matrix
 from app.services.inventory_service import get_seatmap
 
+# Prefix `/shows` tạo các URL như `/api/shows/{show_id}/seats`.
 router = APIRouter(prefix="/shows", tags=["seatmap"])
 
 
@@ -24,20 +34,37 @@ async def show_seat_matrix(
     session: AsyncSession = Depends(get_db_session),
     current_user: User | None = Depends(get_optional_current_user),
 ) -> SeatMatrixResponse:
-    """Return full seat matrix for booking UI."""
+    """Trả ma trận ghế đầy đủ cho màn đặt vé.
 
+    Input:
+    - `show_id`: id buổi diễn cần xem ghế.
+    - `current_user`: user nếu có token hợp lệ, hoặc `None` nếu là guest.
+
+    Output:
+    - `SeatMatrixResponse` gồm metadata show/event, khu giá vé và danh sách ghế.
+
+    Cách hoạt động:
+    - Guest được xem ghế/giá nên dùng `get_optional_current_user`, không bắt đăng nhập.
+    - Nếu là guest, cache response ngắn hạn để giảm tải DB khi nhiều người chỉ xem sơ đồ.
+    - Nếu là admin, service có thể trả thêm thông tin người giữ/người mua để inspect.
+    """
+
+    # Lấy show trước để xác thực `show_id` tồn tại và lấy event_id/queue_enabled.
     show = await get_show_by_id(session, show_id)
     if current_user is None:
+        # Guest không có thông tin cá nhân hóa nên có thể dùng cache public.
         cached = await public_api_cache.get(show_seat_cache_namespace(show.id), "anonymous")
         if cached is not None:
             return cached
 
+    # Service dựng dữ liệu ghế; `current_user_id=None` nghĩa là guest, không đánh dấu ghế của tôi.
     zones, seats = await get_show_seat_matrix(
         session,
         show.id,
         current_user_id=current_user.id if current_user else None,
         include_user_details=bool(current_user and getattr(current_user.role, "value", str(current_user.role)) == "admin"),
     )
+    # Event cha dùng để frontend quay lại trang chi tiết sự kiện bằng slug.
     event = await session.get(Event, show.event_id)
     response = SeatMatrixResponse(
         show_id=show.id,
@@ -50,6 +77,7 @@ async def show_seat_matrix(
         seats=seats,
     )
     if current_user is None:
+        # Cache 30 giây đủ giảm tải danh sách ghế nhưng vẫn không làm trạng thái lock/sold trễ quá lâu.
         return await public_api_cache.set(show_seat_cache_namespace(show.id), "anonymous", response, ttl_seconds=30)
     return response
 
@@ -60,7 +88,20 @@ async def show_seatmap(
     session: AsyncSession = Depends(get_db_session),
     current_user: User | None = Depends(get_optional_current_user),
 ) -> SeatMapResponse:
-    """Get full seat map with coordinates for frontend rendering."""
+    """Lấy sơ đồ ghế đầy đủ có tọa độ để frontend render canvas.
+
+    Input:
+    - `show_id`: id buổi diễn cần render sơ đồ.
+    - `current_user`: user nếu có token hợp lệ, hoặc `None` cho guest.
+
+    Output:
+    - `SeatMapResponse` gồm ghế có tọa độ, khu vực, polygon và ảnh nền.
+
+    Cách hoạt động:
+    - Dùng route này cho canvas seat map của customer.
+    - Guest được xem giá và trạng thái ghế nhưng không được giữ ghế ở route này.
+    - Cache guest 10 giây vì seat map có trạng thái lock cần cập nhật nhanh hơn matrix.
+    """
 
     show = await get_show_by_id(session, show_id)
     if current_user is None:
@@ -76,6 +117,7 @@ async def show_seatmap(
         )
     )
     if current_user is None:
+        # TTL ngắn để người xem đông không dồn toàn bộ request vào DB nhưng vẫn thấy trạng thái gần realtime.
         return await public_api_cache.set(show_seat_cache_namespace(show.id), "seatmap_anonymous", response, ttl_seconds=10)
     return response
 
@@ -85,12 +127,24 @@ async def show_sections(
     show_id: int,
     session: AsyncSession = Depends(get_db_session),
 ) -> list[SeatMapSectionResponse]:
-    """Get section list with prices for a show."""
+    """Lấy danh sách section của venue layout kèm giá nền.
+
+    Input:
+    - `show_id`: id buổi diễn.
+
+    Output:
+    - Danh sách section để frontend dựng legend hoặc editor theo layout.
+
+    Cách hoạt động:
+    - Chỉ show clone từ venue layout mới có `venue_layout_id`.
+    - Show sinh ghế theo zone cổ điển trả danh sách rỗng.
+    """
 
     show = await get_show_by_id(session, show_id)
     if not show.venue_layout_id:
         return []
 
+    # Lấy section theo thứ tự admin đã cấu hình trong venue studio.
     sections = list(
         await session.scalars(
             select(Section)
@@ -99,6 +153,7 @@ async def show_sections(
         )
     )
 
+    # Chuyển ORM model sang schema response, ép `price_base` về float để JSON ổn định.
     return [
         SeatMapSectionResponse(
             id=s.id,

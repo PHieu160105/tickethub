@@ -1,7 +1,3 @@
-/**
- * Custom hook for events data fetching
- */
-
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { EventCard, EventDetail, SeatMatrixResponse } from '../../../types'
 import { eventsApi } from '../api/eventsApi'
@@ -18,24 +14,40 @@ export function useEvents(params?: { search?: string; category?: string }) {
     isLoading: false,
     error: null,
   })
+  const normalizedSearch = params?.search?.trim() || undefined
+  const normalizedCategory = params?.category?.trim() || undefined
+  const autoRequestKeyRef = useRef<string | null>(null)
 
   const fetchEvents = useCallback(async () => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }))
     try {
-      const events = await eventsApi.list(params)
+      const events = await eventsApi.list({
+        search: normalizedSearch,
+        category: normalizedCategory,
+      })
       setState({ events, isLoading: false, error: null })
     } catch (error) {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch events',
+        error: error instanceof Error ? error.message : 'Không tải được danh sách sự kiện',
       }))
     }
-  }, [params?.search, params?.category])
+  }, [normalizedCategory, normalizedSearch])
 
   useEffect(() => {
-    fetchEvents()
-  }, [fetchEvents])
+    const nextRequestKey = JSON.stringify({
+      search: normalizedSearch ?? null,
+      category: normalizedCategory ?? null,
+    })
+
+    if (autoRequestKeyRef.current === nextRequestKey) {
+      return
+    }
+
+    autoRequestKeyRef.current = nextRequestKey
+    void fetchEvents()
+  }, [fetchEvents, normalizedCategory, normalizedSearch])
 
   return { ...state, refetch: fetchEvents }
 }
@@ -64,7 +76,7 @@ export function useEventDetail(eventKey?: string) {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch event details',
+        error: error instanceof Error ? error.message : 'Không tải được chi tiết sự kiện',
       }))
     }
   }, [eventKey])
@@ -105,7 +117,7 @@ export function useShowSeats(showId?: number, options?: { pollIntervalMs?: numbe
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: hasLoadedRef.current ? prev.error : error instanceof Error ? error.message : 'Failed to fetch seats',
+        error: hasLoadedRef.current ? prev.error : error instanceof Error ? error.message : 'Không tải được sơ đồ ghế',
       }))
     }
   }, [showId])

@@ -2,6 +2,7 @@ import { useState, type MouseEventHandler, type ReactNode, type RefObject, type 
 import { Maximize2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
+import { formatCurrencyVnd } from '@/lib/utils'
 import type { SeatMapPolygon, SeatMapResponse, SeatMapSeat } from '@/types'
 
 function isSeatBlocked(seat: SeatMapSeat) {
@@ -110,18 +111,18 @@ export function CustomerSeatMap({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Interactive Seat Map</p>
+          <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Sơ đồ ghế tương tác</p>
           <h2 className="text-2xl font-black text-white">{seatMap.event_title}</h2>
           <p className="text-sm text-slate-400">{seatMap.venue_name}</p>
         </div>
         <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white/95 p-2 shadow-lg">
-          <Button size="icon" variant="outline" className="border-slate-300 bg-white text-slate-900 hover:bg-slate-100" onClick={onZoomOut} title="Zoom out">
+          <Button size="icon" variant="outline" className="border-slate-300 bg-white text-slate-900 hover:bg-slate-100" onClick={onZoomOut} title="Thu nhỏ">
             <ZoomOut className="h-4 w-4 text-black" />
           </Button>
-          <Button size="icon" variant="outline" className="border-slate-300 bg-white text-slate-900 hover:bg-slate-100" onClick={onZoomIn} title="Zoom in">
+          <Button size="icon" variant="outline" className="border-slate-300 bg-white text-slate-900 hover:bg-slate-100" onClick={onZoomIn} title="Phóng to">
             <ZoomIn className="h-4 w-4 text-black" />
           </Button>
-          <Button size="icon" variant="outline" className="border-slate-300 bg-white text-slate-900 hover:bg-slate-100" onClick={onResetView} title="Reset view">
+          <Button size="icon" variant="outline" className="border-slate-300 bg-white text-slate-900 hover:bg-slate-100" onClick={onResetView} title="Đưa sơ đồ về mặc định">
             <RotateCcw className="h-4 w-4 text-black" />
           </Button>
         </div>
@@ -136,7 +137,7 @@ export function CustomerSeatMap({
       >
         <div className="absolute left-4 top-4 z-20 inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white/95 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-700 shadow-lg backdrop-blur">
           <Maximize2 className="h-3.5 w-3.5 text-slate-900" />
-          Drag to pan
+          Kéo để di chuyển sơ đồ
         </div>
 
         <div
@@ -206,8 +207,8 @@ export function CustomerSeatMap({
             {visibleSeats.map((seat) => {
               const isSelected = selectedSeatIds.includes(seat.id)
               const zoneColor = seatColorMap?.get(seat.id) ?? seatMap.zones.find((item) => item.id === seat.zone_id)?.color ?? seatMap.sections.find((item) => item.id === seat.section_id)?.color
-              const priceLabel = Number(seat.price).toLocaleString('vi-VN')
-              const tooltipContent = `${seat.label} · ${seat.zone_name ?? seat.section_name ?? 'General'} · ${priceLabel}đ`
+              const priceLabel = formatCurrencyVnd(seat.price)
+              const tooltipContent = `${seat.label} · ${seat.zone_name ?? seat.section_name ?? 'Khu vực chung'} · ${priceLabel}`
               return (
                 <button
                   key={seat.id}
@@ -217,6 +218,7 @@ export function CustomerSeatMap({
                     if (isSeatBlocked(seat)) return
                     onSeatClick(seat)
                   }}
+                  onMouseDown={(event) => event.stopPropagation()}
                   onMouseEnter={(event) => setTooltip({ x: event.clientX, y: event.clientY, content: tooltipContent })}
                   onMouseLeave={() => setTooltip(null)}
                   disabled={isSeatBlocked(seat)}
@@ -245,8 +247,8 @@ export function CustomerSeatMap({
         </div>
 
         <div className="absolute bottom-4 left-4 right-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white/90 px-4 py-3 text-xs text-slate-700 shadow-lg">
-          <span>{visibleSeats.length} mapped seats{hiddenSeatCount > 0 ? ` · ${hiddenSeatCount} hidden` : ''}</span>
-          <span>Zoom {viewport.scale.toFixed(2)}x</span>
+          <span>{visibleSeats.length} ghế có tọa độ{hiddenSeatCount > 0 ? ` · ${hiddenSeatCount} ghế chưa có tọa độ` : ''}</span>
+          <span>Độ phóng {viewport.scale.toFixed(2)}x</span>
           {footer ? <span>{footer}</span> : null}
         </div>
       </div>

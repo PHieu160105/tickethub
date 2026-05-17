@@ -1,4 +1,4 @@
-"""Virtual queue ORM model."""
+"""Khai báo mô hình ORM cho hàng đợi ảo của hệ thống."""
 
 from datetime import datetime
 
@@ -10,7 +10,19 @@ from app.models.enums import QueueStatus
 
 
 class QueueEntry(TimestampMixin, Base):
-    """Represents one user in the waiting room pipeline for a flash sale event."""
+    """Đại diện cho một người dùng trong pipeline hàng đợi ảo của một show flash-sale.
+
+    Input:
+    - `event_id`, `show_id`, `user_id`, token queue và trạng thái hiện tại.
+
+    Output:
+    - Một bản ghi `queue_entries` dùng để kiểm soát vị trí, hạn truy cập và vòng đời queue.
+
+    Cách hoạt động:
+    - Mỗi người dùng vào hàng đợi sẽ có một token duy nhất.
+    - Trạng thái sẽ đi qua các mốc như `waiting`, `admitted`, `expired`, `completed`.
+    - Các mốc thời gian được dùng để xác định quyền được vào khu chọn ghế.
+    """
 
     __tablename__ = "queue_entries"
 

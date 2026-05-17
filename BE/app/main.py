@@ -1,4 +1,4 @@
-"""TicketRush FastAPI application entrypoint."""
+"""Điểm vào chính để khởi tạo ứng dụng FastAPI của TicketRush."""
 
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -21,7 +21,7 @@ settings = get_settings()
 
 
 async def _ensure_cover_image_url_text_column() -> None:
-    """Migrate events.cover_image_url to TEXT for large data URLs."""
+    """Đảm bảo cột `events.cover_image_url` dùng kiểu `TEXT` cho ảnh base64 hoặc URL dài."""
 
     async with engine.begin() as conn:
         column_type = await conn.scalar(
@@ -48,7 +48,7 @@ async def _ensure_cover_image_url_text_column() -> None:
 
 
 async def _ensure_seats_admin_lock_column() -> None:
-    """Add seats.is_admin_locked for older databases without a migration run."""
+    """Đảm bảo bảng ghế có cột `is_admin_locked` cho các cơ sở dữ liệu cũ."""
 
     async with engine.begin() as conn:
         await conn.execute(
@@ -62,7 +62,7 @@ async def _ensure_seats_admin_lock_column() -> None:
 
 
 async def _ensure_template_seat_columns_are_nullable() -> None:
-    """Allow venue template seats to exist without binding to one event."""
+    """Cho phép ghế template của venue tồn tại mà chưa cần gắn ngay vào event/show cụ thể."""
 
     async with engine.begin() as conn:
         await conn.execute(
@@ -84,7 +84,7 @@ async def _ensure_template_seat_columns_are_nullable() -> None:
 
 
 async def _ensure_user_auth_columns() -> None:
-    """Add newer social-login user columns on older databases."""
+    """Bổ sung các cột social login mới cho bảng người dùng nếu DB cũ còn thiếu."""
 
     async with engine.begin() as conn:
         await conn.execute(
@@ -137,7 +137,7 @@ async def _ensure_user_auth_columns() -> None:
 
 
 async def _ensure_show_refactor_schema() -> None:
-    """Backfill show-based schema on existing databases without manual migration."""
+    """Backfill cấu trúc dữ liệu kiểu show-based cho các DB cũ chưa migrate thủ công."""
 
     async with engine.begin() as conn:
         await conn.execute(
@@ -342,7 +342,21 @@ async def _ensure_show_refactor_schema() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """Initialize schema/seed data and start background workers."""
+    """Khởi tạo schema, seed dữ liệu và bật worker nền trong vòng đời ứng dụng.
+
+    Input:
+    - FastAPI truyền context lifespan nội bộ, hiện không cần dùng trực tiếp.
+
+    Output:
+    - Ứng dụng ở trạng thái sẵn sàng nhận request sau khi hoàn tất bootstrap.
+
+    Cách hoạt động:
+    - Tạo schema nếu thiếu.
+    - Đồng bộ metadata ORM.
+    - Chạy các bước tương thích ngược cho DB cũ.
+    - Seed dữ liệu demo.
+    - Khởi động worker nền.
+    """
 
     async with engine.begin() as conn:
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS ticket_rush"))
@@ -378,6 +392,7 @@ app.mount("/static", StaticFiles(directory=static_root), name="static")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
+    allow_origin_regex=settings.allowed_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -389,21 +404,21 @@ app.include_router(ws.router)
 
 @app.exception_handler(ValueError)
 async def value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
-    """Return consistent validation-style payload for ValueError exceptions."""
+    """Chuẩn hóa lỗi `ValueError` về payload thống nhất kiểu validation."""
 
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": str(exc)})
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(_: Request, __: Exception) -> JSONResponse:
-    """Return sanitized fallback payload for unexpected runtime errors."""
+    """Trả payload an toàn cho các lỗi runtime không mong muốn."""
 
     return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Internal server error"})
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    """Liveness probe endpoint with DB connectivity check."""
+    """Endpoint kiểm tra ứng dụng còn sống và còn kết nối được tới cơ sở dữ liệu."""
 
     from sqlalchemy import text
 

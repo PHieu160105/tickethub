@@ -1,7 +1,7 @@
-"""Pytest fixtures for async database-backed service tests."""
+"""Fixture pytest cho các kiểm thử dịch vụ bất đồng bộ có dùng cơ sở dữ liệu."""
 
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 
 import pytest
 import pytest_asyncio
@@ -14,13 +14,14 @@ from app.core.security import hash_password
 from app.models import Base
 from app.models.enums import EventStatus, Gender, UserRole
 from app.models.user import User
-from app.schemas.event import EventCreateRequest, SeatZoneCreate
-from app.services.event_service import create_event_with_matrix
+from app.models.event import Event, Show
+from app.schemas.event import EventCreateRequest, SeatZoneCreate, ShowCreateRequest
+from app.services.event_service import create_event, create_show_with_inventory
 
 
 @pytest_asyncio.fixture()
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Create isolated sqlite database per test."""
+    """Tạo cơ sở dữ liệu SQLite cô lập cho từng test."""
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", future=True)
 
@@ -33,7 +34,6 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     session_maker = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     async with engine.begin() as conn:
-        await conn.execute(sa.text("ATTACH DATABASE ':memory:' AS ticket_rush"))
         await conn.run_sync(Base.metadata.create_all)
 
     async with session_maker() as session:
@@ -44,7 +44,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 @pytest_asyncio.fixture()
 async def admin_user(db_session: AsyncSession) -> User:
-    """Persist one admin account for tests."""
+    """Tạo sẵn một tài khoản admin cho test."""
 
     admin = User(
         full_name="Admin",
@@ -62,7 +62,7 @@ async def admin_user(db_session: AsyncSession) -> User:
 
 @pytest_asyncio.fixture()
 async def customer_users(db_session: AsyncSession) -> tuple[User, User]:
-    """Persist two customer accounts for seat lock race-path tests."""
+    """Tạo sẵn hai tài khoản khách hàng để kiểm thử tranh chấp giữ ghế."""
 
     user1 = User(
         full_name="User One",
@@ -88,17 +88,26 @@ async def customer_users(db_session: AsyncSession) -> tuple[User, User]:
 
 
 @pytest_asyncio.fixture()
-async def sample_event(db_session: AsyncSession, admin_user: User):
-    """Create event with one zone and deterministic small seat matrix."""
+async def sample_event_with_show(db_session: AsyncSession, admin_user: User) -> tuple[Event, Show]:
+    """Tạo một sự kiện cha và một buổi diễn bán vé với ma trận ghế nhỏ."""
 
-    payload = EventCreateRequest(
+    show_date = (datetime.now(UTC) + timedelta(days=1)).date()
+    event_payload = EventCreateRequest(
         title="Test Event",
         description="Event for testing seat lock and checkout lifecycle.",
         category="Concert",
-        venue="Test Venue",
-        start_at=datetime.now(UTC) + timedelta(days=1),
-        end_at=datetime.now(UTC) + timedelta(days=1, hours=3),
+        start_date=show_date,
+        end_date=show_date,
         cover_image_url="",
+        status=EventStatus.LIVE,
+    )
+    show_payload = ShowCreateRequest(
+        title="Test Show",
+        description="Show inventory used by backend test fixtures.",
+        venue="Test Venue",
+        show_date=show_date,
+        start_time=time(hour=19, minute=0),
+        end_time=time(hour=21, minute=30),
         status=EventStatus.LIVE,
         hold_minutes=10,
         queue_enabled=False,
@@ -107,7 +116,25 @@ async def sample_event(db_session: AsyncSession, admin_user: User):
         zones=[SeatZoneCreate(code="VIP", name="VIP", row_count=2, seats_per_row=3, price=100.0, color="#024ddf")],
     )
 
-    event = await create_event_with_matrix(db_session, admin_user.id, payload)
+    event = await create_event(db_session, admin_user.id, event_payload)
+    show = await create_show_with_inventory(db_session, event, admin_user.id, show_payload)
     await db_session.commit()
     await db_session.refresh(event)
+    await db_session.refresh(show)
+    return event, show
+
+
+@pytest_asyncio.fixture()
+async def sample_event(sample_event_with_show: tuple[Event, Show]) -> Event:
+    """Trả fixture sự kiện cha cho test chỉ cần thông tin mô tả sự kiện."""
+
+    event, _ = sample_event_with_show
     return event
+
+
+@pytest_asyncio.fixture()
+async def sample_show(sample_event_with_show: tuple[Event, Show]) -> Show:
+    """Trả fixture buổi diễn bán vé cho test đặt vé và hàng đợi."""
+
+    _, show = sample_event_with_show
+    return show

@@ -1,7 +1,3 @@
-/**
- * Custom hook for booking operations
- */
-
 import { useState, useCallback } from 'react'
 import type { TicketItem } from '../../../types'
 import { bookingApi } from '../api/bookingApi'
@@ -27,7 +23,7 @@ export function useLockSeats() {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to lock seats',
+        error: error instanceof Error ? error.message : 'Không thể giữ ghế',
       }))
       throw error
     }
@@ -52,7 +48,7 @@ export function useReleaseSeats() {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to release seats',
+        error: error instanceof Error ? error.message : 'Không thể trả ghế',
       }))
       throw error
     }
@@ -77,7 +73,7 @@ export function useCheckout() {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to checkout',
+        error: error instanceof Error ? error.message : 'Không thể thanh toán',
       }))
       throw error
     }
@@ -96,20 +92,27 @@ export function useMyTickets(params?: { search?: string; start_from?: string; en
     isLoading: false,
     error: null,
   })
+  const normalizedSearch = params?.search?.trim() || undefined
+  const normalizedStartFrom = params?.start_from?.trim() || undefined
+  const normalizedEndTo = params?.end_to?.trim() || undefined
 
   const fetchTickets = useCallback(async () => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }))
     try {
-      const response = await bookingApi.myTickets(params)
+      const response = await bookingApi.myTickets({
+        search: normalizedSearch,
+        start_from: normalizedStartFrom,
+        end_to: normalizedEndTo,
+      })
       setState({ tickets: response, isLoading: false, error: null })
     } catch (error) {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch tickets',
+        error: error instanceof Error ? error.message : 'Không thể tải danh sách vé',
       }))
     }
-  }, [params?.search, params?.start_from, params?.end_to])
+  }, [normalizedEndTo, normalizedSearch, normalizedStartFrom])
 
   return { ...state, refetch: fetchTickets }
 }
@@ -130,7 +133,7 @@ export function useCancelTicket() {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to cancel ticket',
+        error: error instanceof Error ? error.message : 'Không thể hủy vé',
       }))
       throw error
     }

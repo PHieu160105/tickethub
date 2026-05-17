@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { CustomerSidebar } from '@/components/layout/CustomerSidebar'
 //import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { TicketCard } from '@/components/ui/TicketCard'
+import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
 import { useCancelTicket, useMyTickets } from '@/features/booking/hooks/useBooking'
 import type { TicketItem } from '@/types'
@@ -14,8 +15,8 @@ const FALLBACK_TICKET_IMAGE =
   'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80'
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleDateString('en-US', {
-    month: 'short',
+  return new Date(value).toLocaleDateString('vi-VN', {
+    month: '2-digit',
     day: '2-digit',
     year: 'numeric',
   })
@@ -35,7 +36,7 @@ const tabLabels: Record<'upcoming' | 'past' | 'cancelled', string> = {
 
 const CustomerTicket: React.FC = () => {
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user, isAuthenticated, logout } = useAuth()
   const [activeTab, setActiveTab] = useState<TicketTab>('upcoming')
   const [pendingCancelTicketId, setPendingCancelTicketId] = useState<number | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -44,8 +45,9 @@ const CustomerTicket: React.FC = () => {
   const { cancelTicket, error: cancelError } = useCancelTicket()
 
   useEffect(() => {
+    if (!isAuthenticated) return
     void refetch()
-  }, [refetch])
+  }, [isAuthenticated, refetch])
 
   useEffect(() => {
     document.body.style.overflow = drawerOpen ? 'hidden' : ''
@@ -91,12 +93,12 @@ const CustomerTicket: React.FC = () => {
   const onDownload = (ticket: TicketItem) => {
     if (!ticket.qr_payload) return
     navigator.clipboard.writeText(ticket.qr_payload).catch(() => undefined)
-    window.alert(`Copied QR payload for ${ticket.ticket_code}`)
+    window.alert(`Đã sao chép nội dung QR của vé ${ticket.ticket_code}`)
   }
 
   const onCancelTicket = async (ticket: TicketItem) => {
     if (!ticket.ticket_id) return
-    const confirmed = window.confirm(`Cancel ticket ${ticket.ticket_code}?`)
+    const confirmed = window.confirm(`Bạn có chắc muốn hủy vé ${ticket.ticket_code}?`)
     if (!confirmed) return
 
     try {
@@ -113,8 +115,8 @@ const CustomerTicket: React.FC = () => {
         <div className="hidden lg:block">
           <CustomerSidebar
             activeTab="tickets"
-            userName={user?.full_name ?? 'Customer'}
-            membershipLevel="Stellar Member"
+            userName={user?.full_name ?? 'Khách hàng'}
+            membershipLevel="Thành viên TicketRush"
             onNavigate={onSidebarNavigate}
           />
         </div>
@@ -123,8 +125,8 @@ const CustomerTicket: React.FC = () => {
             <button className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} />
             <CustomerSidebar
               activeTab="tickets"
-              userName={user?.full_name ?? 'Customer'}
-              membershipLevel="Stellar Member"
+              userName={user?.full_name ?? 'Khách hàng'}
+              membershipLevel="Thành viên TicketRush"
               onNavigate={onSidebarNavigate}
               className="relative"
             />
@@ -155,15 +157,24 @@ const CustomerTicket: React.FC = () => {
             </div>
           </header>
 
-          {isLoading ? (
+          {!isAuthenticated ? (
+            <div className="col-span-full flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-6 py-20 text-center text-slate-300">
+              <Ticket className="w-16 h-16 mb-4 opacity-30" />
+              <p className="text-2xl font-black text-white">Cần đăng nhập để xem vé</p>
+              <p className="mt-2 max-w-md text-sm text-slate-400">Danh sách vé là dữ liệu cá nhân nên hệ thống chỉ tải sau khi xác thực tài khoản.</p>
+              <Button className="mt-6" onClick={() => navigate('/login')}>
+                Đăng nhập
+              </Button>
+            </div>
+          ) : isLoading ? (
             <div className="col-span-full flex flex-col items-center justify-center py-20 text-slate-500">
-              <p className="text-lg font-bold">Loading tickets...</p>
+              <p className="text-lg font-bold">Đang tải danh sách vé...</p>
             </div>
           ) : error ? (
             <div className="col-span-full flex flex-col items-center justify-center py-20 text-amber-300">
               <p className="text-lg font-bold mb-3">{error}</p>
               <button className="text-sm underline" onClick={() => void refetch()}>
-                Retry
+                Thử lại
               </button>
             </div>
           ) : (
@@ -187,7 +198,7 @@ const CustomerTicket: React.FC = () => {
                         disabled={!ticket.ticket_id || pendingCancelTicketId === ticket.ticket_id}
                         onClick={() => void onCancelTicket(ticket)}
                       >
-                        {pendingCancelTicketId === ticket.ticket_id ? 'Cancelling...' : 'Cancel Ticket'}
+                        {pendingCancelTicketId === ticket.ticket_id ? 'Đang hủy...' : 'Hủy vé'}
                       </button>
                     </div>
                   )}
@@ -197,7 +208,7 @@ const CustomerTicket: React.FC = () => {
               {filteredTickets.length === 0 && (
                 <div className="col-span-full flex flex-col items-center justify-center py-20 text-slate-500">
                   <Ticket className="w-16 h-16 mb-4 opacity-20" />
-                  <p className="text-lg font-bold">No {activeTab} tickets found.</p>
+                  <p className="text-lg font-bold">Không có vé trong mục {tabLabels[activeTab].toLowerCase()}.</p>
                 </div>
               )}
             </div>

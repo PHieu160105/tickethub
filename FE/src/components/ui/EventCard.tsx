@@ -46,7 +46,7 @@ export const EventCard = forwardRef<HTMLAnchorElement, EventCardProps>(
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-xs font-headline uppercase tracking-widest text-slate-400">Starting From</p>
+                <p className="text-xs font-headline uppercase tracking-widest text-slate-400">Giá từ</p>
                 <p className="text-3xl font-headline font-black text-secondary">{price}</p>
               </div>
             </div>

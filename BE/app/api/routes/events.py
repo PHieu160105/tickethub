@@ -1,4 +1,4 @@
-"""Public event browsing and show detail routes."""
+"""Các route public để xem sự kiện và chi tiết buổi diễn."""
 
 from datetime import datetime
 
@@ -38,7 +38,7 @@ async def list_events(
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[EventCardResponse]:
-    """List events with optional search and category filters."""
+    """Liệt kê sự kiện với bộ lọc tìm kiếm, thể loại và thời gian."""
 
     cache_key = (
         search or "",
@@ -61,7 +61,7 @@ async def list_events(
 
 @event_router.get("/{event_key}", response_model=EventDetailResponse)
 async def event_detail(event_key: str, session: AsyncSession = Depends(get_db_session)) -> EventDetailResponse:
-    """Get event details by slug or id."""
+    """Lấy chi tiết sự kiện bằng slug hoặc ID."""
 
     cached = await public_api_cache.get(EVENT_DETAIL_CACHE_NAMESPACE, event_key)
     if cached is not None:
@@ -77,7 +77,7 @@ async def event_detail(event_key: str, session: AsyncSession = Depends(get_db_se
 
 @show_router.get("/{show_id}", response_model=ShowDetailResponse)
 async def show_detail(show_id: int, session: AsyncSession = Depends(get_db_session)) -> ShowDetailResponse:
-    """Get one show details by id."""
+    """Lấy chi tiết một buổi diễn bằng ID."""
 
     show = await get_show_by_id(session, show_id)
     return ShowDetailResponse(**(await build_show_detail_response(session, show)))
@@ -90,7 +90,7 @@ async def list_event_reviews(
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[EventReviewResponse]:
-    """Return newest reviews of one event."""
+    """Trả các đánh giá mới nhất của một sự kiện."""
 
     event = await get_event_by_slug_or_id(session, event_key)
     rows = list(
@@ -124,7 +124,7 @@ async def create_event_review(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ) -> EventReviewResponse:
-    """Create one customer review for an event."""
+    """Tạo một đánh giá của khách hàng cho sự kiện."""
 
     event = await get_event_by_slug_or_id(session, event_key)
     review = EventReview(

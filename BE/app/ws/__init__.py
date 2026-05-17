@@ -1,1 +1,1 @@
-"""WebSocket manager package."""
+"""Gói quản lý kết nối WebSocket realtime."""

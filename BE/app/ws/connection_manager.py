@@ -1,4 +1,4 @@
-"""In-memory WebSocket connection managers."""
+"""Bộ quản lý kết nối WebSocket trong RAM."""
 
 import asyncio
 from collections import defaultdict
@@ -10,7 +10,7 @@ MAX_CONNECTIONS_PER_USER = 5
 
 
 class SeatWebSocketManager:
-    """Handles fan-out of seat status updates for each show room."""
+    """Phát tán cập nhật trạng thái ghế tới từng phòng buổi diễn."""
 
     def __init__(self) -> None:
         self._rooms: dict[int, set[WebSocket]] = defaultdict(set)
@@ -18,11 +18,11 @@ class SeatWebSocketManager:
         self._lock = asyncio.Lock()
 
     async def connect(self, show_id: int, user_id: int, websocket: WebSocket) -> bool:
-        """Accept and register a seat-map WebSocket client."""
+        """Chấp nhận và đăng ký một client WebSocket sơ đồ ghế."""
 
         async with self._lock:
             if len(self._user_connections[user_id]) >= MAX_CONNECTIONS_PER_USER:
-                await websocket.close(code=4004, reason="Too many connections")
+                await websocket.close(code=4004, reason="Quá nhiều kết nối")
                 return False
 
         await websocket.accept()
@@ -32,14 +32,14 @@ class SeatWebSocketManager:
         return True
 
     async def disconnect(self, show_id: int, user_id: int, websocket: WebSocket) -> None:
-        """Remove socket from the show room."""
+        """Gỡ socket khỏi phòng buổi diễn."""
 
         async with self._lock:
             self._rooms[show_id].discard(websocket)
             self._user_connections[user_id].discard(websocket)
 
     async def broadcast_seat_changes(self, show_id: int, payload: list[dict[str, Any]]) -> None:
-        """Push seat delta updates to all listeners of a show."""
+        """Đẩy các thay đổi ghế tới toàn bộ listener của buổi diễn."""
 
         if not payload:
             return
@@ -60,7 +60,7 @@ class SeatWebSocketManager:
 
 
 class AdminWebSocketManager:
-    """Broadcast dashboard summary updates to connected admin dashboards."""
+    """Broadcast cập nhật dashboard tới các admin đang kết nối."""
 
     def __init__(self) -> None:
         self._clients: set[WebSocket] = set()
@@ -68,11 +68,11 @@ class AdminWebSocketManager:
         self._lock = asyncio.Lock()
 
     async def connect(self, user_id: int, websocket: WebSocket) -> bool:
-        """Accept and track one dashboard socket."""
+        """Chấp nhận và theo dõi một socket dashboard."""
 
         async with self._lock:
             if len(self._user_connections[user_id]) >= MAX_CONNECTIONS_PER_USER:
-                await websocket.close(code=4004, reason="Too many connections")
+                await websocket.close(code=4004, reason="Quá nhiều kết nối")
                 return False
 
         await websocket.accept()
@@ -82,19 +82,19 @@ class AdminWebSocketManager:
         return True
 
     async def disconnect(self, user_id: int, websocket: WebSocket) -> None:
-        """Drop disconnected dashboard socket."""
+        """Gỡ socket dashboard đã ngắt kết nối."""
 
         async with self._lock:
             self._clients.discard(websocket)
             self._user_connections[user_id].discard(websocket)
 
     def has_clients(self) -> bool:
-        """Return whether any admin dashboard websocket is currently connected."""
+        """Cho biết hiện có admin dashboard nào đang kết nối hay không."""
 
         return bool(self._clients)
 
     async def broadcast(self, payload: dict[str, Any]) -> None:
-        """Send metrics update to all active admin dashboard sockets."""
+        """Gửi cập nhật chỉ số tới toàn bộ socket dashboard đang hoạt động."""
 
         dead_connections: list[WebSocket] = []
         for websocket in list(self._clients):
@@ -116,7 +116,7 @@ admin_ws_manager = AdminWebSocketManager()
 
 
 class HelpWebSocketManager:
-    """Broadcast help chat messages to subscribers of a thread."""
+    """Broadcast tin nhắn hỗ trợ tới người theo dõi một thread."""
 
     def __init__(self) -> None:
         self._rooms: dict[int, set[WebSocket]] = defaultdict(set)
@@ -126,7 +126,7 @@ class HelpWebSocketManager:
     async def connect(self, thread_id: int, user_id: int, websocket: WebSocket) -> bool:
         async with self._lock:
             if len(self._user_connections[user_id]) >= MAX_CONNECTIONS_PER_USER:
-                await websocket.close(code=4004, reason="Too many connections")
+                await websocket.close(code=4004, reason="Quá nhiều kết nối")
                 return False
         await websocket.accept()
         async with self._lock:

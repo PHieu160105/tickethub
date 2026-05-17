@@ -1,4 +1,4 @@
-"""User/account ORM model."""
+"""Khai báo mô hình ORM cho tài khoản người dùng của hệ thống."""
 
 from sqlalchemy import Enum, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -8,7 +8,18 @@ from app.models.enums import Gender, UserRole
 
 
 class User(TimestampMixin, Base):
-    """Platform users: customer and admin roles."""
+    """Đại diện cho tài khoản người dùng trên nền tảng.
+
+    Input:
+    - Thông tin định danh, email, mật khẩu băm, social id, vai trò và hồ sơ cơ bản.
+
+    Output:
+    - Một bản ghi `users` được dùng bởi xác thực, phân quyền và lịch sử mua vé.
+
+    Cách hoạt động:
+    - Hệ thống hiện phân biệt hai vai trò chính: `customer` và `admin`.
+    - Một user có thể tạo event/show, giữ ghế, mua vé, vào queue hoặc gửi hỗ trợ tùy vai trò.
+    """
 
     __tablename__ = "users"
 

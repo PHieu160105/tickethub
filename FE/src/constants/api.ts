@@ -1,5 +1,5 @@
 /**
- * API Configuration Constants
+ * Hằng số cấu hình kết nối API.
  */
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
@@ -13,7 +13,7 @@ export const API_RETRY_ATTEMPTS = 2
 export const API_RETRY_DELAY = 280
 
 /**
- * Pagination Constants
+ * Hằng số phân trang dùng chung.
  */
 export const PAGINATION = {
   DEFAULT_LIMIT: 30,
@@ -23,15 +23,15 @@ export const PAGINATION = {
 } as const
 
 /**
- * Queue Constants
+ * Hằng số hàng đợi ảo.
  */
 export const QUEUE = {
-  HEARTBEAT_INTERVAL: 30000, // 30 seconds
-  STATUS_POLL_INTERVAL: 5000, // 5 seconds
+  HEARTBEAT_INTERVAL: 30000, // 30 giây
+  STATUS_POLL_INTERVAL: 5000, // 5 giây
 } as const
 
 /**
- * Booking Constants
+ * Hằng số thao tác đặt vé.
  */
 export const BOOKING = {
   LOCK_DURATION_MINUTES: 10,
@@ -39,7 +39,7 @@ export const BOOKING = {
 } as const
 
 /**
- * Auth Constants
+ * Hằng số xác thực và localStorage.
  */
 export const AUTH = {
   TOKEN_KEY: 'ticketrush_token',
@@ -48,29 +48,29 @@ export const AUTH = {
 } as const
 
 /**
- * API Endpoints
+ * Danh sách endpoint backend theo từng nhóm nghiệp vụ.
  */
 export const ENDPOINTS = {
-  // Auth endpoints
+  // Endpoint xác thực.
   AUTH: {
     LOGIN: '/auth/login',
     REGISTER: '/auth/register',
     ME: '/auth/me',
     UPDATE_ME: '/auth/me',
   },
-  // Event endpoints
+  // Endpoint sự kiện.
   EVENTS: {
     LIST: '/events',
     DETAIL: (eventKey: string) => `/events/${eventKey}`,
     SEATS: (showId: string | number) => `/shows/${showId}/seats`,
   },
-  // Queue endpoints
+  // Endpoint hàng đợi.
   QUEUE: {
     JOIN: (showId: string | number) => `/shows/${showId}/queue/join`,
     STATUS: (showId: string | number, token: string) => `/shows/${showId}/queue/status/${token}`,
     HEARTBEAT: (showId: string | number, token: string) => `/shows/${showId}/queue/heartbeat/${token}`,
   },
-  // Booking endpoints
+  // Endpoint đặt vé.
   BOOKINGS: {
     LOCK: '/bookings/lock',
     RELEASE: '/bookings/release',
@@ -78,7 +78,7 @@ export const ENDPOINTS = {
     MY_TICKETS: '/bookings/my-tickets',
     CANCEL_TICKET: (ticketId: number) => `/bookings/my-tickets/${ticketId}`,
   },
-  // Admin endpoints
+  // Endpoint quản trị.
   ADMIN: {
     EVENTS: '/admin/events',
     EVENT_DETAIL: (eventKey: string | number) => `/admin/events/${eventKey}`,

@@ -1,5 +1,5 @@
 /**
- * Booking API functions
+ * Tập hợp các hàm gọi API liên quan đến giữ ghế, thanh toán và vé của người dùng.
  */
 
 import { api, withRetry } from '../../../lib/api'
@@ -30,7 +30,7 @@ export interface MyTicketsParams {
 
 export const bookingApi = {
   /**
-   * Lock seats for an event
+   * Gửi yêu cầu giữ ghế cho một show.
    */
   async lock(payload: LockSeatsPayload): Promise<LockSeatResponse> {
     const response = await withRetry(
@@ -46,7 +46,7 @@ export const bookingApi = {
   },
 
   /**
-   * Release locked seats
+   * Gửi yêu cầu trả lại các ghế đang giữ.
    */
   async release(payload: ReleaseSeatsPayload): Promise<ApiMessage> {
     const response = await api.post<ApiMessage>('/bookings/release', {
@@ -57,7 +57,7 @@ export const bookingApi = {
   },
 
   /**
-   * Checkout and purchase locked seats
+   * Gửi yêu cầu checkout để chuyển ghế đang giữ thành vé đã mua.
    */
   async checkout(payload: CheckoutPayload): Promise<CheckoutResponse> {
     const response = await api.post<CheckoutResponse>('/bookings/checkout', {
@@ -69,7 +69,7 @@ export const bookingApi = {
   },
 
   /**
-   * Get current user's tickets
+   * Lấy danh sách vé hiện tại của người dùng đăng nhập.
    */
   async myTickets(params?: MyTicketsParams): Promise<TicketItem[]> {
     const response = await withRetry(() => api.get<TicketItem[]>('/bookings/my-tickets', { params }))
@@ -77,7 +77,7 @@ export const bookingApi = {
   },
 
   /**
-   * Cancel a ticket
+   * Hủy một vé theo mã định danh của vé.
    */
   async cancelTicket(ticketId: number): Promise<ApiMessage> {
     const response = await api.delete<ApiMessage>(`/bookings/my-tickets/${ticketId}`)

@@ -68,7 +68,7 @@ export function useWebSocketHeartbeat({
     const normalizedUrl = normalizeWebSocketUrl(url)
     if (!normalizedUrl) {
       if (socketRef.current) {
-        socketRef.current.close(1000, 'WebSocket disabled')
+        socketRef.current.close(1000, 'Đã tắt WebSocket')
         socketRef.current = null
       }
       return
@@ -116,11 +116,11 @@ export function useWebSocketHeartbeat({
       }
 
       socket.onerror = () => {
-        // Keep browser console quieter by delegating recovery to onclose + reconnect.
+        // Giữ console trình duyệt gọn hơn; luồng khôi phục được xử lý ở onclose và reconnect.
       }
     }
 
-    // Small deferred connect prevents noisy close-before-open loops in dev StrictMode remount cycles.
+    // Trì hoãn kết nối ngắn để tránh vòng đóng trước khi mở khi StrictMode mount lại trong môi trường dev.
     reconnectTimerRef.current = window.setTimeout(connect, 120)
 
     heartbeatTimerRef.current = window.setInterval(() => {
@@ -134,7 +134,7 @@ export function useWebSocketHeartbeat({
       disposed = true
       clearTimers()
       if (socketRef.current?.readyState === WebSocket.OPEN || socketRef.current?.readyState === WebSocket.CONNECTING) {
-        socketRef.current.close(1000, 'Component unmounted')
+        socketRef.current.close(1000, 'Component đã unmount')
       }
       socketRef.current = null
     }

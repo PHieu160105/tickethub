@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AxiosError } from 'axios'
+import type { AxiosError, InternalAxiosRequestConfig } from 'axios'
 
 import { API_BASE_URL, API_TIMEOUT, API_RETRY_ATTEMPTS, API_RETRY_DELAY } from '../constants'
 import { authStorage } from './storage'
@@ -106,19 +106,19 @@ export function extractApiErrorMessage(error: unknown, fallback: string): string
     return detail
       .map((item) => {
         const field = item.loc?.filter((part) => part !== 'body').join('.')
-        return field ? `${field}: ${item.msg ?? 'Invalid value'}` : item.msg ?? 'Invalid value'
+        return field ? `${field}: ${item.msg ?? 'Giá trị không hợp lệ'}` : item.msg ?? 'Giá trị không hợp lệ'
       })
       .join('; ')
   }
   if (message) return message
 
-  if (typedError.code === 'ECONNABORTED') return 'Request timed out. Please retry.'
-  if (typedError.code === 'ERR_NETWORK') return 'Network issue detected. Please check your connection and retry.'
+  if (typedError.code === 'ECONNABORTED') return 'Yêu cầu quá thời gian chờ. Vui lòng thử lại.'
+  if (typedError.code === 'ERR_NETWORK') return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.'
 
   return fallback
 }
 
-api.interceptors.request.use((config: any) => {
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = authStorage.getToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`

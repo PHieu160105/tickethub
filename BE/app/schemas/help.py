@@ -1,4 +1,4 @@
-"""Help center chat DTOs."""
+"""DTO cho trung tâm hỗ trợ và chat realtime."""
 
 from datetime import datetime
 
@@ -32,4 +32,3 @@ class HelpThreadResponse(BaseModel):
     unread_customer: int
     created_at: datetime
     updated_at: datetime
-

@@ -40,12 +40,16 @@ export function ZoneModal({ isOpen, onClose, zones, onChange, eventName }: ZoneM
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return
+
+    const frameId = window.requestAnimationFrame(() => {
       setLocalZones([...zones])
       setEditingZone(null)
       setForm(INITIAL_ZONE)
       setError(null)
-    }
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
   }, [isOpen, zones])
 
   const handleOpenCreate = () => {

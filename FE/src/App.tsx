@@ -39,6 +39,14 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function RequireCustomerAuth({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isAdmin } = useAuth()
+
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (isAdmin) return <Navigate to="/admin" replace />
+  return <>{children}</>
+}
+
 function RedirectIfAuthenticated({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isAdmin } = useAuth()
   if (!isAuthenticated) return <>{children}</>
@@ -69,15 +77,15 @@ function AppRoutes() {
           />
           <Route path="event/:eventKey" element={<EventDetail />} />
           <Route path="queue" element={<VirtualQueue />} />
-          <Route path="checkout" element={<Checkout />} />
+          <Route path="checkout" element={<RequireCustomerAuth><Checkout /></RequireCustomerAuth>} />
           <Route path="confirmation" element={<Confirmation />} />
-          <Route path="profile" element={<CustomerProfile />} />
-          <Route path="tickets" element={<CustomerTicket />} />
-          <Route path="favourites" element={<Favourites />} />
+          <Route path="profile" element={<RequireCustomerAuth><CustomerProfile /></RequireCustomerAuth>} />
+          <Route path="tickets" element={<RequireCustomerAuth><CustomerTicket /></RequireCustomerAuth>} />
+          <Route path="favourites" element={<RequireCustomerAuth><Favourites /></RequireCustomerAuth>} />
           <Route path="payments" element={<Navigate to="/settings" replace />} />
-          <Route path="help" element={<Help />} />
+          <Route path="help" element={<RequireCustomerAuth><Help /></RequireCustomerAuth>} />
           <Route path="info" element={<InfoPage />} />
-          <Route path="settings" element={<CustomerSettings />} />
+          <Route path="settings" element={<RequireCustomerAuth><CustomerSettings /></RequireCustomerAuth>} />
           <Route path="search" element={<Search />} />
           <Route path="shows/:showId/seats" element={<SeatSelection />} />
           <Route path="*" element={<ErrorPage />} />

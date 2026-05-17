@@ -18,9 +18,9 @@ function roleVariant(role: string): 'default' | 'warning' | 'info' {
 }
 
 function genderLabel(gender: string) {
-  if (gender === 'male') return 'Male'
-  if (gender === 'female') return 'Female'
-  return 'Other'
+  if (gender === 'male') return 'Nam'
+  if (gender === 'female') return 'Nữ'
+  return 'Khác'
 }
 
 type Role = {
@@ -36,8 +36,8 @@ interface RoleSelectProps {
 function RoleSelect({ roleFilter, setRoleFilter }: RoleSelectProps) {
   const roles: Role[] = [
     { value: 'all', label: 'Tất cả vai trò' },
-    { value: 'admin', label: 'Admin' },
-    { value: 'customer', label: 'Customer' },
+    { value: 'admin', label: 'Quản trị viên' },
+    { value: 'customer', label: 'Khách hàng' },
   ];
 
   return (
@@ -89,7 +89,7 @@ export default function AdminUsers() {
       setUsers(response.items)
       setTotal(response.total)
     } catch (errorValue) {
-      setError(extractApiErrorMessage(errorValue, 'KhÃ´ng thá»ƒ táº£i danh sÃ¡ch users.'))
+      setError(extractApiErrorMessage(errorValue, 'Không thể tải danh sách người dùng.'))
     } finally {
       setLoading(false)
     }
@@ -127,13 +127,13 @@ export default function AdminUsers() {
         </Card>
         <Card>
           <CardContent className="pt-3">
-            <p className="text-sm font-bold admin-text-body">Page</p>
+            <p className="text-sm font-bold admin-text-body">Trang</p>
             <p className="text-2xl font-bold text-yellow mt-2">{page}/{totalPages}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-3">
-            <p className="text-sm font-bold admin-text-body">Tickets (page)</p>
+            <p className="text-sm font-bold admin-text-body">Vé trong trang</p>
             <p className="text-2xl font-bold text-green-400 mt-2">{totalTickets}</p>
           </CardContent>
         </Card>
@@ -175,9 +175,9 @@ export default function AdminUsers() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-gray-300">Đang tải users...</p>
+            <p className="text-sm text-gray-300">Đang tải người dùng...</p>
           ) : users.length === 0 ? (
-            <p className="text-sm text-gray-400">Không có user.</p>
+            <p className="text-sm text-gray-400">Không có người dùng.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -244,7 +244,7 @@ export default function AdminUsers() {
               <div className="flex items-center gap-2"><Mail className="h-4 w-4" /><span>{selectedUser.email}</span></div>
               <div className="flex items-center gap-2"><UserRound className="h-4 w-4" /><span>{genderLabel(selectedUser.gender)}, {selectedUser.age} tuổi</span></div>
               <div className="flex items-center gap-2"><Ticket className="h-4 w-4" /><span>{selectedUser.total_tickets} vé đã mua</span></div>
-              <div className="flex items-center gap-2"><Calendar className="h-4 w-4" /><span>Registered {new Date(selectedUser.registered_at).toLocaleString('vi-VN')}</span></div>
+              <div className="flex items-center gap-2"><Calendar className="h-4 w-4" /><span>Đăng ký lúc {new Date(selectedUser.registered_at).toLocaleString('vi-VN')}</span></div>
             </div>
             <div className="pt-2 flex justify-end"><Button variant="ghost" onClick={() => setSelectedUser(null)}>Đóng</Button></div>
           </div>

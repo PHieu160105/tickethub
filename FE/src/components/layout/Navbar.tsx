@@ -43,8 +43,8 @@ function formatNotificationTime(value: string): string {
 
 export function Logo() {
   return (
-    <Link to="/" aria-label="TicketRush Home" className="flex items-center gap-2">
-      <img src={LogoSVG} alt="TicketRush Logo" className="h-12 w-auto" />
+    <Link to="/" aria-label="Về trang chủ TicketRush" className="flex items-center gap-2">
+      <img src={LogoSVG} alt="Logo TicketRush" className="h-12 w-auto" />
     </Link>
   )
 }
@@ -62,6 +62,10 @@ export function Navbar() {
   const storageScope = useMemo(() => String(user?.id ?? user?.email ?? 'guest'), [user?.id, user?.email])
   const storageSeenKey = `ticketrush:notifications:seen:${storageScope}`
   const storageSnapshotKey = `ticketrush:notifications:snapshot:${storageScope}`
+  const visibleNotifications = useMemo(
+    () => (isAuthenticated && user ? notifications : []),
+    [isAuthenticated, notifications, user],
+  )
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20)
@@ -81,10 +85,7 @@ export function Navbar() {
   }, [])
 
   useEffect(() => {
-    if (!isAuthenticated || !user) {
-      setNotifications([])
-      return
-    }
+    if (!isAuthenticated || !user) return
 
     let isMounted = true
 
@@ -176,11 +177,11 @@ export function Navbar() {
 
   const hasUnread = useMemo(() => {
     const seenIds = new Set<string>(JSON.parse(localStorage.getItem(storageSeenKey) || '[]'))
-    return notifications.some((item) => !seenIds.has(item.id))
-  }, [notifications, storageSeenKey])
+    return visibleNotifications.some((item) => !seenIds.has(item.id))
+  }, [storageSeenKey, visibleNotifications])
 
   const markAllAsSeen = () => {
-    const ids = notifications.map((item) => item.id)
+    const ids = visibleNotifications.map((item) => item.id)
     localStorage.setItem(storageSeenKey, JSON.stringify(ids))
   }
 
@@ -263,11 +264,11 @@ export function Navbar() {
                   {notificationOpen && (
                     <div className="absolute right-0 mt-2 w-[340px] max-h-[420px] overflow-auto rounded-xl border customer-border customer-bg-soft shadow-xl p-3 z-50">
                       <p className="text-sm font-semibold customer-text-header mb-2">Thông báo</p>
-                      {notifications.length === 0 ? (
+                      {visibleNotifications.length === 0 ? (
                         <p className="text-sm customer-text-muted">Chưa có thông báo mới.</p>
                       ) : (
                         <div className="space-y-2">
-                          {notifications.map((item) => (
+                          {visibleNotifications.map((item) => (
                             <div key={item.id} className="rounded-lg border customer-border p-2.5">
                               <p className="text-sm font-medium customer-text-header">{item.title}</p>
                               <p className="text-xs customer-text-muted mt-0.5">{item.body}</p>

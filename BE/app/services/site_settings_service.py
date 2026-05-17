@@ -1,4 +1,4 @@
-"""Service helpers for lightweight site settings stored in JSON."""
+"""Dịch vụ đọc/ghi cấu hình website dạng JSON nhẹ."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def _write_site_settings(payload: SiteSettingsPayload) -> None:
 
 
 def load_site_settings() -> SiteSettingsPayload:
-    """Load persisted site settings or create a default file when missing/invalid."""
+    """Đọc cấu hình website đã lưu hoặc tạo file mặc định khi thiếu/sai định dạng."""
 
     with _SITE_SETTINGS_LOCK:
         if not SITE_SETTINGS_FILE.exists():
@@ -44,9 +44,8 @@ def load_site_settings() -> SiteSettingsPayload:
 
 
 def save_site_settings(payload: SiteSettingsPayload) -> SiteSettingsPayload:
-    """Persist and return normalized site settings."""
+    """Lưu cấu hình website đã chuẩn hóa và trả lại payload vừa lưu."""
 
     with _SITE_SETTINGS_LOCK:
         _write_site_settings(payload)
     return payload
-

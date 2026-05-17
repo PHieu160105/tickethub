@@ -1,4 +1,4 @@
-"""Tests for admin seat creation endpoints (single and bulk)."""
+"""Kiểm thử điểm cuối API admin tạo ghế đơn lẻ và sinh ghế hàng loạt."""
 
 import pytest
 from fastapi import status
@@ -10,7 +10,7 @@ from app.models.seat import Seat
 
 
 @pytest.mark.asyncio
-async def test_create_single_seat(db_session, admin_user, sample_event):
+async def test_create_single_seat(db_session, admin_user, sample_event, sample_show):
     from app.api.deps import get_db_session, get_current_active_admin
 
     async def override_get_db():
@@ -23,11 +23,11 @@ async def test_create_single_seat(db_session, admin_user, sample_event):
     app.dependency_overrides[get_current_active_admin] = override_get_admin
 
     try:
-        # fetch a zone from DB to avoid lazy-loading outside session
+        # Lấy khu vực ghế trực tiếp từ cơ sở dữ liệu để tránh tải lười ngoài phiên bất đồng bộ.
         from sqlalchemy import select
         from app.models.event import SeatZone
 
-        zone = await db_session.scalar(select(SeatZone).where(SeatZone.event_id == sample_event.id))
+        zone = await db_session.scalar(select(SeatZone).where(SeatZone.show_id == sample_show.id))
         assert zone is not None
 
         payload = {
@@ -41,14 +41,17 @@ async def test_create_single_seat(db_session, admin_user, sample_event):
         from httpx import ASGITransport
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.post(f"/api/admin/events/{sample_event.slug}/seats/single", json=payload)
+            resp = await client.post(
+                f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}/seats/single",
+                json=payload,
+            )
 
         assert resp.status_code == status.HTTP_200_OK
         data = resp.json()
         assert data["seat_label"] == "CUST-1"
         assert float(data["x"]) == pytest.approx(15.5)
 
-        # Verify persisted
+        # Kiểm tra ghế đã thật sự được lưu vào cơ sở dữ liệu.
         seats = await db_session.execute(Seat.__table__.select().where(Seat.seat_label == "CUST-1"))
         row = seats.first()
         assert row is not None
@@ -57,7 +60,7 @@ async def test_create_single_seat(db_session, admin_user, sample_event):
 
 
 @pytest.mark.asyncio
-async def test_create_bulk_straight(db_session, admin_user, sample_event):
+async def test_create_bulk_straight(db_session, admin_user, sample_event, sample_show):
     from app.api.deps import get_db_session, get_current_active_admin
 
     async def override_get_db():
@@ -73,7 +76,7 @@ async def test_create_bulk_straight(db_session, admin_user, sample_event):
         from sqlalchemy import select
         from app.models.event import SeatZone
 
-        zone = await db_session.scalar(select(SeatZone).where(SeatZone.event_id == sample_event.id))
+        zone = await db_session.scalar(select(SeatZone).where(SeatZone.show_id == sample_show.id))
         assert zone is not None
 
         payload = {
@@ -91,7 +94,10 @@ async def test_create_bulk_straight(db_session, admin_user, sample_event):
         from httpx import ASGITransport
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.post(f"/api/admin/events/{sample_event.slug}/seats/bulk", json=payload)
+            resp = await client.post(
+                f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}/seats/bulk",
+                json=payload,
+            )
 
         assert resp.status_code == status.HTTP_200_OK
         data = resp.json()
@@ -102,7 +108,7 @@ async def test_create_bulk_straight(db_session, admin_user, sample_event):
 
 
 @pytest.mark.asyncio
-async def test_create_bulk_arc(db_session, admin_user, sample_event):
+async def test_create_bulk_arc(db_session, admin_user, sample_event, sample_show):
     from app.api.deps import get_db_session, get_current_active_admin
 
     async def override_get_db():
@@ -118,7 +124,7 @@ async def test_create_bulk_arc(db_session, admin_user, sample_event):
         from sqlalchemy import select
         from app.models.event import SeatZone
 
-        zone = await db_session.scalar(select(SeatZone).where(SeatZone.event_id == sample_event.id))
+        zone = await db_session.scalar(select(SeatZone).where(SeatZone.show_id == sample_show.id))
         assert zone is not None
 
         payload = {
@@ -137,7 +143,10 @@ async def test_create_bulk_arc(db_session, admin_user, sample_event):
         from httpx import ASGITransport
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.post(f"/api/admin/events/{sample_event.slug}/seats/bulk", json=payload)
+            resp = await client.post(
+                f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}/seats/bulk",
+                json=payload,
+            )
 
         assert resp.status_code == status.HTTP_200_OK
         data = resp.json()
@@ -148,7 +157,7 @@ async def test_create_bulk_arc(db_session, admin_user, sample_event):
 
 
 @pytest.mark.asyncio
-async def test_update_event_seat_admin_lock(db_session, admin_user, sample_event):
+async def test_update_event_seat_admin_lock(db_session, admin_user, sample_event, sample_show):
     from app.api.deps import get_db_session, get_current_active_admin
 
     async def override_get_db():
@@ -161,14 +170,14 @@ async def test_update_event_seat_admin_lock(db_session, admin_user, sample_event
     app.dependency_overrides[get_current_active_admin] = override_get_admin
 
     try:
-        seat = await db_session.scalar(select(Seat).where(Seat.event_id == sample_event.id).limit(1))
+        seat = await db_session.scalar(select(Seat).where(Seat.show_id == sample_show.id).limit(1))
         assert seat is not None
 
         from httpx import ASGITransport
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.patch(
-                f"/api/admin/events/{sample_event.slug}/seats/{seat.id}",
+                f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}/seats/{seat.id}",
                 json={"is_admin_locked": True},
             )
 

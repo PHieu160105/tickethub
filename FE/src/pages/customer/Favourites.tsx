@@ -9,11 +9,15 @@ import { listFavourites, removeFavourite, type FavouriteItem } from '@/lib/favou
 export default function Favourites() {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const [favourites, setFavourites] = useState<FavouriteItem[]>([])
+  const [favourites, setFavourites] = useState<FavouriteItem[]>(() => listFavourites(user?.id))
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => {
-    setFavourites(listFavourites(user?.id))
+    const timeoutId = window.setTimeout(() => {
+      setFavourites(listFavourites(user?.id))
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
   }, [user?.id])
 
   useEffect(() => {
@@ -41,8 +45,8 @@ export default function Favourites() {
         <div className="hidden lg:block">
           <CustomerSidebar
             activeTab="favourites"
-            userName={user?.full_name ?? 'Customer'}
-            membershipLevel="Stellar Member"
+            userName={user?.full_name ?? 'Khách hàng'}
+            membershipLevel="Thành viên TicketRush"
             onNavigate={onSidebarNavigate}
           />
         </div>
@@ -51,8 +55,8 @@ export default function Favourites() {
             <button className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} />
             <CustomerSidebar
               activeTab="favourites"
-              userName={user?.full_name ?? 'Customer'}
-              membershipLevel="Stellar Member"
+              userName={user?.full_name ?? 'Khách hàng'}
+              membershipLevel="Thành viên TicketRush"
               onNavigate={onSidebarNavigate}
               className="relative"
             />
@@ -71,7 +75,7 @@ export default function Favourites() {
           {favourites.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant">
               <Heart className="w-16 h-16 mb-4 opacity-20" />
-              <p className="text-lg font-bold">No favourites yet.</p>
+              <p className="text-lg font-bold">Chưa có sự kiện yêu thích.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -96,7 +100,7 @@ export default function Favourites() {
                       onClick={() => navigate(`/event/${event.slug}`)}
                       className="w-full mt-4 bg-primary-container text-on-primary-container py-3 rounded-xl font-bold text-sm uppercase tracking-widest hover:shadow-[0_0_15px_rgba(252,83,109,0.4)] transition-all active:scale-95"
                     >
-                      View Event
+                      Xem sự kiện
                     </button>
                   </div>
                 </div>

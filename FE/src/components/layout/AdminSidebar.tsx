@@ -16,7 +16,7 @@ const adminLinks = [
 ]
 
 export function Logo() {
-  return <img src={LogoSVG} alt="TicketRush Logo" className="display-inline flex items-center gap-2 h-10 w-auto" />
+  return <img src={LogoSVG} alt="Logo TicketRush" className="display-inline flex items-center gap-2 h-10 w-auto" />
 }
 
 export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {

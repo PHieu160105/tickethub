@@ -1,4 +1,4 @@
-"""ORM model package exports."""
+"""Xuất các model ORM dùng chung cho toàn bộ ứng dụng."""
 
 from app.models.base import Base
 from app.models.event import Event, SeatZone, Show, ShowPolygon

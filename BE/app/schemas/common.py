@@ -1,4 +1,4 @@
-"""Shared schema pieces."""
+"""Các schema dùng chung cho nhiều nhóm API."""
 
 from datetime import datetime
 
@@ -6,13 +6,13 @@ from pydantic import BaseModel, ConfigDict
 
 
 class APIMessage(BaseModel):
-    """Simple message response for operations without payload."""
+    """Payload phản hồi dạng thông báo cho các thao tác không cần trả dữ liệu chi tiết."""
 
     detail: str
 
 
 class TimestampSchema(BaseModel):
-    """Base response schema containing timestamp metadata."""
+    """Schema nền chứa thông tin thời điểm tạo và cập nhật bản ghi."""
 
     created_at: datetime
     updated_at: datetime

@@ -23,33 +23,5 @@ services:
       - .env
     ports:
       - "6380:6379"
-
-  backend:
-    build: ./BE
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
-      REDIS_URL: redis://redis:6379/0
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-    volumes:
-      - ./BE/app/static:/app/app/static
-    ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-
-  frontend:
-    build: ./FE
-    env_file:
-      - .env
-    command: npm run dev
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
 volumes:
   postgres_data:

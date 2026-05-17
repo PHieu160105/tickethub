@@ -1,19 +1,30 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import axios from 'axios'
 
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useCheckout, useReleaseSeats } from '@/features/booking/hooks/useBooking'
 import { useShowSeats } from '@/features/events/hooks/useEvents'
-import { bookingApi } from '@/lib/api'
+import { bookingApi, extractApiErrorMessage } from '@/lib/api'
 import { queueStorage } from '@/lib/storage'
+import { formatCurrencyVnd } from '@/lib/utils'
 import type { Seat } from '@/types'
 import { AlertCircle, CreditCard, MapPin, QrCode, Rocket, Timer } from 'lucide-react'
 
 interface CheckoutLocationState {
   lockedSeatIds?: number[]
   lockedSeats?: Seat[]
+}
+
+function isRecoverableQueueTokenError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) {
+    return false
+  }
+
+  const statusCode = error.response?.status
+  return statusCode === 403 || statusCode === 404 || statusCode === 410 || statusCode === 429
 }
 
 export default function Checkout() {
@@ -103,13 +114,25 @@ export default function Checkout() {
     return () => window.clearInterval(timer)
   }, [lockExpiryTimestamp])
 
-  useEffect(() => () => {
-    if (checkoutCompletedRef.current || locksReleasedRef.current) return
-    const currentShowId = latestShowIdRef.current
-    const currentSeatIds = latestLockedSeatIdsRef.current
-    if (!currentShowId || currentSeatIds.length === 0) return
-    locksReleasedRef.current = true
-    void bookingApi.release(currentShowId, currentSeatIds).catch(() => undefined)
+  useEffect(() => {
+    const handleBrowserUnload = () => {
+      if (checkoutCompletedRef.current || locksReleasedRef.current) return
+
+      const currentShowId = latestShowIdRef.current
+      const currentSeatIds = latestLockedSeatIdsRef.current
+      if (!currentShowId || currentSeatIds.length === 0) return
+
+      locksReleasedRef.current = true
+      void bookingApi.release(currentShowId, currentSeatIds).catch(() => undefined)
+    }
+
+    window.addEventListener('pagehide', handleBrowserUnload)
+    window.addEventListener('beforeunload', handleBrowserUnload)
+
+    return () => {
+      window.removeEventListener('pagehide', handleBrowserUnload)
+      window.removeEventListener('beforeunload', handleBrowserUnload)
+    }
   }, [])
 
   const handleInputChange = (field: 'fullName' | 'email' | 'phone', value: string) => {
@@ -131,7 +154,7 @@ export default function Checkout() {
       await releaseSeats(showId, lockedSeatIds)
       locksReleasedRef.current = true
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to release held seats')
+      setErrorMessage(error instanceof Error ? error.message : 'Không thể trả lại các ghế đang giữ')
     } finally {
       navigate(`/shows/${showId}/seats`)
     }
@@ -146,12 +169,12 @@ export default function Checkout() {
     }
 
     if (!showId || Number.isNaN(showId)) {
-      setErrorMessage('Missing show information. Please reselect your seats.')
+      setErrorMessage('Thiếu thông tin show. Vui lòng chọn ghế lại từ đầu.')
       return
     }
 
     if (!formData.fullName.trim() || !formData.email.trim() || !formData.phone.trim()) {
-      setErrorMessage('Please fill in full name, email, and phone number before checkout.')
+      setErrorMessage('Vui lòng nhập đầy đủ họ tên, email và số điện thoại trước khi thanh toán.')
       return
     }
 
@@ -160,6 +183,8 @@ export default function Checkout() {
       const queueToken = showId ? queueStorage.getToken(showId) ?? undefined : undefined
       const result = await checkout(showId, queueToken, selectedDiscountCode || undefined)
       checkoutCompletedRef.current = true
+      locksReleasedRef.current = true
+      queueStorage.clearToken(showId)
       navigate('/confirmation', {
         state: {
           order: result,
@@ -173,7 +198,14 @@ export default function Checkout() {
         },
       })
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Checkout failed')
+      if (showId && !Number.isNaN(showId) && isRecoverableQueueTokenError(error)) {
+        queueStorage.clearToken(showId)
+        setErrorMessage('Phien queue khong con hop le. Vui long quay lai hang doi de nhan luot moi.')
+        navigate(`/queue?showId=${showId}${eventKey ? `&eventKey=${encodeURIComponent(eventKey)}` : ''}`)
+        return
+      }
+
+      setErrorMessage(extractApiErrorMessage(error, 'Thanh toán thất bại'))
     }
   }
 
@@ -183,10 +215,10 @@ export default function Checkout() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
           <form className="lg:col-span-7 space-y-8" onSubmit={handleSubmit}>
             <section>
-              <h2 className="text-3xl font-headline font-bold tracking-tight mb-8">Personal Information</h2>
+              <h2 className="text-3xl font-headline font-bold tracking-tight mb-8">Thông tin người mua</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="block text-[10px] font-headline uppercase tracking-[0.2em] text-slate-400 font-bold">Full Name</label>
+                  <label className="block text-[10px] font-headline uppercase tracking-[0.2em] text-slate-400 font-bold">Họ tên</label>
                   <Input
                     className="w-full bg-slate-800 border-none rounded-xl py-4 px-5 text-white"
                     value={formData.fullName}
@@ -194,7 +226,7 @@ export default function Checkout() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="block text-[10px] font-headline uppercase tracking-[0.2em] text-slate-400 font-bold">Email Address</label>
+                  <label className="block text-[10px] font-headline uppercase tracking-[0.2em] text-slate-400 font-bold">Địa chỉ email</label>
                   <Input
                     type="email"
                     className="w-full bg-slate-800 border-none rounded-xl py-4 px-5 text-white"
@@ -203,7 +235,7 @@ export default function Checkout() {
                   />
                 </div>
                 <div className="md:col-span-2 space-y-2">
-                  <label className="block text-[10px] font-headline uppercase tracking-[0.2em] text-slate-400 font-bold">Phone Number</label>
+                  <label className="block text-[10px] font-headline uppercase tracking-[0.2em] text-slate-400 font-bold">Số điện thoại</label>
                   <Input
                     type="tel"
                     className="w-full bg-slate-800 border-none rounded-xl py-4 px-5 text-white"
@@ -218,9 +250,9 @@ export default function Checkout() {
             <section className="backdrop-blur-xl bg-slate-900/70 p-6 rounded-2xl border border-white/10">
               <div className="flex items-center gap-2 mb-4 text-slate-300">
                 <CreditCard className="w-5 h-5 text-primary" />
-                <p className="font-semibold">Demo Payment</p>
+                <p className="font-semibold">Thanh toán mô phỏng</p>
               </div>
-              <p className="text-sm text-slate-400">This demo uses server-side checkout. No card info is processed.</p>
+              <p className="text-sm text-slate-400">Luồng demo này chỉ xác nhận thanh toán ở phía server, không xử lý thẻ thật.</p>
             </section>
 
             {errorMessage && (
@@ -236,23 +268,23 @@ export default function Checkout() {
               disabled={isCheckoutDisabled}
               isLoading={isSubmitting}
             >
-              Complete Purchase
+              Xác nhận thanh toán
               <Rocket className="h-6 w-6" />
             </Button>
           </form>
 
           <aside className="lg:col-span-5 sticky top-28">
             <div className="backdrop-blur-xl bg-slate-900/80 p-8 rounded-3xl overflow-hidden relative border border-white/10">
-              <h3 className="text-xl font-headline font-bold uppercase tracking-widest mb-6 border-b border-white/5 pb-4">Order Summary</h3>
+              <h3 className="text-xl font-headline font-bold uppercase tracking-widest mb-6 border-b border-white/5 pb-4">Tóm tắt đơn hàng</h3>
 
               <div className="space-y-3 mb-8 max-h-64 overflow-auto">
                 {lockedSeats.length === 0 ? (
-                  <p className="text-slate-400 text-sm">No locked seats found. Please go back and lock seats first.</p>
+                  <p className="text-slate-400 text-sm">Không tìm thấy ghế đang giữ. Vui lòng quay lại bước chọn ghế.</p>
                 ) : (
                   lockedSeats.map((seat: Seat) => (
                     <div key={seat.id} className="flex justify-between items-center text-sm bg-slate-800/60 rounded-lg px-3 py-2">
                       <span>{seat.seat_label}</span>
-                      <span>${Number(seat.price).toFixed(2)}</span>
+                      <span>{formatCurrencyVnd(seat.price)}</span>
                     </div>
                   ))
                 )}
@@ -260,11 +292,11 @@ export default function Checkout() {
 
               <div className="space-y-3 mb-8">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500">Subtotal ({lockedSeats.length} seats)</span>
-                  <span className="text-white">${subtotal.toFixed(2)}</span>
+                  <span className="text-slate-500">Tạm tính ({lockedSeats.length} ghế)</span>
+                  <span className="text-white">{formatCurrencyVnd(subtotal)}</span>
                 </div>
               <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-500">Hold Timer</span>
+                <span className="text-slate-500">Thời gian giữ ghế</span>
                 <span className={remainingSeconds === 0 ? 'text-red-300' : 'text-secondary'}>{countdownLabel}</span>
               </div>
               </div>
@@ -272,8 +304,8 @@ export default function Checkout() {
               <div className="pt-4 border-t border-white/5">
                 <div className="flex justify-between items-end">
                   <div>
-                    <span className="text-[10px] font-headline font-black uppercase tracking-[0.3em] text-slate-500">Total Amount</span>
-                    <p className="text-4xl font-headline font-black text-white mt-1">${total.toFixed(2)}</p>
+                    <span className="text-[10px] font-headline font-black uppercase tracking-[0.3em] text-slate-500">Tổng thanh toán</span>
+                    <p className="text-4xl font-headline font-black text-white mt-1">{formatCurrencyVnd(total)}</p>
                   </div>
                   <div className="bg-white p-2 rounded-lg">
                     <div className="w-16 h-16 bg-slate-100 flex items-center justify-center">
@@ -290,23 +322,23 @@ export default function Checkout() {
                 </div>
               )}
               <div className="mt-4">
-                <label className="text-xs text-slate-400 uppercase tracking-wider">Voucher</label>
+                <label className="text-xs text-slate-400 uppercase tracking-wider">Mã giảm giá</label>
                 <Input
                   className="mt-2 w-full rounded-lg border bg-slate-800 border-white/20 px-3 py-2 text-white"
                   value={selectedDiscountCode}
                   onChange={(e) => setSelectedDiscountCode(e.target.value)}
-                  placeholder="Enter voucher code"
+                  placeholder="Nhập mã giảm giá"
                 />
               </div>
             </div>
 
             <div className="mt-6 flex items-center gap-4 bg-secondary/5 border border-secondary/20 p-4 rounded-2xl">
               <Timer className="text-secondary h-5 w-5" />
-              <p className="text-xs text-secondary font-medium">Seats remain locked only for a limited time.</p>
+              <p className="text-xs text-secondary font-medium">Ghế chỉ được giữ trong một khoảng thời gian giới hạn.</p>
             </div>
             <div className="block mt-4">
               <Button variant="outline" className="w-full" onClick={() => void handleBackToSeatSelection()} isLoading={isReleasing}>
-                Back To Seat Selection
+                Quay lại chọn ghế
               </Button>
             </div>
           </aside>

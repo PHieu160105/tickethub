@@ -381,7 +381,7 @@ export default function AdminSettings() {
                       <div className="mb-3 flex items-center gap-3">
                         <Moon className={`h-6 w-6 ${theme === 'dark' ? 'text-red-400' : 'text-slate-500'}`} />
                         <span className={`text-lg font-bold ${theme === 'dark' ? 'text-on-background' : 'text-on-surface-variant'}`}>
-                          Dark Mode
+                          Chế độ tối
                         </span>
                       </div>
                       <p className={`text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-on-surface-variant'}`}>
@@ -407,7 +407,7 @@ export default function AdminSettings() {
                       <div className="mb-3 flex items-center gap-3">
                         <Sun className={`h-6 w-6 ${theme === 'light' ? 'text-amber-400' : 'text-slate-500'}`} />
                         <span className={`text-lg font-bold ${theme === 'light' ? 'text-on-background' : 'text-on-surface-variant'}`}>
-                          Light Mode
+                          Chế độ sáng
                         </span>
                       </div>
                       <p className={`text-sm ${theme === 'light' ? 'text-slate-300' : 'text-on-surface-variant'}`}>

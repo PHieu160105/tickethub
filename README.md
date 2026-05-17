@@ -3,18 +3,33 @@
 TicketRush là hệ thống phân phối vé điện tử được xây dựng fullstack:
 - **Frontend:** React (`FE/`)
 - **Backend:** FastAPI + PostgreSQL (`BE/`)
-- **Infra local:** Docker Compose (Postgres, Redis, Backend, Frontend)
+- **Infra local:** Docker Compose chỉ dùng cho Postgres và Redis
 
 
-## 1) Chạy nhanh bằng Docker
+## 1) Cách chạy chuẩn cho đồ án này
 
 ```bash
-docker compose up --build
+docker compose up -d postgres redis
+
+cd BE
+python3 -m pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+cd FE
+npm install
+npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
 - Frontend: `http://localhost:5173`
 - Backend API: `http://localhost:8000`
 - Swagger: `http://localhost:8000/docs`
+
+Lưu ý:
+
+- Không chạy frontend/backend bằng Docker trong flow local mặc định.
+- `docker compose stop` giờ chỉ tác động vào hạ tầng `postgres` và `redis`, không đụng tới app local.
+- Có sẵn task VS Code trong `.vscode/tasks.json` để chạy đúng flow local này.
+- Redis Docker đang được publish ra host tại `127.0.0.1:6380`, và `.env` đã được cấu hình đồng bộ theo cổng này.
 
 ## 2) Tài khoản seed mặc định
 - Admin: `admin@ticketrush.com` / `Admin@123`
@@ -33,7 +48,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```bash
 cd FE
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
 ## 4) Kiểm thử đã chạy
@@ -41,9 +56,8 @@ npm run dev
 ### Backend
 ```bash
 cd BE
-python3 -m pytest -q
+PYTHONPATH=. ../.venv/bin/pytest -q
 ```
-Kết quả: `8 passed`.
 
 ### Frontend
 ```bash
@@ -51,7 +65,6 @@ cd FE
 npm run build
 npm run lint
 ```
-Kết quả: build/lint pass.
 
 ## 5) Checklist requirement đối chiếu
 

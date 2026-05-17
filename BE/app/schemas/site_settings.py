@@ -1,10 +1,10 @@
-"""Schemas for lightweight site settings persistence."""
+"""Schema lưu cấu hình website dạng JSON nhẹ."""
 
 from pydantic import BaseModel, Field, field_validator
 
 
 class SiteSettingsPayload(BaseModel):
-    """Shared request/response payload for public site settings."""
+    """Payload dùng chung cho request/response cấu hình public của website."""
 
     site_name: str = Field(default="TicketRush", min_length=1, max_length=120)
     contact_email: str = Field(default="contact@ticketrush.com", min_length=3, max_length=255)
@@ -19,4 +19,3 @@ class SiteSettingsPayload(BaseModel):
         if isinstance(value, str):
             return value.strip()
         return value
-

@@ -1,4 +1,4 @@
-"""Help center REST endpoints."""
+"""Các endpoint REST cho trung tâm hỗ trợ khách hàng."""
 
 from datetime import datetime, timezone
 
@@ -19,6 +19,21 @@ router = APIRouter(prefix="/help", tags=["help"])
 
 
 async def _get_latest_customer_thread(session: AsyncSession, customer_id: int, *, with_customer: bool = False) -> HelpThread | None:
+    """Lấy thread hỗ trợ mới nhất của một khách hàng.
+
+    Input:
+    - `session`: phiên database async.
+    - `customer_id`: id khách hàng cần tìm thread.
+    - `with_customer`: có preload quan hệ customer hay không.
+
+    Output:
+    - Thread mới nhất, hoặc `None` nếu khách chưa từng mở hội thoại.
+
+    Cách hoạt động:
+    - Sắp xếp theo `updated_at` và `id` giảm dần để lấy hội thoại mới nhất.
+    - Khi cần hiển thị tên/email khách, dùng `selectinload` để tránh lazy-load ngoài async context.
+    """
+
     stmt = (
         select(HelpThread)
         .where(HelpThread.customer_id == customer_id)
@@ -30,6 +45,8 @@ async def _get_latest_customer_thread(session: AsyncSession, customer_id: int, *
 
 
 def _message_to_response(row: HelpMessage) -> HelpMessageResponse:
+    """Chuyển model `HelpMessage` sang schema response an toàn cho frontend."""
+
     return HelpMessageResponse(
         id=row.id,
         thread_id=row.thread_id,
@@ -43,10 +60,12 @@ def _message_to_response(row: HelpMessage) -> HelpMessageResponse:
 
 
 def _thread_to_response(row: HelpThread) -> HelpThreadResponse:
+    """Chuyển model `HelpThread` sang schema response cho customer/admin."""
+
     return HelpThreadResponse(
         id=row.id,
         customer_id=row.customer_id,
-        customer_name=row.customer.full_name if row.customer else "Customer",
+        customer_name=row.customer.full_name if row.customer else "Khách hàng",
         customer_email=row.customer.email if row.customer else "",
         last_message_at=row.last_message_at,
         last_message_preview=row.last_message_preview,
@@ -63,11 +82,14 @@ async def create_or_get_my_thread(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ) -> HelpThreadResponse:
+    """Tạo hoặc lấy thread hỗ trợ của khách hàng đang đăng nhập."""
+
     if current_user.role != UserRole.CUSTOMER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Customer role is required")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Chỉ khách hàng mới được mở hội thoại hỗ trợ")
 
     thread = await _get_latest_customer_thread(session, current_user.id, with_customer=True)
     if not thread:
+        # Khách chưa có thread thì tạo hội thoại trống để frontend bắt đầu nhắn tin.
         now = datetime.now(timezone.utc)
         thread = HelpThread(
             customer_id=current_user.id,
@@ -91,8 +113,10 @@ async def get_my_messages(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ) -> list[HelpMessageResponse]:
+    """Trả danh sách tin nhắn trong thread hỗ trợ của khách đang đăng nhập."""
+
     if current_user.role != UserRole.CUSTOMER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Customer role is required")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Chỉ khách hàng mới được đọc hội thoại hỗ trợ")
     thread = await _get_latest_customer_thread(session, current_user.id)
     if not thread:
         return []
@@ -114,10 +138,13 @@ async def send_my_message(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ) -> HelpMessageResponse:
+    """Khách hàng gửi một tin nhắn vào thread hỗ trợ của chính mình."""
+
     if current_user.role != UserRole.CUSTOMER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Customer role is required")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Chỉ khách hàng mới được gửi tin nhắn hỗ trợ")
     thread = await _get_latest_customer_thread(session, current_user.id)
     if not thread:
+        # Cho phép gửi tin nhắn đầu tiên mà không cần gọi API tạo thread trước.
         now = datetime.now(timezone.utc)
         thread = HelpThread(
             customer_id=current_user.id,
@@ -141,6 +168,7 @@ async def send_my_message(
     )
     thread.last_message_at = now
     thread.last_message_preview = payload.content.strip()[:255]
+    # Tin nhắn khách gửi làm tăng số tin chưa đọc phía admin.
     thread.unread_admin += 1
     thread.unread_customer = 0
     session.add(message)
@@ -157,6 +185,8 @@ async def admin_list_threads(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> list[HelpThreadResponse]:
+    """Admin liệt kê thread hỗ trợ mới nhất của từng khách hàng."""
+
     rows = list(
         await session.scalars(
             select(HelpThread)
@@ -166,6 +196,7 @@ async def admin_list_threads(
     )
     latest_by_customer: dict[int, HelpThread] = {}
     for row in rows:
+        # Một khách có thể có nhiều thread lịch sử; màn inbox chỉ hiển thị thread mới nhất.
         if row.customer_id not in latest_by_customer:
             latest_by_customer[row.customer_id] = row
 
@@ -183,12 +214,14 @@ async def admin_get_thread_messages(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> list[HelpMessageResponse]:
+    """Admin đọc tin nhắn của một thread hỗ trợ."""
+
     thread = await session.scalar(select(HelpThread).where(HelpThread.id == thread_id))
     if not thread:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hội thoại hỗ trợ")
     canonical_thread = await _get_latest_customer_thread(session, thread.customer_id)
     if not canonical_thread:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hội thoại hỗ trợ")
     rows = list(
         await session.scalars(
             select(HelpMessage)
@@ -206,12 +239,14 @@ async def admin_send_message(
     session: AsyncSession = Depends(get_db_session),
     admin_user: User = Depends(get_current_active_admin),
 ) -> HelpMessageResponse:
+    """Admin gửi tin nhắn trả lời khách hàng trong thread hỗ trợ."""
+
     thread = await session.scalar(select(HelpThread).where(HelpThread.id == thread_id))
     if not thread:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hội thoại hỗ trợ")
     canonical_thread = await _get_latest_customer_thread(session, thread.customer_id)
     if not canonical_thread:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hội thoại hỗ trợ")
 
     now = datetime.now(timezone.utc)
     message = HelpMessage(
@@ -224,6 +259,7 @@ async def admin_send_message(
     )
     canonical_thread.last_message_at = now
     canonical_thread.last_message_preview = payload.content.strip()[:255]
+    # Tin nhắn admin gửi làm tăng số tin chưa đọc phía customer.
     canonical_thread.unread_customer += 1
     canonical_thread.unread_admin = 0
     session.add(message)

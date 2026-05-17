@@ -1,4 +1,4 @@
-"""Background workers for lock release, queue admission, and dashboard streaming."""
+"""Điều phối các worker nền cho giải phóng lock, admit queue và phát dashboard realtime."""
 
 import asyncio
 import logging
@@ -15,51 +15,74 @@ logger = logging.getLogger(__name__)
 
 
 class WorkerOrchestrator:
-    """Coordinates periodic background jobs within FastAPI lifespan."""
+    """Điều phối các công việc nền chạy tuần hoàn trong vòng đời FastAPI.
+
+    Input:
+    - Không nhận tham số từ bên ngoài khi khởi tạo mặc định.
+
+    Output:
+    - Một vòng lặp async nền chịu trách nhiệm chạy các tác vụ housekeeping nghiệp vụ.
+
+    Cách hoạt động:
+    - Tác vụ nền chạy theo chu kỳ vài giây.
+    - Mỗi vòng lặp mở session riêng cho từng nhóm công việc để cô lập lỗi.
+    - Nếu một tác vụ lỗi, worker ghi log rồi tiếp tục vòng kế tiếp thay vì làm sập backend.
+    """
 
     def __init__(self) -> None:
+        # Cờ async cho biết worker đã nhận yêu cầu dừng từ lifecycle của FastAPI.
         self._stop_event = asyncio.Event()
+
+        # Task nền thật sự; giữ reference để không bị garbage collector hủy giữa chừng.
         self._task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
-        """Start worker loop if not running."""
+        """Khởi động vòng lặp worker nếu hiện chưa chạy."""
 
         if self._task and not self._task.done():
             return
+
+        # Mỗi lần start phải xóa cờ dừng cũ để vòng lặp `_run_loop` được chạy lại.
         self._stop_event.clear()
         self._task = asyncio.create_task(self._run_loop(), name="ticketrush-background-workers")
 
     async def stop(self) -> None:
-        """Signal worker loop to stop and wait for graceful shutdown."""
+        """Phát tín hiệu dừng worker và chờ tắt an toàn."""
 
         self._stop_event.set()
         if self._task:
             await self._task
 
     async def _run_loop(self) -> None:
-        """Execute all periodic jobs in one cooperative async loop."""
+        """Chạy toàn bộ job nền trong một vòng lặp async hợp tác."""
 
         while not self._stop_event.is_set():
             try:
                 async with AsyncSessionLocal() as session:
+                    # Job 1: mở lại các ghế hết hạn giữ chỗ và gom payload theo từng show.
                     released_by_show = await release_expired_locks(session)
                     for show_id, payload in released_by_show.items():
+                        # Seat map public bị cache nên phải xóa cache trước khi phát WebSocket.
                         await public_api_cache.invalidate_namespace(show_seat_cache_namespace(show_id))
                         await seat_ws_manager.broadcast_seat_changes(show_id, payload)
 
                 async with AsyncSessionLocal() as session:
+                    # Job 2: xét hàng đợi ảo và admit thêm user khi còn slot.
                     await process_virtual_queue(session)
 
                 async with AsyncSessionLocal() as session:
+                    # Job 3: dọn queue token hết hạn để bảng queue không phình mãi.
                     await cleanup_expired_queue_entries(session)
 
                 if admin_ws_manager.has_clients():
                     async with AsyncSessionLocal() as session:
+                        # Job 4: phát KPI dashboard realtime khi có admin đang mở màn hình.
                         summary = await get_dashboard_summary(session)
                         await admin_ws_manager.broadcast(summary.model_dump())
-            except Exception:  # pragma: no cover - defensive runtime logging
-                logger.exception("Background worker iteration failed")
+            except Exception:  # pragma: no cover - ghi log phòng vệ khi worker chạy thật
+                logger.exception("Vòng lặp worker nền gặp lỗi")
 
+            # Nghỉ ngắn giữa các vòng để giảm tải CPU/database nhưng vẫn đủ realtime cho demo.
             await asyncio.sleep(3)
 
 

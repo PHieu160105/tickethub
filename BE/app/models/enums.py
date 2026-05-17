@@ -1,4 +1,4 @@
-"""Domain enums used across ORM models and schemas."""
+"""Khai báo các enum miền nghiệp vụ dùng chung cho model ORM và schema."""
 
 from enum import StrEnum
 

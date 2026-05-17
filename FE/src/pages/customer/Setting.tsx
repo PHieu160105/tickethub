@@ -36,8 +36,8 @@ export default function CustomerSettings() {
         <div className="hidden lg:block">
           <CustomerSidebar
             activeTab="settings"
-            userName={user?.full_name ?? 'Customer'}
-            membershipLevel="Stellar Member"
+            userName={user?.full_name ?? 'Khách hàng'}
+            membershipLevel="Thành viên TicketRush"
             onNavigate={onSidebarNavigate}
           />
         </div>
@@ -46,8 +46,8 @@ export default function CustomerSettings() {
             <button className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} />
             <CustomerSidebar
               activeTab="settings"
-              userName={user?.full_name ?? 'Customer'}
-              membershipLevel="Stellar Member"
+              userName={user?.full_name ?? 'Khách hàng'}
+              membershipLevel="Thành viên TicketRush"
               onNavigate={onSidebarNavigate}
               className="relative"
             />
@@ -63,7 +63,7 @@ export default function CustomerSettings() {
             <p className="text-on-surface-variant mt-2 max-w-lg">Chế độ tự chỉnh sửa theo ý bạn!</p>
           </header>
 
-          {/* Appearance Card */}
+          {/* Khối cấu hình giao diện: cho phép người dùng đổi sáng/tối ngay trong trình duyệt. */}
           <div className="rounded-2xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6 space-y-6">
             <div>
               <h2 className="text-2xl font-bold text-on-background font-headline">Hiển thị</h2>
@@ -87,7 +87,7 @@ export default function CustomerSettings() {
                       <div className="flex items-center gap-3 mb-3">
                         <Moon className={`w-6 h-6 ${theme === 'dark' ? 'text-red-400' : 'text-slate-500'}`} />
                         <span className={`font-bold text-lg ${theme === 'dark' ? 'text-on-background' : 'text-on-surface-variant'}`}>
-                          Dark Mode
+                          Chế độ tối
                         </span>
                       </div>
                       <p className={`text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-on-surface-variant'}`}>
@@ -113,11 +113,11 @@ export default function CustomerSettings() {
                       <div className="flex items-center gap-3 mb-3">
                         <Sun className={`w-6 h-6 ${theme === 'light' ? 'text-amber-400' : 'text-slate-500'}`} />
                         <span className={`font-bold text-lg ${theme === 'light' ? 'text-on-background' : 'text-on-surface-variant'}`}>
-                          Light Mode
+                          Chế độ sáng
                         </span>
                       </div>
                       <p className={`text-sm ${theme === 'light' ? 'text-slate-300' : 'text-on-surface-variant'}`}>
-                        Chế độ ban ngày, độ sáng mặc đinhj
+                        Chế độ ban ngày, độ sáng mặc định
                       </p>
                       {theme === 'light' && (
                         <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center">
@@ -132,7 +132,7 @@ export default function CustomerSettings() {
 
                 <div className="rounded-lg bg-surface-variant border border-gray-500 p-4">
                   <p className="text-sm text-on-surface-variant">
-                    Nền đang chọn: <span className="font-bold text-on-background">{theme === 'dark' ? 'Dark' : 'Light'}</span>
+                    Nền đang chọn: <span className="font-bold text-on-background">{theme === 'dark' ? 'Tối' : 'Sáng'}</span>
                   </p>
                 </div>
           </div>

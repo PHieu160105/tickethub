@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { signInWithGoogle } from '@/lib/firebase'
@@ -83,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(enrichedUser)
       return enrichedUser
     } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Login failed. Please try again.'))
+      throw new Error(extractApiErrorMessage(error, 'Đăng nhập thất bại. Vui lòng thử lại.'))
     } finally {
       setIsLoading(false)
     }
@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(enrichedUser)
       return enrichedUser
     } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Google login failed. Please try again.'))
+      throw new Error(extractApiErrorMessage(error, 'Đăng nhập Google thất bại. Vui lòng thử lại.'))
     } finally {
       setIsLoading(false)
     }
@@ -139,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(enrichedUser)
       return enrichedUser
     } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Registration failed. Please try again.'))
+      throw new Error(extractApiErrorMessage(error, 'Đăng ký thất bại. Vui lòng thử lại.'))
     } finally {
       setIsLoading(false)
     }
@@ -150,13 +150,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
-  const updateProfile = async (payload: { full_name: string; gender: 'male' | 'female' | 'other'; age: number }) => {
+  const updateProfile = useCallback(async (payload: { full_name: string; gender: 'male' | 'female' | 'other'; age: number }) => {
     const profile = await authApi.updateMe(payload)
     const enrichedUser = enrichUser(profile)
     authStorage.setUser(profile)
     setUser(enrichedUser)
     return enrichedUser
-  }
+  }, [])
 
   const value = useMemo(
     () => ({
@@ -181,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    throw new Error('useAuth phải được dùng bên trong AuthProvider')
   }
   return context
 }

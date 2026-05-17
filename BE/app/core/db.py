@@ -1,4 +1,4 @@
-"""Database engine/session setup and dependency helpers."""
+"""Khởi tạo engine cơ sở dữ liệu, session async và dependency cấp request."""
 
 from collections.abc import AsyncGenerator
 from uuid import uuid4
@@ -18,7 +18,7 @@ engine = create_async_engine(
     connect_args={
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
-        # Required when running through PgBouncer transaction/statement pooling.
+        # Mỗi prepared statement được đặt tên động để an toàn khi chạy qua PgBouncer.
         "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
     },
 )
@@ -26,7 +26,18 @@ AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Yield one async SQLAlchemy session per request."""
+    """Cấp một `AsyncSession` cho mỗi request backend.
+
+    Input:
+    - Không nhận tham số trực tiếp, được FastAPI inject như dependency.
+
+    Output:
+    - Một phiên SQLAlchemy async sống trong phạm vi request hiện tại.
+
+    Cách hoạt động:
+    - Mỗi request mở một session riêng.
+    - Session tự đóng khi request kết thúc để tránh rò rỉ kết nối.
+    """
 
     async with AsyncSessionLocal() as session:
         yield session

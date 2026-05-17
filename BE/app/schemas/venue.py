@@ -1,4 +1,4 @@
-"""Venue, layout, and section schemas."""
+"""Schema địa điểm, bố cục, khu vực và builder ghế mẫu."""
 
 from datetime import datetime
 from decimal import Decimal
@@ -6,10 +6,10 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-# ── Venue Schemas ──
+# ── Schema địa điểm ──
 
 class VenueCreateRequest(BaseModel):
-    """Payload to create a new venue."""
+    """Payload tạo địa điểm mới."""
 
     name: str = Field(min_length=1, max_length=255)
     address: str | None = None
@@ -21,7 +21,7 @@ class VenueCreateRequest(BaseModel):
 
 
 class VenueUpdateRequest(BaseModel):
-    """Payload to update a venue."""
+    """Payload cập nhật địa điểm."""
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     address: str | None = None
@@ -34,7 +34,7 @@ class VenueUpdateRequest(BaseModel):
 
 
 class VenueListResponse(BaseModel):
-    """Short venue shape for listings."""
+    """Payload tóm tắt địa điểm cho danh sách."""
 
     id: int
     name: str
@@ -48,7 +48,7 @@ class VenueListResponse(BaseModel):
 
 
 class VenueDetailResponse(VenueListResponse):
-    """Full venue details."""
+    """Payload chi tiết địa điểm."""
 
     address: str | None
     width: int
@@ -65,10 +65,10 @@ class VenueDetailResponse(VenueListResponse):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ── Layout Schemas ──
+# ── Schema bố cục ──
 
 class LayoutCreateRequest(BaseModel):
-    """Payload to create a venue layout."""
+    """Payload tạo bố cục cho địa điểm."""
 
     name: str = Field(min_length=1, max_length=255)
     description: str | None = None
@@ -77,7 +77,7 @@ class LayoutCreateRequest(BaseModel):
 
 
 class LayoutUpdateRequest(BaseModel):
-    """Payload to update a layout."""
+    """Payload cập nhật bố cục."""
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
@@ -86,7 +86,7 @@ class LayoutUpdateRequest(BaseModel):
 
 
 class LayoutDetailResponse(BaseModel):
-    """Layout details."""
+    """Payload chi tiết bố cục."""
 
     id: int
     venue_id: int
@@ -100,10 +100,10 @@ class LayoutDetailResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ── Section Schemas ──
+# ── Schema khu vực ──
 
 class SectionCreateRequest(BaseModel):
-    """Payload to create a section."""
+    """Payload tạo khu vực trong bố cục."""
 
     name: str = Field(min_length=1, max_length=100)
     code: str = Field(min_length=1, max_length=30)
@@ -113,7 +113,7 @@ class SectionCreateRequest(BaseModel):
 
 
 class SectionUpdateRequest(BaseModel):
-    """Payload to update a section."""
+    """Payload cập nhật khu vực."""
 
     name: str | None = Field(default=None, min_length=1, max_length=100)
     code: str | None = Field(default=None, min_length=1, max_length=30)
@@ -123,7 +123,7 @@ class SectionUpdateRequest(BaseModel):
 
 
 class SectionDetailResponse(BaseModel):
-    """Section details."""
+    """Payload chi tiết khu vực."""
 
     id: int
     venue_layout_id: int

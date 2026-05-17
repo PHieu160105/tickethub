@@ -6,25 +6,29 @@ import { EventCard } from '@/components/ui/EventCard'
 //import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { Input } from '@/components/ui/Input'
 import { useEvents } from '@/features/events/hooks/useEvents'
+import { formatCurrencyVnd } from '@/lib/utils'
 import { Calendar, ChevronLeft, ChevronRight, DollarSign, MapPin, Search as SearchIcon, SlidersHorizontal, X } from 'lucide-react'
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80'
 
 function formatDate(date: string) {
-  return new Date(date).toLocaleDateString('en-US', {
-    month: 'short',
+  return new Date(date).toLocaleDateString('vi-VN', {
+    month: '2-digit',
     day: '2-digit',
   })
 }
 
 export default function Search() {
   const [urlParams, setUrlParams] = useSearchParams()
-  const [searchInput, setSearchInput] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('all')
+  const urlParamsKey = urlParams.toString()
+  const initialQuery = urlParams.get('q') ?? ''
+  const initialCategory = urlParams.get('category') ?? 'all'
+  const [searchInput, setSearchInput] = useState(initialQuery)
+  const [searchQuery, setSearchQuery] = useState(initialQuery)
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory || 'all')
   const [selectedVenue, setSelectedVenue] = useState('all')
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000])
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 5_000_000])
   const [sortBy, setSortBy] = useState<'recommended' | 'date' | 'title'>('recommended')
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 6
@@ -35,13 +39,14 @@ export default function Search() {
   })
 
   useEffect(() => {
-    const initialQuery = urlParams.get('q') ?? ''
-    const initialCategory = urlParams.get('category') ?? 'all'
+    const frameId = window.requestAnimationFrame(() => {
+      setSearchInput(initialQuery)
+      setSearchQuery(initialQuery)
+      setSelectedCategory(initialCategory || 'all')
+    })
 
-    setSearchInput(initialQuery)
-    setSearchQuery(initialQuery)
-    setSelectedCategory(initialCategory || 'all')
-  }, [urlParams.toString()])
+    return () => window.cancelAnimationFrame(frameId)
+  }, [initialCategory, initialQuery, urlParamsKey])
 
   const categories = useMemo(() => {
     const uniqueCategories = Array.from(new Set(events.map((event) => event.category).filter(Boolean)))
@@ -67,7 +72,7 @@ export default function Search() {
     }
 
     return results
-  }, [events, selectedVenue, priceRange, sortBy])
+  }, [events, selectedVenue, sortBy])
 
   const totalPages = Math.ceil(filteredResults.length / itemsPerPage)
   const paginatedResults = filteredResults.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
@@ -91,7 +96,7 @@ export default function Search() {
     setSearchQuery('')
     setSelectedCategory('all')
     setSelectedVenue('all')
-    setPriceRange([0, 1000])
+    setPriceRange([0, 5_000_000])
     setSortBy('recommended')
     setCurrentPage(1)
     setUrlParams({}, { replace: true })
@@ -196,13 +201,14 @@ export default function Search() {
                   <div className="flex items-center gap-2 text-sm customer-text-body">
                     <DollarSign className="w-4 h-4 text-green-500" />
                     <span>
-                      ${priceRange[0]} - ${priceRange[1]}
+                      {formatCurrencyVnd(priceRange[0])} - {formatCurrencyVnd(priceRange[1])}
                     </span>
                   </div>
                   <input
                     type="range"
                     min={0}
-                    max={1000}
+                    max={5_000_000}
+                    step={50_000}
                     value={priceRange[1]}
                     onChange={(event) => {
                       setPriceRange([0, Number(event.target.value)])
@@ -219,35 +225,35 @@ export default function Search() {
             <div className="flex items-center justify-between mb-8 gap-4">
               <div className="flex items-baseline gap-3 flex-wrap">
                 <h2 className="text-2xl font-headline font-bold customer-text-body">Đã tìm được {filteredResults.length} sự kiện</h2>
-                {searchQuery && <span className="text-sm text-slate-400 italic">for "{searchQuery}"</span>}
+                {searchQuery && <span className="text-sm text-slate-400 italic">cho từ khóa "{searchQuery}"</span>}
                 {activeFiltersCount > 0 && (
-                  <span className="text-xs px-2 py-1 bg-primary/20 text-primary rounded-full">{activeFiltersCount} active filters</span>
+                  <span className="text-xs px-2 py-1 bg-primary/20 text-primary rounded-full">{activeFiltersCount} bộ lọc đang bật</span>
                 )}
               </div>
 
               <div className="flex items-center gap-2">
                 <span className="text-xs font-headline font-bold uppercase tracking-widest text-slate-500">
                   <SlidersHorizontal className="w-4 h-4 inline mr-1" />
-                  Sort By:
+                  Sắp xếp:
                 </span>
                 <select
                   value={sortBy}
                   onChange={(event) => setSortBy(event.target.value as 'recommended' | 'date' | 'title')}
                   className="text-sm font-semibold bg-slate-800 border border-white/10 rounded-lg px-3 py-2"
                 >
-                  <option value="recommended">Recommended</option>
-                  <option value="date">Date</option>
-                  <option value="title">Title</option>
+                  <option value="recommended">Gợi ý</option>
+                  <option value="date">Ngày diễn</option>
+                  <option value="title">Tên sự kiện</option>
                 </select>
               </div>
             </div>
 
             {isLoading ? (
-              <div className="text-center py-20 customer-text-body">Loading events...</div>
+              <div className="text-center py-20 customer-text-body">Đang tải sự kiện...</div>
             ) : error ? (
               <div className="text-center py-20">
                 <p className="text-red-400 mb-4">{error}</p>
-                <Button onClick={onSearchSubmit}>Retry</Button>
+                <Button onClick={onSearchSubmit}>Thử lại</Button>
               </div>
             ) : paginatedResults.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -258,7 +264,7 @@ export default function Search() {
                     title={event.title}
                     date={formatDate(event.start_at)}
                     venue={event.venue}
-                    price="See Seats"
+                    price="Xem giá ghế"
                     badge={event.category}
                     href={`/event/${event.slug || event.id}`}
                   />

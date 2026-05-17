@@ -18,9 +18,9 @@ function formatCurrency(amount: number) {
 }
 
 function statusBadge(status: string) {
-  if (status === 'paid') return <Badge variant="success" size="sm">Paid</Badge>
-  if (status === 'pending') return <Badge variant="warning" size="sm">Pending</Badge>
-  return <Badge variant="default" size="sm">Cancelled</Badge>
+  if (status === 'paid') return <Badge variant="success" size="sm">Đã thanh toán</Badge>
+  if (status === 'pending') return <Badge variant="warning" size="sm">Đang chờ</Badge>
+  return <Badge variant="default" size="sm">Đã hủy</Badge>
 }
 
 const DEFAULT_SUMMARY: DashboardSummary = {
@@ -135,10 +135,10 @@ export default function AdminTickets() {
     })),
   ]
   const statusOptions: SelectOption[] = [
-    { value: 'all', label: 'Tất cả status' },
-    { value: 'paid', label: 'Paid' },
-    { value: 'pending', label: 'Pending' },
-    { value: 'cancelled', label: 'Cancelled' },
+    { value: 'all', label: 'Tất cả trạng thái' },
+    { value: 'paid', label: 'Đã thanh toán' },
+    { value: 'pending', label: 'Đang chờ' },
+    { value: 'cancelled', label: 'Đã hủy' },
   ]
 
   return (
@@ -155,7 +155,7 @@ export default function AdminTickets() {
           </Button>
           <Button variant="outline" disabled>
             <Download className="h-4 w-4" />
-            Xuất báo cáo (soon)
+            Xuất báo cáo (sắp có)
           </Button>
         </div>
       </div>
@@ -178,7 +178,7 @@ export default function AdminTickets() {
                 <DollarSign className="h-6 w-6 text-green-400" />
               </div>
             </div>
-            <div className="mt-4 flex items-center gap-2 text-sm text-green-400"><TrendingUp className="h-4 w-4" /><span>Cap nhat tu /admin/dashboard/summary</span></div>
+            <div className="mt-4 flex items-center gap-2 text-sm text-green-400"><TrendingUp className="h-4 w-4" /><span>Cập nhật từ /admin/dashboard/summary</span></div>
           </CardContent>
         </Card>
 
@@ -204,7 +204,7 @@ export default function AdminTickets() {
               </div>
               <div className="h-12 w-12 rounded-lg bg-brand-yellow/20 flex items-center justify-center"><Calendar className="h-6 w-6 text-brand-yellow" /></div>
             </div>
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-400"><span>Page {page}/{totalPages}</span></div>
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-400"><span>Trang {page}/{totalPages}</span></div>
           </CardContent>
         </Card>
       </div>
@@ -281,9 +281,9 @@ export default function AdminTickets() {
                     <th className="pb-3 font-medium">Show</th>
                     <th className="pb-3 font-medium">Khách hàng</th>
                     <th className="pb-3 font-medium">Ghế</th>
-                    <th className="pb-3 font-medium">Gía</th>
+                    <th className="pb-3 font-medium">Giá</th>
                     <th className="pb-3 font-medium">Thời gian</th>
-                    <th className="pb-3 font-medium">Status</th>
+                    <th className="pb-3 font-medium">Trạng thái</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -1,4 +1,4 @@
-"""Authentication and user schemas."""
+"""Schema xác thực và hồ sơ người dùng."""
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -6,7 +6,7 @@ from app.models.enums import Gender, UserRole
 
 
 class RegisterRequest(BaseModel):
-    """Payload for customer registration."""
+    """Payload đăng ký tài khoản khách hàng."""
 
     full_name: str = Field(min_length=2, max_length=120)
     email: EmailStr
@@ -16,14 +16,14 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """Payload for login."""
+    """Payload đăng nhập bằng email và mật khẩu."""
 
-    email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    email: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
 
 
 class UserResponse(BaseModel):
-    """Public user profile data."""
+    """Dữ liệu hồ sơ người dùng trả về frontend."""
 
     id: int
     full_name: str
@@ -36,7 +36,7 @@ class UserResponse(BaseModel):
 
 
 class AuthTokenResponse(BaseModel):
-    """JWT auth response data."""
+    """Dữ liệu phản hồi xác thực gồm JWT và hồ sơ người dùng."""
 
     access_token: str
     token_type: str = "bearer"
@@ -44,7 +44,7 @@ class AuthTokenResponse(BaseModel):
 
 
 class UpdateProfileRequest(BaseModel):
-    """Payload for user self-service profile update."""
+    """Payload người dùng tự cập nhật hồ sơ cá nhân."""
 
     full_name: str = Field(min_length=2, max_length=120)
     gender: Gender = Gender.OTHER
@@ -52,6 +52,6 @@ class UpdateProfileRequest(BaseModel):
 
 
 class FirebaseTokenRequest(BaseModel):
-    """Payload for Firebase ID token verification."""
+    """Payload xác minh Firebase ID token."""
 
     id_token: str

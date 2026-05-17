@@ -1,4 +1,4 @@
-"""Seat lock, checkout and ticket schemas."""
+"""Schema giữ ghế, thanh toán và vé điện tử."""
 
 from datetime import datetime
 from decimal import Decimal
@@ -10,7 +10,7 @@ from app.models.enums import OrderStatus, SeatStatus
 
 
 class LockSeatsRequest(BaseModel):
-    """Seat lock request payload."""
+    """Payload yêu cầu giữ một hoặc nhiều ghế."""
 
     show_id: int
     seat_ids: list[int] = Field(min_length=1)
@@ -18,7 +18,7 @@ class LockSeatsRequest(BaseModel):
 
 
 class LockSeatsResponse(BaseModel):
-    """Result for seat lock attempts."""
+    """Kết quả giữ ghế, tách rõ ghế giữ thành công và ghế bị từ chối."""
 
     locked_seat_ids: list[int]
     failed_seat_ids: list[int]
@@ -26,14 +26,14 @@ class LockSeatsResponse(BaseModel):
 
 
 class ReleaseSeatsRequest(BaseModel):
-    """Manual release payload."""
+    """Payload trả ghế thủ công khi người dùng rời luồng thanh toán."""
 
     show_id: int
     seat_ids: list[int] = Field(min_length=1)
 
 
 class CheckoutRequest(BaseModel):
-    """Checkout confirmation payload (no external gateway)."""
+    """Payload xác nhận thanh toán mô phỏng, chưa đi qua cổng thanh toán thật."""
 
     show_id: int
     queue_token: str | None = None
@@ -41,7 +41,7 @@ class CheckoutRequest(BaseModel):
 
 
 class CheckoutItemResponse(BaseModel):
-    """One purchased seat line item."""
+    """Một dòng ghế đã mua trong đơn hàng."""
 
     seat_id: int
     seat_label: str
@@ -52,7 +52,7 @@ class CheckoutItemResponse(BaseModel):
 
 
 class CheckoutResponse(BaseModel):
-    """Order confirmation response after payment simulation."""
+    """Phản hồi xác nhận đơn hàng sau khi mô phỏng thanh toán thành công."""
 
     order_id: int
     order_status: OrderStatus
@@ -64,7 +64,7 @@ class CheckoutResponse(BaseModel):
 
 
 class MyTicketResponse(BaseModel):
-    """Customer ticket management payload."""
+    """Payload vé của khách hàng trên màn quản lý vé cá nhân."""
 
     ticket_id: int | None = None
     cancellation_id: int | None = None

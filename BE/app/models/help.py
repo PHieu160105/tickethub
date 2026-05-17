@@ -1,4 +1,4 @@
-"""Help center chat ORM models."""
+"""Khai báo các mô hình ORM cho trung tâm hỗ trợ và hội thoại trợ giúp."""
 
 from datetime import datetime
 
@@ -10,6 +10,19 @@ from app.models.enums import UserRole
 
 
 class HelpThread(TimestampMixin, Base):
+    """Đại diện cho một luồng hội thoại hỗ trợ giữa khách hàng và quản trị viên.
+
+    Input:
+    - Khách hàng mở thread, hệ thống lưu thời điểm tin nhắn cuối, preview và bộ đếm unread.
+
+    Output:
+    - Một bản ghi `help_threads` đóng vai trò đầu mối cho danh sách tin nhắn hỗ trợ.
+
+    Cách hoạt động:
+    - Một thread thuộc về một khách hàng.
+    - Thread giữ thông tin tóm tắt để màn hình danh sách tải nhanh hơn.
+    """
+
     __tablename__ = "help_threads"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -25,6 +38,19 @@ class HelpThread(TimestampMixin, Base):
 
 
 class HelpMessage(Base):
+    """Đại diện cho một tin nhắn cụ thể bên trong một luồng hỗ trợ.
+
+    Input:
+    - `thread_id`, `sender_id`, vai trò người gửi, nội dung và loại tin nhắn.
+
+    Output:
+    - Một bản ghi `help_messages` dùng để render lịch sử chat hỗ trợ.
+
+    Cách hoạt động:
+    - Tin nhắn gắn với một `HelpThread`.
+    - `sender_role` cho biết đây là tin từ khách hàng hay quản trị viên.
+    """
+
     __tablename__ = "help_messages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

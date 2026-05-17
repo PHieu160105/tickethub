@@ -109,10 +109,10 @@ export default function Home() {
             </div>
           ) : (
             <div className="max-w-2xl space-y-4">
-              <h1 className="text-4xl md:text-5xl font-black">No live events right now</h1>
-              <p className="text-slate-400">Please check back later or search upcoming listings.</p>
+              <h1 className="text-4xl md:text-5xl font-black">Hiện chưa có sự kiện đang mở bán</h1>
+              <p className="text-slate-400">Vui lòng quay lại sau hoặc tìm các sự kiện sắp diễn ra.</p>
               <Link to="/search">
-                <Button>Go To Search</Button>
+                <Button>Đi tới tìm kiếm</Button>
               </Link>
             </div>
           )}
@@ -166,7 +166,7 @@ export default function Home() {
                 title={event.title}
                 date={formatDate(event.start_at)}
                 venue={event.venue}
-                price={event.category}
+                price="Xem chi tiết"
                 badge={event.category}
                 href={`/event/${event.slug || event.id}`}
               />

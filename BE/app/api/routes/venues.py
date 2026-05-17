@@ -1,4 +1,4 @@
-"""Venue, layout, section, and builder management routes."""
+"""Các route quản lý địa điểm, bố cục, khu vực và builder."""
 
 import base64
 import math
@@ -48,7 +48,7 @@ polygon_router = APIRouter(prefix="/admin/polygons", tags=["admin-polygons"])
 async def _get_venue_or_404(session: AsyncSession, venue_id: int) -> Venue:
     venue = await session.scalar(select(Venue).where(Venue.id == venue_id))
     if not venue:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy địa điểm")
     return venue
 
 
@@ -60,8 +60,8 @@ async def _resolve_layout_for_venue(session: AsyncSession, venue_id: int, layout
     layout = await session.scalar(stmt)
     if not layout:
         if layout_id is not None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Layout not found for this venue")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Venue requires at least one layout")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy bố cục thuộc địa điểm này")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Địa điểm cần ít nhất một bố cục")
     return layout
 
 
@@ -72,7 +72,7 @@ async def _resolve_section_for_layout(session: AsyncSession, layout_id: int, sec
         select(Section).where(Section.id == section_id, Section.venue_layout_id == layout_id)
     )
     if not section:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Section not found for this layout")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy khu vực thuộc bố cục này")
     return section
 
 
@@ -91,7 +91,7 @@ async def _ensure_unique_layout_seat_label(
         stmt = stmt.where(Seat.id != exclude_seat_id)
     exists = await session.scalar(stmt)
     if exists and exists > 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Seat label already exists for this layout")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nhãn ghế đã tồn tại trong bố cục này")
 
 
 def _seat_response_from_model(seat: Seat, section_name: str | None = None) -> VenueSeatResponse:
@@ -215,7 +215,7 @@ def _generate_bulk_layout_seats(
 
     if payload.pattern == "arc":
         if payload.arc_config is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="arc_config required for arc pattern")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bắt buộc có cấu hình vòng cung khi dùng mẫu vòng cung")
         cfg = payload.arc_config
         for row in range(payload.rows):
             radius = cfg.radius + row * payload.gap_y
@@ -250,10 +250,10 @@ def _generate_bulk_layout_seats(
                 )
         return seats_to_add
 
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported pattern")
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mẫu sinh ghế không được hỗ trợ")
 
 
-# ── Venue CRUD ──
+# ── CRUD địa điểm ──
 
 @router.post("", response_model=VenueDetailResponse)
 async def create_venue(
@@ -261,7 +261,7 @@ async def create_venue(
     session: AsyncSession = Depends(get_db_session),
     admin_user: User = Depends(get_current_active_admin),
 ) -> VenueDetailResponse:
-    """Create a new venue."""
+    """Tạo địa điểm mới."""
 
     venue = Venue(
         name=payload.name,
@@ -287,7 +287,7 @@ async def list_venues(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> list[VenueListResponse]:
-    """List all venues."""
+    """Liệt kê toàn bộ địa điểm."""
 
     stmt = select(Venue).where(Venue.is_active.is_(True)).order_by(Venue.created_at.desc())
     if search:
@@ -304,11 +304,11 @@ async def get_venue(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> VenueDetailResponse:
-    """Get venue details."""
+    """Lấy chi tiết địa điểm."""
 
     venue = await session.scalar(select(Venue).where(Venue.id == venue_id))
     if not venue:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy địa điểm")
     return VenueDetailResponse.model_validate(venue)
 
 
@@ -319,11 +319,11 @@ async def update_venue(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> VenueDetailResponse:
-    """Update venue metadata."""
+    """Cập nhật metadata địa điểm."""
 
     venue = await session.scalar(select(Venue).where(Venue.id == venue_id))
     if not venue:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy địa điểm")
 
     updates = payload.model_dump(exclude_unset=True)
     for field_name, field_value in updates.items():
@@ -340,11 +340,11 @@ async def delete_venue(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> None:
-    """Soft-delete a venue."""
+    """Xóa mềm một địa điểm."""
 
     venue = await session.scalar(select(Venue).where(Venue.id == venue_id))
     if not venue:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy địa điểm")
 
     venue.is_active = False
     await session.commit()
@@ -365,12 +365,12 @@ async def _store_venue_background(venue: Venue, file: UploadFile) -> tuple[str, 
     if not file.content_type or file.content_type not in BACKGROUND_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only SVG, PNG, JPEG, and WEBP files are allowed",
+            detail="Chỉ cho phép file SVG, PNG, JPEG và WEBP",
         )
 
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Background must be <= 10MB")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ảnh nền phải có dung lượng không quá 10MB")
 
     if file.content_type in SVG_CONTENT_TYPES:
         venue.svg_source = content.decode("utf-8")
@@ -380,7 +380,7 @@ async def _store_venue_background(venue: Venue, file: UploadFile) -> tuple[str, 
         venue.svg_source = f"data:{file.content_type};base64,{encoded}"
         background_type = "raster"
 
-    # Parsed SVG output is tied to the current source and must be dropped on any new upload.
+    # Kết quả SVG đã xử lý gắn với file nguồn hiện tại nên phải xóa khi upload nền mới.
     venue.svg_processed = None
     return background_type, file.content_type
 
@@ -391,7 +391,7 @@ async def upload_venue_svg(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> dict[str, Any]:
-    """Backward-compatible endpoint for uploading a venue background."""
+    """Endpoint tương thích ngược để upload nền địa điểm."""
 
     return await upload_venue_background(venue_id=venue_id, file=file, session=session, _=_)
 
@@ -403,17 +403,17 @@ async def upload_venue_background(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> dict[str, Any]:
-    """Upload and store a venue background."""
+    """Upload và lưu nền địa điểm."""
 
     venue = await session.scalar(select(Venue).where(Venue.id == venue_id))
     if not venue:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy địa điểm")
 
     background_type, content_type = await _store_venue_background(venue, file)
     await session.commit()
 
     return {
-        "detail": "Background uploaded successfully",
+        "detail": "Tải nền địa điểm thành công",
         "venue_id": venue_id,
         "background_type": background_type,
         "content_type": content_type,
@@ -426,19 +426,19 @@ async def process_venue_svg_endpoint(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> dict[str, Any]:
-    """Process uploaded SVG and extract seats/sections."""
+    """Xử lý SVG đã upload và trích xuất ghế/khu vực."""
 
     venue = await session.scalar(select(Venue).where(Venue.id == venue_id))
     if not venue:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy địa điểm")
 
     if not venue.svg_source:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No background uploaded for this venue")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Địa điểm này chưa có ảnh nền")
 
     if not _is_svg_markup(venue.svg_source):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="SVG parse is only available when the current background is an SVG",
+            detail="Chỉ có thể phân tích SVG khi ảnh nền hiện tại là file SVG",
         )
 
     result = await process_venue_svg(venue_id, venue.svg_source)
@@ -471,11 +471,11 @@ async def create_layout(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> LayoutDetailResponse:
-    """Create a new layout for a venue."""
+    """Tạo bố cục mới cho địa điểm."""
 
     venue = await session.scalar(select(Venue).where(Venue.id == venue_id))
     if not venue:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy địa điểm")
 
     layout = VenueLayout(
         venue_id=venue_id,
@@ -496,7 +496,7 @@ async def list_layouts(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> list[LayoutDetailResponse]:
-    """List layouts for a venue."""
+    """Liệt kê bố cục của một địa điểm."""
 
     layouts = list(
         await session.scalars(
@@ -506,7 +506,7 @@ async def list_layouts(
     return [LayoutDetailResponse.model_validate(l) for l in layouts]
 
 
-# ── Layout detail/update/delete (using /admin/layouts prefix) ──
+# ── Chi tiết/cập nhật/xóa bố cục dùng prefix /admin/layouts ──
 
 layout_router = APIRouter(prefix="/admin/layouts", tags=["admin-layouts"])
 
@@ -517,11 +517,11 @@ async def get_layout(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> LayoutDetailResponse:
-    """Get layout details."""
+    """Lấy chi tiết bố cục."""
 
     layout = await session.scalar(select(VenueLayout).where(VenueLayout.id == layout_id))
     if not layout:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Layout not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy bố cục")
     return LayoutDetailResponse.model_validate(layout)
 
 
@@ -532,11 +532,11 @@ async def update_layout(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> LayoutDetailResponse:
-    """Update layout."""
+    """Cập nhật bố cục."""
 
     layout = await session.scalar(select(VenueLayout).where(VenueLayout.id == layout_id))
     if not layout:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Layout not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy bố cục")
 
     updates = payload.model_dump(exclude_unset=True)
     for field_name, field_value in updates.items():
@@ -553,11 +553,11 @@ async def delete_layout(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> None:
-    """Delete a layout."""
+    """Xóa bố cục."""
 
     layout = await session.scalar(select(VenueLayout).where(VenueLayout.id == layout_id))
     if not layout:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Layout not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy bố cục")
 
     await session.delete(layout)
     await session.commit()
@@ -571,7 +571,7 @@ async def list_sections(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> list[SectionDetailResponse]:
-    """List sections for a layout."""
+    """Liệt kê khu vực của một bố cục."""
 
     sections = list(
         await session.scalars(
@@ -588,11 +588,11 @@ async def create_section(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> SectionDetailResponse:
-    """Create a section within a layout."""
+    """Tạo khu vực trong bố cục."""
 
     layout = await session.scalar(select(VenueLayout).where(VenueLayout.id == layout_id))
     if not layout:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Layout not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy bố cục")
 
     section = Section(
         venue_layout_id=layout_id,
@@ -618,11 +618,11 @@ async def update_section(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> SectionDetailResponse:
-    """Update a section."""
+    """Cập nhật khu vực."""
 
     section = await session.scalar(select(Section).where(Section.id == section_id))
     if not section:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Section not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy khu vực")
 
     updates = payload.model_dump(exclude_unset=True)
     for field_name, field_value in updates.items():
@@ -639,27 +639,27 @@ async def delete_section(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> None:
-    """Delete a section if it has no seats."""
+    """Xóa khu vực nếu chưa có ghế."""
 
     section = await session.scalar(select(Section).where(Section.id == section_id))
     if not section:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Section not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy khu vực")
 
-    # Check if section has seats
+    # Kiểm tra khu vực còn ghế hay không trước khi xóa.
     seat_count = await session.scalar(
         select(func.count()).select_from(Seat).where(Seat.section_id == section_id)
     )
     if seat_count and seat_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete section with existing seats",
+            detail="Không thể xóa khu vực đang có ghế",
         )
 
     await session.delete(section)
     await session.commit()
 
 
-# ── Venue Builder: Seats ──
+# ── Builder địa điểm: ghế mẫu ──
 
 @router.get("/{venue_id}/seats", response_model=list[VenueSeatResponse])
 async def list_venue_seats(
@@ -668,7 +668,7 @@ async def list_venue_seats(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> list[VenueSeatResponse]:
-    """List template seats for one venue layout."""
+    """Liệt kê ghế mẫu của một bố cục địa điểm."""
 
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, layout_id)
@@ -692,7 +692,7 @@ async def create_venue_seat_single(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> VenueSeatResponse:
-    """Create one template seat within a venue layout."""
+    """Tạo một ghế mẫu trong bố cục địa điểm."""
 
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, payload.layout_id)
@@ -728,7 +728,7 @@ async def create_venue_seat_bulk(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> VenueSeatBulkCreateResponse:
-    """Bulk-generate template seats for one venue layout."""
+    """Sinh ghế mẫu hàng loạt cho một bố cục địa điểm."""
 
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, payload.layout_id)
@@ -783,7 +783,7 @@ async def sync_venue_seats(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> VenueSeatSyncResponse:
-    """Synchronize many template seat changes for one venue layout in a single transaction."""
+    """Đồng bộ nhiều thay đổi ghế mẫu trong một transaction."""
 
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, payload.layout_id)
@@ -802,18 +802,18 @@ async def sync_venue_seats(
     delete_ids = list(payload.delete_ids)
     client_ids = [item.client_id for item in payload.create]
 
-    _validate_unique_ids(update_ids, "Duplicate seat ids in update payload")
-    _validate_unique_ids(delete_ids, "Duplicate seat ids in delete payload")
-    _validate_unique_ids(client_ids, "Duplicate client ids in create payload")
+    _validate_unique_ids(update_ids, "Trùng ID ghế trong payload cập nhật")
+    _validate_unique_ids(delete_ids, "Trùng ID ghế trong payload xóa")
+    _validate_unique_ids(client_ids, "Trùng client_id trong payload tạo mới")
 
     delete_id_set = set(delete_ids)
     if delete_id_set.intersection(update_ids):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A seat cannot be updated and deleted in the same request")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Một ghế không thể vừa cập nhật vừa xóa trong cùng request")
 
     if any(seat_id not in seat_map for seat_id in update_ids):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template seat not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghế mẫu")
     if any(seat_id not in seat_map for seat_id in delete_ids):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template seat not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghế mẫu")
 
     invalid_section = next(
         (
@@ -824,7 +824,7 @@ async def sync_venue_seats(
         None,
     )
     if invalid_section is not None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Section not found for this layout")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy khu vực thuộc bố cục này")
 
     final_labels: list[str] = []
     update_map = {item.id: item for item in payload.update}
@@ -834,7 +834,7 @@ async def sync_venue_seats(
         candidate = update_map.get(seat.id)
         final_labels.append(candidate.label if candidate else seat.seat_label)
     final_labels.extend(item.label for item in payload.create)
-    _validate_unique_labels(final_labels, "Seat label already exists for this layout")
+    _validate_unique_labels(final_labels, "Nhãn ghế đã tồn tại trong bố cục này")
 
     created_pairs: list[tuple[int, Seat]] = []
     try:
@@ -893,7 +893,7 @@ async def sync_venue_seats(
     return response
 
 
-# ── Venue Builder: Polygons ──
+# ── Builder địa điểm: polygon ──
 
 @router.get("/{venue_id}/polygons", response_model=list[PolygonResponse])
 async def list_venue_polygons(
@@ -902,7 +902,7 @@ async def list_venue_polygons(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> list[PolygonResponse]:
-    """List polygons for one venue layout."""
+    """Liệt kê polygon của một bố cục địa điểm."""
 
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, layout_id)
@@ -925,7 +925,7 @@ async def create_venue_polygon(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> PolygonResponse:
-    """Save one polygon zone for a venue layout."""
+    """Lưu một vùng polygon cho bố cục địa điểm."""
 
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, payload.layout_id)
@@ -951,11 +951,11 @@ async def update_polygon(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> PolygonResponse:
-    """Update one polygon zone."""
+    """Cập nhật một vùng polygon."""
 
     polygon = await session.scalar(select(Polygon).where(Polygon.id == polygon_id))
     if not polygon:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Polygon not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy polygon")
 
     if payload.section_id is not None:
         section = await _resolve_section_for_layout(session, polygon.venue_layout_id, payload.section_id)
@@ -980,15 +980,15 @@ async def delete_polygon(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> APIMessage:
-    """Delete one polygon zone."""
+    """Xóa một vùng polygon."""
 
     polygon = await session.scalar(select(Polygon).where(Polygon.id == polygon_id))
     if not polygon:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Polygon not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy polygon")
 
     await session.delete(polygon)
     await session.commit()
-    return APIMessage(detail="Polygon deleted")
+    return APIMessage(detail="Đã xóa polygon")
 
 
 @seat_router.patch("/{seat_id}", response_model=VenueSeatResponse)
@@ -998,13 +998,13 @@ async def update_venue_seat(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> VenueSeatResponse:
-    """Update a template seat attached to a venue layout."""
+    """Cập nhật ghế mẫu thuộc bố cục địa điểm."""
 
     seat = await session.scalar(
         select(Seat).where(Seat.id == seat_id, Seat.show_id.is_(None), Seat.venue_layout_id.is_not(None))
     )
     if not seat:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template seat not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghế mẫu")
 
     section = None
     if payload.section_id is not None:
@@ -1036,14 +1036,14 @@ async def delete_venue_seat(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> APIMessage:
-    """Delete a template seat attached to a venue layout."""
+    """Xóa ghế mẫu thuộc bố cục địa điểm."""
 
     seat = await session.scalar(
         select(Seat).where(Seat.id == seat_id, Seat.show_id.is_(None), Seat.venue_layout_id.is_not(None))
     )
     if not seat:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template seat not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghế mẫu")
 
     await session.delete(seat)
     await session.commit()
-    return APIMessage(detail="Seat deleted")
+    return APIMessage(detail="Đã xóa ghế")

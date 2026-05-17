@@ -1,4 +1,4 @@
-"""Virtual queue request/response schemas."""
+"""Schema request/response cho hàng đợi ảo."""
 
 from datetime import datetime
 
@@ -8,7 +8,7 @@ from app.models.enums import QueueStatus
 
 
 class QueueJoinResponse(BaseModel):
-    """Queue join response containing token and current status."""
+    """Phản hồi khi tham gia hàng đợi, gồm token và trạng thái hiện tại."""
 
     token: str
     status: QueueStatus
@@ -18,7 +18,7 @@ class QueueJoinResponse(BaseModel):
 
 
 class QueueStatusResponse(BaseModel):
-    """Waiting room polling response."""
+    """Phản hồi polling trạng thái phòng chờ."""
 
     token: str
     status: QueueStatus
@@ -28,7 +28,7 @@ class QueueStatusResponse(BaseModel):
 
 
 class QueueHeartbeatResponse(BaseModel):
-    """Response after refreshing queue token TTL."""
+    """Phản hồi sau khi làm mới mốc hoạt động của token hàng đợi."""
 
     token: str
     status: QueueStatus

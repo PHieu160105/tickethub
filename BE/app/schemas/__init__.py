@@ -1,1 +1,1 @@
-"""Schema package exports."""
+"""Gói tập hợp các schema Pydantic của backend."""

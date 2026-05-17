@@ -52,7 +52,7 @@ export default function CustomerProfile() {
 
   const handleSave = async () => {
     if (!fullName.trim()) {
-      setError('Full name is required.')
+      setError('Vui lòng nhập họ tên.')
       return
     }
 
@@ -66,9 +66,9 @@ export default function CustomerProfile() {
         gender,
         age: Math.max(10, Math.min(100, age)),
       })
-      setMessage('Profile updated successfully.')
+      setMessage('Cập nhật hồ sơ thành công.')
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : 'Unable to update profile.')
+      setError(updateError instanceof Error ? updateError.message : 'Không thể cập nhật hồ sơ.')
     } finally {
       setIsSaving(false)
     }
@@ -79,8 +79,8 @@ export default function CustomerProfile() {
         <div className="hidden lg:block">
           <CustomerSidebar
             activeTab="profile"
-            userName={user?.full_name ?? 'Customer'}
-            membershipLevel="Stellar Member"
+            userName={user?.full_name ?? 'Khách hàng'}
+            membershipLevel="Thành viên TicketRush"
             onNavigate={onSidebarNavigate}
           />
         </div>
@@ -89,8 +89,8 @@ export default function CustomerProfile() {
             <button className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} />
             <CustomerSidebar
               activeTab="profile"
-              userName={user?.full_name ?? 'Customer'}
-              membershipLevel="Stellar Member"
+              userName={user?.full_name ?? 'Khách hàng'}
+              membershipLevel="Thành viên TicketRush"
               onNavigate={onSidebarNavigate}
               className="relative"
             />
@@ -156,7 +156,7 @@ export default function CustomerProfile() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Age</label>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tuổi</label>
                 <div className="relative">
                   <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                   <input

@@ -1,4 +1,4 @@
-"""Enhanced inventory service with coordinate-based seat map support."""
+"""Dịch vụ dựng sơ đồ ghế có tọa độ cho màn chọn ghế của khách hàng."""
 
 from datetime import UTC, datetime
 import math
@@ -15,7 +15,7 @@ from app.models.venue import Polygon, Section, Venue
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
-    """Normalize naive datetimes from DB drivers to UTC-aware values."""
+    """Chuẩn hóa thời gian từ DB về UTC-aware để so sánh hạn giữ ghế an toàn."""
 
     if value is None:
         return None
@@ -23,13 +23,40 @@ def _as_utc(value: datetime | None) -> datetime | None:
 
 
 async def _get_show_or_404(session: AsyncSession, show_id: int) -> Show:
+    """Lấy show còn hiệu lực hoặc trả lỗi 404.
+
+    Input:
+    - `session`: phiên DB async.
+    - `show_id`: ID buổi diễn cần lấy sơ đồ ghế.
+
+    Output:
+    - Model `Show` nếu tồn tại và chưa bị soft-delete.
+
+    Cách hoạt động:
+    - Query theo `show_id` và `is_deleted = false`.
+    - Nếu không có dữ liệu thì ném `HTTPException 404` để route trả lỗi rõ ràng cho frontend.
+    """
+
     show = await session.scalar(select(Show).where(Show.id == show_id, Show.is_deleted.is_(False)))
     if not show:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy buổi diễn")
     return show
 
 
 def _zone_block_map(zones: list[SeatZone]) -> dict[int, dict[str, float]]:
+    """Chia canvas phần trăm thành các khối mặc định khi ghế chưa có tọa độ.
+
+    Input:
+    - `zones`: danh sách khu vực vé của một buổi diễn.
+
+    Output:
+    - Map `zone_id -> {left, top, width, height}` theo hệ tọa độ phần trăm 0-100.
+
+    Cách hoạt động:
+    - Một khu vực thì chiếm một khối lớn.
+    - Nhiều khu vực thì xếp thành lưới 2 cột, có margin/gap cố định để frontend vẫn vẽ được sơ đồ.
+    """
+
     if not zones:
         return {}
 
@@ -56,6 +83,21 @@ def _zone_block_map(zones: list[SeatZone]) -> dict[int, dict[str, float]]:
 
 
 def _generated_xy(seat: Seat, zone: SeatZone | None, block: dict[str, float] | None) -> tuple[float | None, float | None]:
+    """Tạo tọa độ tạm cho ghế chưa có `x_coord/y_coord`.
+
+    Input:
+    - `seat`: ghế cần hiển thị.
+    - `zone`: khu vực chứa ghế nếu có.
+    - `block`: khối phần trăm của khu vực trên canvas.
+
+    Output:
+    - Cặp tọa độ `(x, y)` theo phần trăm hoặc `(None, None)` nếu không đủ dữ liệu.
+
+    Cách hoạt động:
+    - Ưu tiên tọa độ thật do admin tạo.
+    - Nếu thiếu tọa độ, nội suy vị trí theo hàng/cột trong khối khu vực.
+    """
+
     if seat.x_coord is not None and seat.y_coord is not None:
         return float(seat.x_coord), float(seat.y_coord)
     if block is None:
@@ -79,11 +121,25 @@ async def get_seatmap(
     show_id: int,
     current_user_id: int | None = None,
 ) -> dict[str, Any]:
-    """Get full seat map with coordinates for frontend rendering."""
+    """Trả toàn bộ sơ đồ ghế có tọa độ để frontend render.
+
+    Input:
+    - `show_id`: buổi diễn cần xem sơ đồ.
+    - `current_user_id`: có thể rỗng khi khách chưa đăng nhập xem preview.
+
+    Output:
+    - Dict gồm thông tin show/event, nền venue, khu vực, polygon và danh sách ghế có giá/trạng thái.
+
+    Cách hoạt động:
+    - Lấy show, event, venue, zones, sections và polygon overlay.
+    - Chuẩn hóa trạng thái ghế lock đã hết hạn về `available` trên payload public.
+    - Không đánh dấu `is_locked_by_me` cho guest để tránh lỗi so sánh `NULL = NULL`.
+    """
 
     show = await _get_show_or_404(session, show_id)
     event = await session.get(Event, show.event_id)
     venue: Venue | None = await session.get(Venue, show.venue_id) if show.venue_id else None
+    # Lấy toàn bộ khu giá vé trước để dựng map tra cứu nhanh theo `zone_id`.
     zones = list(await session.scalars(select(SeatZone).where(SeatZone.show_id == show.id).order_by(SeatZone.id.asc())))
     zone_map = {
         zone.id: {
@@ -98,6 +154,7 @@ async def get_seatmap(
     zone_lookup = {zone.id: zone for zone in zones}
     zone_blocks = _zone_block_map(zones)
 
+    # Section chỉ tồn tại khi show được clone từ venue layout.
     sections: list[Section] = []
     if show.venue_layout_id:
         sections = list(
@@ -108,6 +165,7 @@ async def get_seatmap(
             )
         )
 
+    # Ưu tiên polygon cấp show; nếu chưa có thì fallback polygon từ venue layout.
     venue_polygons: list[Polygon] = []
     if show.venue_layout_id:
         venue_polygons = list(
@@ -123,6 +181,7 @@ async def get_seatmap(
         )
     )
 
+    # Danh sách ghế là dữ liệu chính để frontend render từng nút ghế trên canvas.
     seats = list(await session.scalars(select(Seat).where(Seat.show_id == show_id).order_by(Seat.section_id, Seat.seat_label)))
     now = datetime.now(UTC)
 
@@ -140,11 +199,13 @@ async def get_seatmap(
     seat_responses = []
     section_to_zone: dict[int, int] = {}
     for seat in seats:
+        # Admin lock được hiển thị như trạng thái locked để khách không thể chọn.
         normalized_status = SeatStatus.LOCKED if seat.is_admin_locked and seat.status != SeatStatus.SOLD else seat.status
         lock_expires = _as_utc(seat.lock_expires_at)
         if seat.status == SeatStatus.LOCKED and lock_expires and lock_expires < now:
             normalized_status = SeatStatus.AVAILABLE
 
+        # Ghi nhớ section thuộc zone nào để polygon venue vẫn có màu/tên zone khi fallback.
         if seat.section_id is not None and seat.zone_id is not None and seat.section_id not in section_to_zone:
             section_to_zone[seat.section_id] = seat.zone_id
 
@@ -169,7 +230,7 @@ async def get_seatmap(
                 "price": float(seat.price),
                 "status": normalized_status.value,
                 "lock_expires_at": seat.lock_expires_at.isoformat() if seat.lock_expires_at else None,
-                "is_locked_by_me": seat.locked_by_user_id == current_user_id,
+                "is_locked_by_me": current_user_id is not None and seat.locked_by_user_id == current_user_id,
                 "is_admin_locked": seat.is_admin_locked,
             }
         )

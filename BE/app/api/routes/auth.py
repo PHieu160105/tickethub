@@ -1,4 +1,4 @@
-"""Authentication routes."""
+"""Khai báo các route xác thực, hồ sơ cá nhân và đăng nhập mạng xã hội."""
 
 from datetime import UTC, datetime, timedelta
 import json
@@ -28,6 +28,19 @@ DISCORD_ME_URL = "https://discord.com/api/users/@me"
 
 
 def _create_discord_state() -> str:
+    """Sinh state chống giả mạo cho luồng OAuth Discord.
+
+    Input:
+    - Không nhận tham số; dùng secret key cấu hình của backend.
+
+    Output:
+    - Chuỗi JWT ngắn hạn dùng làm `state` gửi sang Discord.
+
+    Cách hoạt động:
+    - `purpose` giúp phân biệt token state với access token đăng nhập.
+    - `exp` giới hạn state trong 10 phút để giảm rủi ro bị tái sử dụng.
+    """
+
     payload = {
         "purpose": "discord_oauth",
         "exp": datetime.now(UTC) + timedelta(minutes=10),
@@ -36,33 +49,85 @@ def _create_discord_state() -> str:
 
 
 def _verify_discord_state(state: str) -> None:
+    """Xác thực state OAuth Discord trước khi đổi code lấy token.
+
+    Input:
+    - `state`: chuỗi frontend nhận lại từ Discord callback.
+
+    Output:
+    - Không trả dữ liệu nếu state hợp lệ; ném HTTP 400 nếu sai.
+
+    Cách hoạt động:
+    - Giải mã state bằng cùng secret key đã dùng khi tạo.
+    - Kiểm tra `purpose` để tránh dùng nhầm token khác làm OAuth state.
+    """
+
     try:
         payload = jwt.decode(state, settings.secret_key, algorithms=[settings.algorithm])
     except JWTError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Discord OAuth state") from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="State OAuth Discord không hợp lệ") from exc
 
     if payload.get("purpose") != "discord_oauth":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Discord OAuth state")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="State OAuth Discord không hợp lệ")
 
 
 def _frontend_auth_redirect(access_token: str, user: UserResponse) -> RedirectResponse:
+    """Chuyển hướng về frontend kèm access token và hồ sơ người dùng đã encode.
+
+    Input:
+    - `access_token`: JWT nội bộ của TicketRush.
+    - `user`: hồ sơ user đã chuẩn hóa bằng Pydantic schema.
+
+    Output:
+    - HTTP 302 redirect về trang login để frontend lưu token.
+
+    Cách hoạt động:
+    - Serialize user thành JSON gọn.
+    - URL-encode token và user để truyền an toàn qua query string.
+    """
+
     encoded_user = quote(json.dumps(user.model_dump(mode="json"), separators=(",", ":")))
     url = f"{settings.frontend_app_url.rstrip('/')}/login?access_token={quote(access_token)}&user={encoded_user}"
     return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
 
 
 def _frontend_auth_error_redirect(message: str) -> RedirectResponse:
+    """Chuyển hướng về frontend với thông điệp lỗi OAuth đã encode.
+
+    Input:
+    - `message`: nội dung lỗi thân thiện cho frontend hiển thị.
+
+    Output:
+    - HTTP 302 redirect về `/login?oauth_error=...`.
+
+    Cách hoạt động:
+    - Không trả lỗi JSON vì đây là callback trình duyệt từ Discord.
+    - Encode message để tránh query string bị vỡ bởi khoảng trắng/ký tự đặc biệt.
+    """
+
     url = f"{settings.frontend_app_url.rstrip('/')}/login?oauth_error={quote(message)}"
     return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
 
 
 @router.post("/register", response_model=AuthTokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: RegisterRequest, session: AsyncSession = Depends(get_db_session)) -> AuthTokenResponse:
-    """Register a new customer account and return JWT token."""
+    """Đăng ký tài khoản khách hàng mới và trả về JWT.
+
+    Input:
+    - Họ tên, email, mật khẩu và thông tin hồ sơ cơ bản.
+
+    Output:
+    - JWT truy cập và hồ sơ người dùng vừa tạo.
+
+    Cách hoạt động:
+    - Kiểm tra email trùng.
+    - Băm mật khẩu.
+    - Tạo user với role `customer`.
+    """
 
     existing = await session.scalar(select(User).where(User.email == payload.email.lower()))
     if existing:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email đã tồn tại")
 
     user = User(
         full_name=payload.full_name,
@@ -82,11 +147,24 @@ async def register(payload: RegisterRequest, session: AsyncSession = Depends(get
 
 @router.post("/login", response_model=AuthTokenResponse)
 async def login(payload: LoginRequest, session: AsyncSession = Depends(get_db_session)) -> AuthTokenResponse:
-    """Authenticate user with email/password and return JWT token."""
+    """Đăng nhập bằng email và mật khẩu rồi trả JWT truy cập.
+
+    Input:
+    - `payload.email`: email người dùng nhập.
+    - `payload.password`: mật khẩu chữ rõ lấy từ form đăng nhập.
+
+    Output:
+    - JWT truy cập và hồ sơ user nếu thông tin chính xác.
+
+    Cách hoạt động:
+    - Tìm user theo email đã chuyển về chữ thường.
+    - So sánh mật khẩu bằng hàm hash, không so sánh chữ rõ.
+    - Tạo access token chứa `user.id` trong claim `sub`.
+    """
 
     user = await session.scalar(select(User).where(User.email == payload.email.lower()))
     if not user or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email hoặc mật khẩu không đúng")
 
     token = create_access_token(str(user.id))
     return AuthTokenResponse(access_token=token, user=UserResponse.model_validate(user))
@@ -94,18 +172,30 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_db_se
 
 @router.post("/firebase-token", response_model=AuthTokenResponse)
 async def firebase_auth(payload: FirebaseTokenRequest, session: AsyncSession = Depends(get_db_session)) -> AuthTokenResponse:
-    """Verify Firebase ID token and return JWT for TicketRush."""
+    """Xác thực Firebase ID token và đổi sang JWT nội bộ của TicketRush.
+
+    Input:
+    - `payload.id_token`: Firebase ID token do frontend nhận sau đăng nhập Google/Facebook.
+
+    Output:
+    - JWT nội bộ TicketRush và hồ sơ user.
+
+    Cách hoạt động:
+    - Nhờ Firebase Admin SDK xác minh token thật/giả.
+    - Tìm user theo `firebase_uid`, nếu chưa có thì fallback theo email.
+    - Tự tạo user customer khi đây là lần social login đầu tiên.
+    """
     try:
         claims = verify_firebase_token(payload.id_token)
     except FirebaseTokenError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Firebase token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Firebase token không hợp lệ")
 
     firebase_uid: str | None = claims.get("uid")
     email: str | None = claims.get("email")
     name: str | None = claims.get("name")
 
     if not firebase_uid:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Firebase token: missing uid")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Firebase token thiếu uid")
 
     user = await session.scalar(select(User).where(User.firebase_uid == firebase_uid))
 
@@ -134,10 +224,22 @@ async def firebase_auth(payload: FirebaseTokenRequest, session: AsyncSession = D
 
 @router.get("/discord/login")
 async def discord_login() -> RedirectResponse:
-    """Start Discord OAuth login flow."""
+    """Bắt đầu luồng đăng nhập OAuth với Discord.
+
+    Input:
+    - Không nhận body; browser gọi trực tiếp route này.
+
+    Output:
+    - Redirect sang trang cấp quyền của Discord.
+
+    Cách hoạt động:
+    - Kiểm tra cấu hình OAuth.
+    - Sinh `state` chống CSRF.
+    - Ghép query OAuth chuẩn rồi trả HTTP 302.
+    """
 
     if not settings.discord_client_id or not settings.discord_client_secret:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Discord OAuth is not configured")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Chưa cấu hình OAuth Discord")
 
     state = _create_discord_state()
     params = {
@@ -159,17 +261,31 @@ async def discord_callback(
     error: str | None = None,
     session: AsyncSession = Depends(get_db_session),
 ) -> RedirectResponse:
-    """Handle Discord OAuth callback, then redirect back to frontend with TicketRush JWT."""
+    """Xử lý callback OAuth Discord rồi chuyển người dùng về frontend với JWT nội bộ.
+
+    Input:
+    - `code`: mã ủy quyền Discord trả về sau khi user đồng ý.
+    - `state`: token chống giả mạo đã sinh ở bước login.
+    - `error`: lỗi Discord trả về nếu user từ chối hoặc flow thất bại.
+
+    Output:
+    - Redirect về frontend kèm JWT hoặc thông báo lỗi.
+
+    Cách hoạt động:
+    - Xác thực state trước để chống callback giả.
+    - Đổi `code` lấy access token Discord.
+    - Gọi Discord `/users/@me` lấy hồ sơ rồi map sang user TicketRush.
+    """
 
     if error:
-        return _frontend_auth_error_redirect(f"Discord login failed: {error}")
+        return _frontend_auth_error_redirect(f"Đăng nhập Discord thất bại: {error}")
     if not code or not state:
-        return _frontend_auth_error_redirect("Discord login failed: missing code or state")
+        return _frontend_auth_error_redirect("Đăng nhập Discord thất bại: thiếu code hoặc state")
 
     try:
         _verify_discord_state(state)
     except HTTPException:
-        return _frontend_auth_error_redirect("Discord login failed: invalid state")
+        return _frontend_auth_error_redirect("Đăng nhập Discord thất bại: state không hợp lệ")
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:
@@ -188,7 +304,7 @@ async def discord_callback(
             token_payload = token_response.json()
             access_token = token_payload.get("access_token")
             if not access_token:
-                return _frontend_auth_error_redirect("Discord login failed: missing access token")
+                return _frontend_auth_error_redirect("Đăng nhập Discord thất bại: thiếu access token")
 
             profile_response = await client.get(
                 DISCORD_ME_URL,
@@ -197,13 +313,13 @@ async def discord_callback(
             profile_response.raise_for_status()
             profile = profile_response.json()
     except httpx.HTTPError:
-        return _frontend_auth_error_redirect("Discord login failed while contacting Discord")
+        return _frontend_auth_error_redirect("Đăng nhập Discord thất bại khi kết nối tới Discord")
 
     discord_id = str(profile.get("id") or "").strip()
     email = str(profile.get("email") or "").strip().lower()
     display_name = str(profile.get("global_name") or profile.get("username") or email or "Discord User").strip()
     if not discord_id:
-        return _frontend_auth_error_redirect("Discord login failed: missing account id")
+        return _frontend_auth_error_redirect("Đăng nhập Discord thất bại: thiếu id tài khoản")
 
     user = await session.scalar(select(User).where(User.discord_id == discord_id))
     if not user and email:
@@ -238,7 +354,7 @@ async def discord_callback(
 
 @router.get("/me", response_model=UserResponse)
 async def me(current_user: User = Depends(get_current_user)) -> UserResponse:
-    """Return currently authenticated user profile."""
+    """Trả về hồ sơ của người dùng đang đăng nhập."""
 
     return UserResponse.model_validate(current_user)
 
@@ -249,7 +365,7 @@ async def update_me(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ) -> UserResponse:
-    """Allow authenticated user to edit personal profile information."""
+    """Cho phép người dùng đã đăng nhập cập nhật thông tin hồ sơ cá nhân."""
 
     current_user.full_name = payload.full_name
     current_user.gender = payload.gender

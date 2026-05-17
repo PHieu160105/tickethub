@@ -1,4 +1,4 @@
-"""WebSocket endpoints for seat updates and admin realtime dashboard."""
+"""Endpoint WebSocket cho cập nhật ghế, dashboard realtime và hỗ trợ."""
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
@@ -16,7 +16,7 @@ router = APIRouter(tags=["websocket"])
 
 
 async def _resolve_ws_user(token: str) -> User | None:
-    """Decode token and fetch user for websocket authentication."""
+    """Giải mã token và lấy người dùng để xác thực WebSocket."""
 
     try:
         payload = decode_access_token(token)
@@ -30,22 +30,22 @@ async def _resolve_ws_user(token: str) -> User | None:
 
 @router.websocket("/ws/shows/{show_id}/seats")
 async def show_seat_ws(websocket: WebSocket, show_id: int, token: str | None = None) -> None:
-    """Push incremental seat updates for one show."""
+    """Đẩy cập nhật ghế tăng dần cho một buổi diễn."""
 
     if not token:
-        await websocket.close(code=1008, reason="Auth token is required")
+        await websocket.close(code=1008, reason="Bắt buộc có token xác thực")
         return
 
     user = await _resolve_ws_user(token)
     if not user:
-        await websocket.close(code=1008, reason="Invalid auth token")
+        await websocket.close(code=1008, reason="Token xác thực không hợp lệ")
         return
 
     async with AsyncSessionLocal() as session:
         show = await session.scalar(select(Show).where(Show.id == show_id, Show.is_deleted.is_(False)))
 
     if not show:
-        await websocket.close(code=1008, reason="Show not found")
+        await websocket.close(code=1008, reason="Không tìm thấy buổi diễn")
         return
 
     connected = await seat_ws_manager.connect(show.id, user.id, websocket)
@@ -54,7 +54,7 @@ async def show_seat_ws(websocket: WebSocket, show_id: int, token: str | None = N
 
     try:
         while True:
-            # Keep socket alive and allow client to ping.
+            # Giữ socket sống và cho phép client gửi ping.
             await websocket.receive_text()
     except WebSocketDisconnect:
         await seat_ws_manager.disconnect(show.id, user.id, websocket)
@@ -62,15 +62,15 @@ async def show_seat_ws(websocket: WebSocket, show_id: int, token: str | None = N
 
 @router.websocket("/ws/admin/dashboard")
 async def admin_dashboard_ws(websocket: WebSocket, token: str | None = None) -> None:
-    """Push real-time summary metrics for admin dashboard."""
+    """Đẩy chỉ số tổng quan realtime cho dashboard admin."""
 
     if not token:
-        await websocket.close(code=1008, reason="Auth token is required")
+        await websocket.close(code=1008, reason="Bắt buộc có token xác thực")
         return
 
     user = await _resolve_ws_user(token)
     if not user or user.role != UserRole.ADMIN:
-        await websocket.close(code=1008, reason="Admin role required")
+        await websocket.close(code=1008, reason="Yêu cầu quyền admin")
         return
 
     connected = await admin_ws_manager.connect(user.id, websocket)
@@ -90,23 +90,23 @@ async def admin_dashboard_ws(websocket: WebSocket, token: str | None = None) -> 
 
 @router.websocket("/ws/help/{thread_id}")
 async def help_chat_ws(websocket: WebSocket, thread_id: int, token: str | None = None) -> None:
-    """Realtime room for one help thread."""
+    """Phòng realtime cho một thread hỗ trợ."""
 
     if not token:
-        await websocket.close(code=1008, reason="Auth token is required")
+        await websocket.close(code=1008, reason="Bắt buộc có token xác thực")
         return
     user = await _resolve_ws_user(token)
     if not user:
-        await websocket.close(code=1008, reason="Invalid auth token")
+        await websocket.close(code=1008, reason="Token xác thực không hợp lệ")
         return
 
     async with AsyncSessionLocal() as session:
         thread = await session.scalar(select(HelpThread).where(HelpThread.id == thread_id))
     if not thread:
-        await websocket.close(code=1008, reason="Thread not found")
+        await websocket.close(code=1008, reason="Không tìm thấy thread")
         return
     if user.role != UserRole.ADMIN and thread.customer_id != user.id:
-        await websocket.close(code=1008, reason="Forbidden")
+        await websocket.close(code=1008, reason="Không có quyền truy cập")
         return
 
     connected = await help_ws_manager.connect(thread_id, user.id, websocket)

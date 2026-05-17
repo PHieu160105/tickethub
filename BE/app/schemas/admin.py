@@ -1,10 +1,10 @@
-"""Admin dashboard schemas."""
+"""Các schema phục vụ dashboard, thống kê và màn quản trị."""
 
 from pydantic import BaseModel
 
 
 class DashboardSummaryResponse(BaseModel):
-    """High-level KPI metrics for admin cards."""
+    """Các chỉ số KPI tổng quan hiển thị trên thẻ dashboard admin."""
 
     total_revenue: float
     tickets_sold: int
@@ -14,21 +14,21 @@ class DashboardSummaryResponse(BaseModel):
 
 
 class RevenuePoint(BaseModel):
-    """Revenue trend point."""
+    """Một điểm dữ liệu doanh thu theo ngày cho biểu đồ xu hướng."""
 
     date: str
     revenue: float
 
 
 class AudienceDistributionResponse(BaseModel):
-    """Audience demographics grouped by age bucket and gender."""
+    """Phân bổ người mua theo nhóm tuổi và giới tính."""
 
     age_groups: dict[str, int]
     gender_groups: dict[str, int]
 
 
 class DashboardStreamResponse(BaseModel):
-    """Payload broadcasted over WebSocket for near real-time updates."""
+    """Payload phát qua WebSocket để dashboard admin cập nhật gần thời gian thực."""
 
     total_revenue: float
     tickets_sold: int
@@ -38,13 +38,13 @@ class DashboardStreamResponse(BaseModel):
 
 
 class UploadImageResponse(BaseModel):
-    """Public image URL returned after admin upload."""
+    """URL ảnh công khai trả về sau khi admin upload ảnh."""
 
     image_url: str
 
 
 class EventZoneStatsResponse(BaseModel):
-    """Seat and sales summary for one zone of an event."""
+    """Tổng hợp ghế và doanh số của một khu vực trong buổi diễn."""
 
     zone_id: int
     zone_code: str
@@ -60,7 +60,7 @@ class EventZoneStatsResponse(BaseModel):
 
 
 class EventDetailStatsResponse(BaseModel):
-    """Detailed show analytics for admin drilldown."""
+    """Thống kê chi tiết một buổi diễn cho màn drilldown của admin."""
 
     event_id: int
     event_title: str
@@ -80,7 +80,7 @@ class EventDetailStatsResponse(BaseModel):
 
 
 class AdminUserResponse(BaseModel):
-    """User row for admin management screen."""
+    """Một dòng dữ liệu người dùng trên màn quản lý admin."""
 
     id: int
     full_name: str
@@ -93,7 +93,7 @@ class AdminUserResponse(BaseModel):
 
 
 class AdminTicketSaleResponse(BaseModel):
-    """Recent ticket sale row shown on admin ticket table."""
+    """Một dòng vé bán gần đây trên bảng quản lý vé của admin."""
 
     id: int
     event_id: int
@@ -111,7 +111,7 @@ class AdminTicketSaleResponse(BaseModel):
 
 
 class AdminEventRevenueResponse(BaseModel):
-    """Per-show revenue aggregate used in admin ticket analytics."""
+    """Doanh thu tổng hợp theo buổi diễn dùng cho phân tích vé của admin."""
 
     event_id: int
     event_title: str
@@ -123,7 +123,7 @@ class AdminEventRevenueResponse(BaseModel):
 
 
 class PaginatedAdminUsersResponse(BaseModel):
-    """Paginated payload for admin users table."""
+    """Payload phân trang cho bảng người dùng admin."""
 
     items: list[AdminUserResponse]
     total: int
@@ -132,7 +132,7 @@ class PaginatedAdminUsersResponse(BaseModel):
 
 
 class PaginatedAdminTicketSalesResponse(BaseModel):
-    """Paginated payload for admin ticket sales table."""
+    """Payload phân trang cho bảng doanh số vé admin."""
 
     items: list[AdminTicketSaleResponse]
     total: int

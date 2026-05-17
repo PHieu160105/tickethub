@@ -1,4 +1,4 @@
-"""Event, show, and seat zone ORM models."""
+"""Khai báo các mô hình ORM cho sự kiện, show và vùng ghế."""
 
 from datetime import UTC, date, datetime, time
 
@@ -10,7 +10,19 @@ from app.models.enums import EventStatus
 
 
 class Event(TimestampMixin, Base):
-    """Parent event container that groups one or many sellable shows."""
+    """Đại diện cho thực thể sự kiện cha dùng để gom một hoặc nhiều show bán vé.
+
+    Input:
+    - Dữ liệu mô tả sự kiện như tiêu đề, mô tả, danh mục, ảnh bìa và khoảng ngày diễn ra.
+
+    Output:
+    - Một bản ghi `events` đóng vai trò thực thể cha cho các `show`.
+
+    Cách hoạt động:
+    - `Event` không phải đơn vị bán vé trực tiếp trong kiến trúc hiện tại.
+    - Mỗi `Event` có thể chứa nhiều `Show`.
+    - Một số cột legacy cấp event vẫn được giữ lại để tương thích dữ liệu cũ.
+    """
 
     __tablename__ = "events"
 
@@ -25,7 +37,7 @@ class Event(TimestampMixin, Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     status: Mapped[EventStatus] = mapped_column(Enum(EventStatus, native_enum=False), default=EventStatus.DRAFT, nullable=False)
 
-    # Legacy event-level ticketing fields are kept only to support backfill on older databases.
+    # Các cột ticketing cấp event cũ được giữ lại chỉ để hỗ trợ dữ liệu cũ khi backfill/migrate.
     venue: Mapped[str] = mapped_column(String(200), default="", nullable=False)
     start_at_legacy: Mapped[datetime | None] = mapped_column("start_at", DateTime(timezone=True), nullable=True)
     end_at_legacy: Mapped[datetime | None] = mapped_column("end_at", DateTime(timezone=True), nullable=True)
@@ -46,19 +58,49 @@ class Event(TimestampMixin, Base):
 
     @property
     def start_at(self) -> datetime:
-        """Expose date-only events as a synthetic UTC datetime for legacy responses."""
+        """Sinh thời điểm bắt đầu giả lập theo UTC cho response kiểu cũ.
+
+        Input:
+        - Không nhận tham số ngoài.
+
+        Output:
+        - `datetime` UTC tại đầu ngày `start_date`.
+
+        Cách hoạt động:
+        - Dùng khi response cũ vẫn cần `start_at` dù mô hình mới lưu theo `start_date`.
+        """
 
         return datetime.combine(self.start_date, time.min, tzinfo=UTC)
 
     @property
     def end_at(self) -> datetime:
-        """Expose date-only events as a synthetic UTC datetime for legacy responses."""
+        """Sinh thời điểm kết thúc giả lập theo UTC cho response kiểu cũ.
+
+        Input:
+        - Không nhận tham số ngoài.
+
+        Output:
+        - `datetime` UTC tại cuối ngày `end_date`.
+
+        Cách hoạt động:
+        - Dùng khi response cũ vẫn cần `end_at` dù mô hình mới lưu theo `end_date`.
+        """
 
         return datetime.combine(self.end_date, time.max, tzinfo=UTC)
 
 
 class Show(TimestampMixin, Base):
-    """Sellable ticketing unit bound to one parent event."""
+    """Đại diện cho đơn vị bán vé thực tế gắn với một sự kiện cha.
+
+    Input:
+    - Dữ liệu lịch diễn thật như thời gian bắt đầu, kết thúc, venue và cấu hình queue/hold.
+
+    Output:
+    - Một bản ghi `shows` là đầu mối gắn ghế, đơn hàng, queue và polygon.
+
+    Cách hoạt động:
+    - Người dùng lock ghế, checkout và vào queue theo `show_id`, không phải `event_id`.
+    """
 
     __tablename__ = "shows"
 
@@ -91,7 +133,18 @@ class Show(TimestampMixin, Base):
 
 
 class SeatZone(TimestampMixin, Base):
-    """Configuration block describing one sellable seating area of a show."""
+    """Đại diện cho cấu hình một vùng ghế bán được trong một show.
+
+    Input:
+    - Mã vùng, tên vùng, số hàng, số ghế mỗi hàng, giá và màu hiển thị.
+
+    Output:
+    - Một bản ghi `seat_zones` làm khuôn để sinh hoặc nhóm ghế theo vùng.
+
+    Cách hoạt động:
+    - Một `Show` có thể có nhiều `SeatZone`.
+    - Mỗi `SeatZone` liên kết tới danh sách ghế và polygon trực quan.
+    """
 
     __tablename__ = "seat_zones"
 
@@ -112,7 +165,17 @@ class SeatZone(TimestampMixin, Base):
 
 
 class ShowPolygon(TimestampMixin, Base):
-    """Polygon metadata drawn on top of one show's free-form seat plan."""
+    """Lưu metadata polygon được vẽ đè lên sơ đồ ghế tự do của một show.
+
+    Input:
+    - `show_id`, `zone_id` tùy chọn, nhãn hiển thị và danh sách điểm polygon.
+
+    Output:
+    - Một bản ghi `show_polygons` phục vụ render seatmap dạng canvas hoặc free-form.
+
+    Cách hoạt động:
+    - Polygon có thể gắn với một vùng ghế để tô khối, đặt nhãn hoặc bao vùng trực quan.
+    """
 
     __tablename__ = "show_polygons"
 

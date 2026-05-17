@@ -1,4 +1,4 @@
-"""Small in-memory TTL cache helpers for low-volatility API responses."""
+"""Cung cấp bộ nhớ đệm TTL trong RAM kèm Redis cho các API ít biến động."""
 
 import asyncio
 import json
@@ -11,14 +11,26 @@ from pydantic import BaseModel
 
 @dataclass(slots=True)
 class CacheEntry:
-    """Cached value with monotonic expiration."""
+    """Đại diện cho một mục cache kèm thời điểm hết hạn theo đồng hồ monotonic."""
 
     expires_at: float
     value: Any
 
 
 class TTLCacheStore:
-    """Async-safe cache with namespace invalidation."""
+    """Bộ nhớ đệm an toàn cho môi trường async, hỗ trợ xóa theo namespace.
+
+    Input:
+    - Namespace, key, value và TTL của từng mục cache.
+
+    Output:
+    - Dữ liệu đã cache trong Redis và/hoặc bộ nhớ cục bộ trong tiến trình.
+
+    Cách hoạt động:
+    - Ưu tiên đọc Redis trước để tận dụng cache liên tiến trình.
+    - Nếu Redis lỗi hoặc không sẵn sàng, hệ thống tự fallback về cache trong RAM.
+    - Namespace version giúp vô hiệu hóa nhanh toàn bộ key liên quan mà không phải duyệt hết RAM.
+    """
 
     def __init__(self) -> None:
         self._entries: dict[tuple[str, int, Any], CacheEntry] = {}
@@ -27,7 +39,7 @@ class TTLCacheStore:
         self._redis = get_redis_client()
 
     async def get(self, namespace: str, key: Any) -> Any | None:
-        """Return cached value when present and not expired."""
+        """Lấy giá trị cache nếu còn tồn tại và chưa hết hạn."""
 
         redis_key = f"cache:{namespace}:{key!r}"
         try:
@@ -49,7 +61,7 @@ class TTLCacheStore:
             return entry.value
 
     async def set(self, namespace: str, key: Any, value: Any, ttl_seconds: int) -> Any:
-        """Store value in cache and return it for fluent usage."""
+        """Ghi giá trị vào cache rồi trả lại chính giá trị đó để caller dùng tiếp."""
 
         redis_key = f"cache:{namespace}:{key!r}"
         try:
@@ -64,7 +76,7 @@ class TTLCacheStore:
             return value
 
     def _jsonable(self, value: Any) -> Any:
-        """Convert pydantic/object values to JSON-safe primitives."""
+        """Chuyển dữ liệu về dạng an toàn để serialize JSON."""
 
         if isinstance(value, BaseModel):
             return value.model_dump(mode="json")
@@ -77,7 +89,7 @@ class TTLCacheStore:
         return value
 
     async def invalidate_namespace(self, namespace: str) -> None:
-        """Invalidate all current entries of one namespace."""
+        """Vô hiệu hóa toàn bộ mục cache của một namespace."""
 
         await self.invalidate_pattern(f"cache:{namespace}:*")
 
@@ -85,7 +97,7 @@ class TTLCacheStore:
             self._namespace_versions[namespace] = self._namespace_versions.get(namespace, 0) + 1
 
     async def invalidate_pattern(self, pattern: str) -> int:
-        """Invalidate redis keys matching one wildcard pattern."""
+        """Xóa các key Redis khớp với một pattern wildcard."""
 
         try:
             keys = await self._redis.keys(pattern)
@@ -96,7 +108,7 @@ class TTLCacheStore:
             return 0
 
     async def invalidate_patterns(self, patterns: list[str]) -> int:
-        """Invalidate multiple wildcard patterns and return total deleted keys."""
+        """Xóa nhiều pattern cache và trả về tổng số key đã bị xóa."""
 
         total = 0
         for pattern in patterns:
@@ -111,18 +123,18 @@ EVENT_DETAIL_CACHE_NAMESPACE = "events:detail"
 
 
 def show_seat_cache_namespace(show_id: int) -> str:
-    """Namespace for one show seat matrix cache."""
+    """Sinh namespace cache cho seat matrix của một show."""
 
     return f"shows:seats:{show_id}"
 
 
 def event_seat_cache_namespace(event_id: int) -> str:
-    """Backward-compatible alias kept for older call sites during refactor."""
+    """Alias tương thích ngược cho các call site cũ đang truyền `event_id`."""
 
     return show_seat_cache_namespace(event_id)
 
 
 def user_ticket_cache_namespace(user_id: int) -> str:
-    """Namespace for one user's ticket list cache."""
+    """Sinh namespace cache cho danh sách vé của một người dùng."""
 
     return f"users:{user_id}:tickets"
