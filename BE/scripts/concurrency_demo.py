@@ -1,4 +1,4 @@
-"""Simple script to simulate two users racing for one seat lock."""
+"""Kịch bản mô phỏng hai người dùng cùng tranh một ghế trong cùng buổi diễn."""
 
 import asyncio
 import os
@@ -19,13 +19,43 @@ async def login(client: httpx.AsyncClient, email: str, password: str) -> str:
     return response.json()["access_token"]
 
 
-async def lock_seat(client: httpx.AsyncClient, token: str, event_id: int, seat_id: int) -> dict:
+async def lock_seat(client: httpx.AsyncClient, token: str, show_id: int, seat_id: int, queue_token: str | None) -> dict:
+    """Gọi API giữ ghế bằng đúng hợp đồng hiện tại của backend.
+
+    Đầu vào:
+    - `client`: HTTP client dùng chung cho kịch bản mô phỏng.
+    - `token`: JWT của từng khách hàng.
+    - `show_id`: mã buổi diễn cần tranh ghế.
+    - `seat_id`: mã ghế cần giữ.
+    - `queue_token`: token hàng đợi nếu buổi diễn đang bật queue.
+
+    Đầu ra:
+    - Từ điển gồm mã trạng thái HTTP và payload phản hồi.
+    """
+
+    payload: dict[str, object] = {"show_id": show_id, "seat_ids": [seat_id]}
+    if queue_token:
+        payload["queue_token"] = queue_token
+
     response = await client.post(
         f"{API_BASE}/bookings/lock",
         headers={"Authorization": f"Bearer {token}"},
-        json={"event_id": event_id, "seat_ids": [seat_id]},
+        json=payload,
     )
     return {"status_code": response.status_code, "body": response.json()}
+
+
+async def join_queue_if_needed(client: httpx.AsyncClient, token: str, show_id: int) -> str | None:
+    """Lấy token hàng đợi cho buổi diễn nếu endpoint queue yêu cầu."""
+
+    response = await client.post(
+        f"{API_BASE}/shows/{show_id}/queue/join",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    if response.status_code >= 400:
+        return None
+    body = response.json()
+    return body.get("token")
 
 
 async def main() -> None:
@@ -37,15 +67,20 @@ async def main() -> None:
 
         event_resp = await client.get(f"{API_BASE}/events/{EVENT_KEY}")
         event_resp.raise_for_status()
-        event_id = event_resp.json()["id"]
-
-        result1, result2 = await asyncio.gather(
-            lock_seat(client, token1, event_id, SEAT_ID),
-            lock_seat(client, token2, event_id, SEAT_ID),
+        shows = event_resp.json().get("shows") or []
+        show_id = int(shows[0]["id"])
+        queue_token1, queue_token2 = await asyncio.gather(
+            join_queue_if_needed(client, token1, show_id),
+            join_queue_if_needed(client, token2, show_id),
         )
 
-        print("Result User1:", result1)
-        print("Result User2:", result2)
+        result1, result2 = await asyncio.gather(
+            lock_seat(client, token1, show_id, SEAT_ID, queue_token1),
+            lock_seat(client, token2, show_id, SEAT_ID, queue_token2),
+        )
+
+        print("Kết quả người dùng 1:", result1)
+        print("Kết quả người dùng 2:", result2)
 
 
 if __name__ == "__main__":

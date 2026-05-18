@@ -1,55 +1,55 @@
 """Nghiệp vụ sự kiện, buổi diễn và sinh ma trận ghế bán vé.
 
-File này chứa các hàm service xử lý:
-1. Tạo/sửa/xóa Event (sự kiện cha)
-2. Tạo Show (buổi diễn) kèm inventory ghế
+File này chứa các hàm dịch vụ xử lý:
+1. Tạo, sửa, xóa sự kiện cha
+2. Tạo buổi diễn kèm tồn kho ghế
 3. Clone layout từ venue template sang show
 4. Lấy danh sách sự kiện, buổi diễn
-5. Sinh ma trận ghế (seat matrix) cho frontend hiển thị
+5. Sinh ma trận ghế cho giao diện người dùng hiển thị
 """
 
 # ============================================================
-# IMPORTS TỪ THƯ VIỆN CHUẨN PYTHON (built-in - có sẵn)
+# IMPORTS TỪ THƯ VIỆN CHUẨN PYTHON (có sẵn trong Python)
 # ============================================================
 from collections import defaultdict
-#   defaultdict: Python built-in - dict tự động tạo giá trị mặc định khi key chưa tồn tại
+#   defaultdict: Python có sẵn - từ điển tự động tạo giá trị mặc định khi key chưa tồn tại
 #   vd: defaultdict(list) → khi truy cập key mới, tự tạo list rỗng thay vì báo lỗi KeyError
 
 from datetime import UTC, date, datetime, time
-#   datetime: module xử lý ngày giờ
+#   datetime: mô-đun xử lý ngày giờ
 #   UTC: hằng số múi giờ UTC+0
-#   date: class chỉ lưu NGÀY (không có giờ)
-#   datetime: class lưu NGÀY + GIỜ
-#   time: class chỉ lưu GIỜ (không có ngày)
+#   date: lớp chỉ lưu NGÀY (không có giờ)
+#   datetime: lớp lưu NGÀY + GIỜ
+#   time: lớp chỉ lưu GIỜ (không có ngày)
 
 from decimal import Decimal
-#   Decimal: Python built-in - số thập phân CHÍNH XÁC, dùng cho tiền tệ
+#   Decimal: Python có sẵn - số thập phân CHÍNH XÁC, dùng cho tiền tệ
 #   Tránh sai số kiểu float (0.1 + 0.2 = 0.30000000000000004)
 
 import re
-#   re: Python built-in - module xử lý Regular Expression (biểu thức chính quy)
-#   Dùng để tạo slug từ tiêu đề (loại bỏ ký tự đặc biệt)
+#   re: Python có sẵn - mô-đun xử lý biểu thức chính quy
+#   Dùng để tạo định danh URL từ tiêu đề (loại bỏ ký tự đặc biệt)
 
 # ============================================================
 # IMPORTS TỪ THƯ VIỆN BÊN NGOÀI (cài qua pip install)
 # ============================================================
 from fastapi import HTTPException, status
-#   HTTPException: class của FastAPI để ném lỗi HTTP
-#   status: module chứa hằng số mã trạng thái HTTP
+#   HTTPException: lớp của FastAPI để ném lỗi HTTP
+#   status: mô-đun chứa hằng số mã trạng thái HTTP
 
 from sqlalchemy import func, select
 #   func: cầu nối gọi hàm SQL (COUNT, SUM, MAX, MIN, COALESCE, LOWER...)
 #   select: hàm tạo câu lệnh SELECT
 
 from sqlalchemy.ext.asyncio import AsyncSession
-#   AsyncSession: class phiên làm việc BẤT ĐỒNG BỘ với database
+#   AsyncSession: lớp phiên làm việc BẤT ĐỒNG BỘ với cơ sở dữ liệu
 
 # ============================================================
-# IMPORTS TỪ NỘI BỘ DỰ ÁN (code tự viết)
+# IMPORTS TỪ NỘI BỘ DỰ ÁN (mã tự viết)
 # ============================================================
 from app.core.search import build_ilike_pattern, sanitize_search_query
-#   build_ilike_pattern(): tự viết - tạo pattern LIKE không phân biệt hoa thường
-#   sanitize_search_query(): tự viết - làm sạch query tìm kiếm, giới hạn độ dài
+#   build_ilike_pattern(): tự viết - tạo mẫu LIKE không phân biệt hoa thường
+#   sanitize_search_query(): tự viết - làm sạch truy vấn tìm kiếm, giới hạn độ dài
 
 from app.models.enums import SeatStatus
 #   SeatStatus: enum tự viết - AVAILABLE, LOCKED, SOLD
@@ -78,45 +78,45 @@ from app.models.venue import Polygon, Section, Venue, VenueLayout
 #   VenueLayout: ORM model - bảng venue_layouts (bố cục địa điểm)
 
 from app.schemas.event import (
-    EventCardResponse,          # Pydantic schema: response thẻ sự kiện
-    EventCreateRequest,         # Pydantic schema: request tạo sự kiện
-    EventDetailResponse,        # Pydantic schema: response chi tiết sự kiện
-    SeatPurchaseInfoResponse,   # Pydantic schema: thông tin người mua ghế
-    SeatResponse,               # Pydantic schema: response thông tin ghế
-    SeatUserInfoResponse,       # Pydantic schema: thông tin user
-    SeatZoneCreate,             # Pydantic schema: request tạo vùng ghế
-    SeatZoneUpdate,             # Pydantic schema: request cập nhật vùng ghế
-    SeatZoneResponse,           # Pydantic schema: response vùng ghế
-    ShowCreateRequest,          # Pydantic schema: request tạo buổi diễn
-    ShowSummaryResponse,        # Pydantic schema: response tóm tắt buổi diễn
+    EventCardResponse,          # lược đồ Pydantic: phản hồi thẻ sự kiện
+    EventCreateRequest,         # lược đồ Pydantic: yêu cầu tạo sự kiện
+    EventDetailResponse,        # lược đồ Pydantic: phản hồi chi tiết sự kiện
+    SeatPurchaseInfoResponse,   # lược đồ Pydantic: thông tin người mua ghế
+    SeatResponse,               # lược đồ Pydantic: phản hồi thông tin ghế
+    SeatUserInfoResponse,       # lược đồ Pydantic: thông tin user
+    SeatZoneCreate,             # lược đồ Pydantic: yêu cầu tạo vùng ghế
+    SeatZoneUpdate,             # lược đồ Pydantic: yêu cầu cập nhật vùng ghế
+    SeatZoneResponse,           # lược đồ Pydantic: phản hồi vùng ghế
+    ShowCreateRequest,          # lược đồ Pydantic: yêu cầu tạo buổi diễn
+    ShowSummaryResponse,        # lược đồ Pydantic: phản hồi tóm tắt buổi diễn
 )
 
 
 # ============================================================
-# HÀM TIỆN ÍCH (utility functions)
+# HÀM TIỆN ÍCH
 # ============================================================
 
 def slugify(text: str) -> str:
-    """Sinh slug thân thiện URL từ tiêu đề sự kiện.
+    """Sinh định danh URL thân thiện từ tiêu đề sự kiện.
     
-    MỤC ĐÍCH: Chuyển tiêu đề tiếng Việt/có dấu thành chuỗi URL-safe.
+    MỤC ĐÍCH: Chuyển tiêu đề tiếng Việt/có dấu thành chuỗi phù hợp URL.
     vd: "Nhạc kịch Lés Misérables" → "nhac-kich-les-miserables"
     
-    Args:
+    Đầu vào:
         text: str - tiêu đề sự kiện cần chuyển đổi
         
-    Returns:
-        str - slug URL-safe, hoặc "event" nếu chuỗi rỗng
+    Đầu ra:
+        str - định danh URL phù hợp, hoặc "event" nếu chuỗi rỗng
     """
 
-    # re.sub(): Python built-in - thay thế pattern bằng chuỗi khác
+    # re.sub(): Python có sẵn - thay thế pattern bằng chuỗi khác
     #   pattern r"[^a-zA-Z0-9]+": 1 hoặc nhiều ký tự KHÔNG phải chữ cái/số
     #   thay bằng dấu gạch ngang "-"
     value = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
     #   .strip("-"): Python string method - xóa dấu "-" ở đầu và cuối chuỗi
     #   .lower(): Python string method - chuyển về chữ thường
     
-    # Nếu sau khi xử lý chuỗi rỗng → trả về "event" làm fallback
+    # Nếu sau khi xử lý chuỗi rỗng → trả về "event" làm giá trị dự phòng
     # Python: chuỗi rỗng "" là falsy → or "event" sẽ trả "event"
     return value or "event"
 
@@ -127,10 +127,10 @@ def row_label_from_index(index: int) -> str:
     MỤC ĐÍCH: Chuyển số hàng thành chữ cái như Excel.
     vd: 1 → A, 2 → B, 26 → Z, 27 → AA, 28 → AB...
     
-    Args:
+    Đầu vào:
         index: int - số thứ tự hàng, bắt đầu từ 1
         
-    Returns:
+    Đầu ra:
         str - nhãn hàng dạng chữ cái
     """
 
@@ -139,12 +139,12 @@ def row_label_from_index(index: int) -> str:
     
     # Vòng lặp while: xử lý từ phải sang trái (như chuyển đổi hệ cơ số 26)
     while value > 0:
-        # divmod(): Python built-in - chia lấy nguyên và dư
+        # divmod(): Python có sẵn - chia lấy nguyên và dư
         #   value - 1: vì hệ chữ cái bắt đầu từ A=0 (không phải A=1)
         #   remainder: 0-25, tương ứng A-Z
         value, remainder = divmod(value - 1, 26)
         
-        # chr(): Python built-in - chuyển mã ASCII thành ký tự
+        # chr(): Python có sẵn - chuyển mã ASCII thành ký tự
         #   65 = 'A', 65 + remainder → 'A' đến 'Z'
         # Cộng vào BÊN TRÁI của label (vì xử lý từ phải sang trái)
         label = chr(65 + remainder) + label
@@ -153,46 +153,46 @@ def row_label_from_index(index: int) -> str:
 
 
 def combine_show_datetime(show_date: date, show_time: time) -> datetime:
-    """Ghép ngày diễn và giờ diễn thành `datetime` có timezone UTC.
+    """Ghép ngày diễn và giờ diễn thành `datetime` có múi giờ UTC.
     
     MỤC ĐÍCH: Frontend gửi ngày và giờ riêng biệt, cần ghép lại thành datetime
     để lưu vào database.
     
-    Args:
+    Đầu vào:
         show_date: date - ngày diễn
         show_time: time - giờ diễn
         
-    Returns:
-        datetime - đã ghép ngày + giờ + timezone UTC
+    Đầu ra:
+        datetime - đã ghép ngày + giờ + múi giờ UTC
     """
 
-    # datetime.combine(): Python built-in method
+    # datetime.combine(): Python có sẵn method
     #   Ghép date và time thành datetime
     #   tzinfo=UTC: gắn múi giờ UTC
     return datetime.combine(show_date, show_time, tzinfo=UTC)
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
-    """Chuẩn hóa datetime naive từ DB thành datetime có timezone UTC.
+    """Chuẩn hóa datetime naive từ DB thành datetime có múi giờ UTC.
     
-    MỤC ĐÍCH: Database có thể trả về datetime không có timezone.
+    MỤC ĐÍCH: Database có thể trả về datetime không có múi giờ.
     Hàm này gắn UTC vào để so sánh an toàn với các datetime khác.
     
-    Args:
+    Đầu vào:
         value: datetime | None - thời gian từ database
         
-    Returns:
-        datetime | None - đã có timezone UTC, hoặc None nếu đầu vào None
+    Đầu ra:
+        datetime | None - đã có múi giờ UTC, hoặc None nếu đầu vào None
     """
 
-    # None check: Python built-in
+    # None check: Python có sẵn
     if value is None:
         return None
     
     # value.tzinfo: thuộc tính của Python datetime
-    #   None nếu datetime không có timezone (naive)
-    #   Có giá trị nếu datetime có timezone (aware)
-    # value.replace(tzinfo=UTC): tạo bản sao với timezone mới
+    #   None nếu datetime không có múi giờ (naive)
+    #   Có giá trị nếu datetime có múi giờ (aware)
+    # value.replace(tzinfo=UTC): tạo bản sao với múi giờ mới
     # UTC: hằng số từ datetime module
     return value if value.tzinfo else value.replace(tzinfo=UTC)
 
@@ -201,24 +201,24 @@ def _event_range_to_datetimes(start_date: date, end_date: date) -> tuple[datetim
     """Tạo khoảng thời gian UTC đại diện cho ngày bắt đầu/kết thúc của sự kiện.
     
     MỤC ĐÍCH: Event lưu start_date và end_date (kiểu date).
-    Khi cần trả về datetime cho frontend, chuyển date thành datetime:
+    Khi cần trả về datetime cho giao diện người dùng, chuyển date thành datetime:
     - start_date → 00:00:00 UTC của ngày đó
     - end_date → 23:59:59 UTC của ngày đó
     
-    Args:
+    Đầu vào:
         start_date: date - ngày bắt đầu
         end_date: date - ngày kết thúc
         
-    Returns:
+    Đầu ra:
         tuple[datetime, datetime] - (bắt đầu lúc 00:00, kết thúc lúc 23:59)
     """
 
     return (
-        # datetime.combine(): Python built-in - ghép date và time
-        # time.min: Python built-in - 00:00:00.000000 (đầu ngày)
+        # datetime.combine(): Python có sẵn - ghép date và time
+        # time.min: Python có sẵn - 00:00:00.000000 (đầu ngày)
         # tzinfo=UTC: gắn múi giờ UTC
         datetime.combine(start_date, time.min, tzinfo=UTC),
-        # time.max: Python built-in - 23:59:59.999999 (cuối ngày)
+        # time.max: Python có sẵn - 23:59:59.999999 (cuối ngày)
         datetime.combine(end_date, time.max, tzinfo=UTC),
     )
 
@@ -232,19 +232,19 @@ def _build_zone_seats(event_id: int, show_id: int, zone: SeatZone, payload: Seat
     vd: Zone VIP, row_count=3, seats_per_row=10, code="VIP"
     → Tạo 30 ghế: VIP-A1, VIP-A2... VIP-A10, VIP-B1... VIP-C10
     
-    Args:
+    Đầu vào:
         event_id: int - ID sự kiện
         show_id: int - ID buổi diễn
-        zone: SeatZone - ORM object vùng ghế đã tạo
+        zone: SeatZone - đối tượng ORM vùng ghế đã tạo
         payload: SeatZoneCreate - dữ liệu cấu hình từ request
         
-    Returns:
+    Đầu ra:
         list[Seat] - danh sách ghế đã tạo
     """
 
     seat_models: list[Seat] = []  # Python list: khởi tạo danh sách rỗng
     
-    # range(1, payload.row_count + 1): Python built-in
+    # range(1, payload.row_count + 1): Python có sẵn
     #   Tạo dãy số từ 1 đến row_count (bao gồm)
     #   vd: row_count=3 → range(1, 4) → 1, 2, 3
     for row_index in range(1, payload.row_count + 1):
@@ -258,7 +258,7 @@ def _build_zone_seats(event_id: int, show_id: int, zone: SeatZone, payload: Seat
             # f-string Python: chèn biến vào chuỗi
             seat_label = f"{payload.code}-{row_label}{seat_number}"
             
-            # Tạo Seat ORM object (tự viết trong app/models/seat.py)
+            # Tạo Seat đối tượng ORM (tự viết trong app/models/seat.py)
             seat_models.append(
                 Seat(
                     event_id=event_id,              # Thuộc event nào
@@ -295,12 +295,12 @@ def _build_positioned_zone_seats(
     
     Tọa độ tính theo phần trăm (%) của canvas, từ 0.0 đến 100.0.
     
-    Args:
+    Đầu vào:
         event_id, show_id, zone, payload: giống _build_zone_seats
         start_x, start_y: tọa độ bắt đầu của ghế đầu tiên (góc trên trái)
         gap_x, gap_y: khoảng cách giữa các ghế/hàng
         
-    Returns:
+    Đầu ra:
         list[Seat] - danh sách ghế đã có tọa độ
     """
 
@@ -323,7 +323,7 @@ def _build_positioned_zone_seats(
                     seat_label=seat_label,
                     price=payload.price,
                     status=SeatStatus.AVAILABLE,  # Enum tự viết
-                    # round(): Python built-in - làm tròn số thập phân
+                    # round(): Python có sẵn - làm tròn số thập phân
                     #   round(x, 2): làm tròn đến 2 chữ số thập phân
                     # Tính tọa độ X: start_x + (số thứ tự ghế - 1) * khoảng cách
                     #   seat_number=1 → X = start_x
@@ -355,14 +355,14 @@ def _build_zone_boundary_polygon(
     Polygon là hình chữ nhật được tính từ tọa độ min/max của tất cả ghế,
     cộng thêm padding ra ngoài.
     
-    Args:
+    Đầu vào:
         zone: SeatZone - vùng ghế
         seats: list[Seat] - danh sách ghế đã sinh
         padding: float - khoảng mở rộng ra ngoài
         label: str | None - nhãn hiển thị
         
-    Returns:
-        ShowPolygon - ORM object polygon bao vùng
+    Đầu ra:
+        ShowPolygon - đối tượng ORM polygon bao vùng
     """
 
     # Kiểm tra danh sách ghế không được rỗng
@@ -386,8 +386,8 @@ def _build_zone_boundary_polygon(
             detail="Không thể tạo polygon bao vùng khi ghế chưa có tọa độ"
         )
 
-    # min(), max(): Python built-in - tìm giá trị nhỏ nhất/lớn nhất
-    # round(): Python built-in - làm tròn
+    # min(), max(): Python có sẵn - tìm giá trị nhỏ nhất/lớn nhất
+    # round(): Python có sẵn - làm tròn
     # max(0.0, ...): đảm bảo không âm (trong canvas 0-100%)
     left = max(0.0, round(min(x_values) - padding, 2))      # Cạnh trái
     top = max(0.0, round(min(y_values) - padding, 2))       # Cạnh trên
@@ -395,7 +395,7 @@ def _build_zone_boundary_polygon(
     right = min(100.0, round(max(x_values) + padding, 2))    # Cạnh phải
     bottom = min(100.0, round(max(y_values) + padding, 2))   # Cạnh dưới
     
-    # Tạo ShowPolygon ORM object (tự viết trong app/models/event.py)
+    # Tạo ShowPolygon đối tượng ORM (tự viết trong app/models/event.py)
     return ShowPolygon(
         show_id=zone.show_id or 0,  # zone.show_id có thể None → fallback 0
         zone_id=zone.id,
@@ -421,11 +421,11 @@ async def build_unique_slug(session: AsyncSession, title: str) -> str:
     MỤC ĐÍCH: Đảm bảo mỗi event có slug unique trong database.
     Nếu "nhac-kich" đã tồn tại → tạo "nhac-kich-2", "nhac-kich-3"...
     
-    Args:
+    Đầu vào:
         session: AsyncSession - phiên database
         title: str - tiêu đề sự kiện
         
-    Returns:
+    Đầu ra:
         str - slug duy nhất
     """
 
@@ -482,12 +482,12 @@ async def _resolve_event_layout(
     - Nếu có venue_layout_id → kiểm tra layout thuộc venue nào
     - Nếu có cả 2 → kiểm tra layout có thuộc venue không
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         venue_id: int | None - ID địa điểm
         venue_layout_id: int | None - ID bố cục
         
-    Returns:
+    Đầu ra:
         tuple[Venue | None, VenueLayout | None] - cặp (venue, layout)
     """
 
@@ -540,24 +540,24 @@ async def _resolve_event_layout(
 async def create_event(
     session: AsyncSession,
     admin_id: int,                    # ID của admin tạo sự kiện
-    payload: EventCreateRequest,      # Pydantic schema tự viết: dữ liệu từ request
+    payload: EventCreateRequest,      # lược đồ Pydantic tự viết: dữ liệu từ request
 ) -> Event:
     """Tạo sự kiện cha, chưa sinh tồn kho ghế bán vé.
     
     MỤC ĐÍCH: Tạo mới 1 Event. Event là "container" chứa các Show.
     Chưa tạo ghế ở bước này - ghế được tạo khi tạo Show.
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         admin_id: int - ID của admin đang thao tác
         payload: EventCreateRequest - dữ liệu sự kiện từ request
         
-    Returns:
-        Event - ORM object đã tạo
+    Đầu ra:
+        Event - đối tượng ORM đã tạo
     """
 
     # Kiểm tra ngày kết thúc phải >= ngày bắt đầu
-    # payload.end_date, payload.start_date: kiểu date (Python built-in)
+    # payload.end_date, payload.start_date: kiểu date (Python có sẵn)
     if payload.end_date < payload.start_date:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -569,7 +569,7 @@ async def create_event(
         payload.start_date, payload.end_date
     )
 
-    # Tạo Event ORM object (tự viết trong app/models/event.py)
+    # Tạo Event đối tượng ORM (tự viết trong app/models/event.py)
     event = Event(
         # await build_unique_slug(...): gọi hàm tự viết, tạo slug không trùng
         slug=await build_unique_slug(session, payload.title),
@@ -611,7 +611,7 @@ async def _clone_layout_inventory(
     Đây là cơ chế "template inheritance": venue layout là bản mẫu,
     mỗi show clone ra 1 bản riêng để bán vé độc lập.
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         event: Event - sự kiện cha
         show: Show - buổi diễn cần clone
@@ -692,8 +692,8 @@ async def _clone_layout_inventory(
             code="GEN",                       # GEN = General
             name="Khu vực chung",
             row_count=1,
-            seats_per_row=max(len(template_seats), 1),  # max() Python built-in
-            price=Decimal("0"),              # Decimal: Python built-in - giá 0
+            seats_per_row=max(len(template_seats), 1),  # max() Python có sẵn
+            price=Decimal("0"),              # Decimal: Python có sẵn - giá 0
             color="#024ddf",                 # Màu xanh mặc định
         )
         session.add(fallback_zone)
@@ -711,7 +711,7 @@ async def _clone_layout_inventory(
         zone = zone_map.get(template_seat.section_id) or zone_map.get(None)
         
         # Xác định giá: lấy từ zone (nếu có), không thì lấy từ template seat
-        # float(): Python built-in - chuyển Decimal sang float
+        # float(): Python có sẵn - chuyển Decimal sang float
         price = float(zone.price) if zone else float(template_seat.price)
         
         cloned_seats.append(
@@ -772,7 +772,7 @@ async def create_show_with_inventory(
     session: AsyncSession,
     event: Event,              # Event cha
     admin_id: int,             # Admin tạo show
-    payload: ShowCreateRequest, # Pydantic schema tự viết: dữ liệu tạo show
+    payload: ShowCreateRequest, # lược đồ Pydantic tự viết: dữ liệu tạo show
 ) -> Show:
     """Tạo một buổi diễn có thể bán vé và khởi tạo tồn kho ghế.
     
@@ -781,14 +781,14 @@ async def create_show_with_inventory(
     - Nếu có venue_layout_id → clone từ template
     - Nếu có zones trong payload → tạo zone + sinh ghế từ cấu hình
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         event: Event - sự kiện cha
         admin_id: int - admin tạo show
         payload: ShowCreateRequest - dữ liệu từ request
         
-    Returns:
-        Show - ORM object đã tạo
+    Đầu ra:
+        Show - đối tượng ORM đã tạo
     """
 
     # Kiểm tra ngày diễn phải nằm trong khoảng ngày của event
@@ -816,7 +816,7 @@ async def create_show_with_inventory(
         session, payload.venue_id, payload.venue_layout_id
     )
 
-    # Tạo Show ORM object (tự viết trong app/models/event.py)
+    # Tạo Show đối tượng ORM (tự viết trong app/models/event.py)
     show = Show(
         event_id=event.id,
         title=payload.title,
@@ -890,12 +890,12 @@ async def list_event_shows(
     
     MỤC ĐÍCH: Lấy tất cả show thuộc 1 event, sắp xếp theo thời gian.
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         event_id: int - ID của event cha
         include_deleted: bool - có lấy show đã xóa mềm không
         
-    Returns:
+    Đầu ra:
         list[Show] - danh sách show
     """
 
@@ -909,7 +909,7 @@ async def list_event_shows(
     # Sắp xếp theo thời gian bắt đầu, rồi đến ID
     stmt = stmt.order_by(Show.start_at.asc(), Show.id.asc())
     
-    # list(): Python built-in - thực thi query và chuyển thành list
+    # list(): Python có sẵn - thực thi query và chuyển thành list
     return list(await session.scalars(stmt))
 
 
@@ -928,12 +928,12 @@ async def list_shows_for_event_ids(
     MỤC ĐÍCH: Khi hiển thị danh sách events kèm shows, thay vì query từng event một
     (N+1 query problem), dùng 1 query duy nhất cho tất cả events rồi nhóm lại.
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         event_ids: list[int] - danh sách ID events
         include_deleted: bool
         
-    Returns:
+    Đầu ra:
         dict[int, list[Show]] - map event_id → danh sách show của event đó
     """
 
@@ -950,7 +950,7 @@ async def list_shows_for_event_ids(
     # Sắp xếp theo event_id → start_at → id
     stmt = stmt.order_by(Show.event_id.asc(), Show.start_at.asc(), Show.id.asc())
 
-    # defaultdict(list): Python built-in
+    # defaultdict(list): Python có sẵn
     #   Khi truy cập key chưa tồn tại → tự tạo list rỗng
     grouped: dict[int, list[Show]] = defaultdict(list)
     
@@ -995,13 +995,13 @@ async def get_show_by_id(
 ) -> Show:
     """Lấy buổi diễn theo ID số.
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         show_id: int - ID buổi diễn
         include_deleted: bool
         
-    Returns:
-        Show - ORM object
+    Đầu ra:
+        Show - đối tượng ORM
         
     Raises:
         HTTPException 404 nếu không tìm thấy
@@ -1027,11 +1027,11 @@ async def get_show_by_id(
 async def list_show_zones(session: AsyncSession, show_id: int) -> list[SeatZone]:
     """Liệt kê toàn bộ khu vực ghế của một buổi diễn theo thứ tự ổn định.
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         show_id: int
         
-    Returns:
+    Đầu ra:
         list[SeatZone] - danh sách vùng ghế
     """
 
@@ -1051,19 +1051,19 @@ async def list_show_zones(session: AsyncSession, show_id: int) -> list[SeatZone]
 async def create_show_zone(
     session: AsyncSession,
     show: Show,
-    payload: SeatZoneCreate,  # Pydantic schema tự viết
+    payload: SeatZoneCreate,  # lược đồ Pydantic tự viết
 ) -> SeatZone:
     """Tạo một khu vực ghế và tùy chọn sinh sẵn ghế cho khu vực đó.
     
     MỤC ĐÍCH: Admin thêm vùng ghế mới cho show (vd: thêm khu VIP).
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         show: Show - buổi diễn
         payload: SeatZoneCreate - dữ liệu vùng ghế
         
-    Returns:
-        SeatZone - ORM object đã tạo
+    Đầu ra:
+        SeatZone - đối tượng ORM đã tạo
     """
 
     # Kiểm tra trùng mã code trong cùng show
@@ -1120,12 +1120,12 @@ async def create_initial_show_zone(
     MỤC ĐÍCH: Khi tạo show free-form (không dùng venue layout template),
     tạo zone đầu tiên với ghế có TỌA ĐỘ sẵn để admin dễ chỉnh sửa.
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         show: Show
         payload: SeatZoneCreate
         
-    Returns:
+    Đầu ra:
         SeatZone - đã tạo kèm ghế và polygon
     """
 
@@ -1192,7 +1192,7 @@ async def update_show_zone(
     session: AsyncSession,
     show: Show,
     zone_id: int,
-    payload: SeatZoneUpdate,  # Pydantic schema tự viết
+    payload: SeatZoneUpdate,  # lược đồ Pydantic tự viết
 ) -> SeatZone:
     """Cập nhật khu vực ghế và tùy chọn sinh lại ghế nếu chưa có ghế bị giữ/bán.
     
@@ -1200,13 +1200,13 @@ async def update_show_zone(
     Nếu yêu cầu regenerate_seats → xóa ghế cũ, sinh lại.
     Nhưng CHỈ làm được nếu chưa có ghế nào SOLD hoặc LOCKED trong zone.
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         show: Show
         zone_id: int
         payload: SeatZoneUpdate
         
-    Returns:
+    Đầu ra:
         SeatZone - đã cập nhật
     """
 
@@ -1297,7 +1297,7 @@ async def delete_show_zone(
 ) -> None:
     """Xóa khu vực nếu khu vực chưa có ghế đã bán hoặc đang giữ.
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         show: Show
         zone_id: int
@@ -1350,7 +1350,7 @@ async def list_live_events(
     
     MỤC ĐÍCH: API public GET /api/events - liệt kê sự kiện cho khách xem.
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         search: str | None - từ khóa tìm kiếm trong tiêu đề
         category: str | None - lọc theo thể loại
@@ -1359,7 +1359,7 @@ async def list_live_events(
         limit: int - giới hạn số lượng
         offset: int - vị trí bắt đầu
         
-    Returns:
+    Đầu ra:
         list[Event] - danh sách events
     """
 
@@ -1410,13 +1410,13 @@ async def get_event_by_slug_or_id(
     MỤC ĐÍCH: API có thể nhận slug (chuỗi) hoặc ID (số).
     Hàm này tự phân biệt: nếu là số → tìm theo ID; nếu là chữ → tìm theo slug.
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         slug_or_id: str - "nhac-kich" hoặc "42"
         include_deleted: bool
         
-    Returns:
-        Event - ORM object
+    Đầu ra:
+        Event - đối tượng ORM
         
     Raises:
         HTTPException 404 nếu không tìm thấy
@@ -1426,7 +1426,7 @@ async def get_event_by_slug_or_id(
     #   "42".isdigit() → True
     #   "nhac-kich".isdigit() → False
     if slug_or_id.isdigit():
-        # int(): Python built-in - chuyển chuỗi thành số
+        # int(): Python có sẵn - chuyển chuỗi thành số
         stmt = select(Event).where(Event.id == int(slug_or_id))
     else:
         stmt = select(Event).where(Event.slug == slug_or_id)
@@ -1444,19 +1444,19 @@ async def get_event_by_slug_or_id(
 
 
 # ============================================================
-# HÀM BUILD RESPONSE (chuyển ORM → Pydantic schema)
+# HÀM BUILD RESPONSE (chuyển ORM → lược đồ Pydantic)
 # ============================================================
 
 async def build_show_summary_response(show: Show) -> ShowSummaryResponse:
     """Chuyển một buổi diễn sang schema response ngắn gọn.
     
-    MỤC ĐÍCH: Chuyển ORM object → Pydantic schema để trả JSON cho client.
+    MỤC ĐÍCH: Chuyển đối tượng ORM → lược đồ Pydantic để trả JSON cho client.
     
-    Args:
-        show: Show - ORM object
+    Đầu vào:
+        show: Show - đối tượng ORM
         
-    Returns:
-        ShowSummaryResponse - Pydantic schema
+    Đầu ra:
+        ShowSummaryResponse - lược đồ Pydantic
     """
 
     # .model_validate(): Pydantic method - tự động map các field trùng tên
@@ -1474,13 +1474,13 @@ async def build_event_card_response(
     MỤC ĐÍCH: Tạo response cho màn hình danh sách events.
     Mỗi event card hiển thị: tên, ảnh, địa điểm, có queue không...
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         event: Event
         shows: list[Show] | None - nếu None thì tự load từ DB
         
-    Returns:
-        EventCardResponse - Pydantic schema
+    Đầu ra:
+        EventCardResponse - lược đồ Pydantic
     """
 
     # Nếu không truyền shows → tự load
@@ -1508,7 +1508,7 @@ async def build_event_card_response(
     if not distinct_venues:
         venue_summary = event.venue or "Chưa cập nhật"  # Python or operator
     elif len(set(distinct_venues)) == 1:
-        # set(): Python built-in - loại bỏ trùng lặp
+        # set(): Python có sẵn - loại bỏ trùng lặp
         # Nếu tất cả show cùng 1 venue → hiển thị tên venue đó
         venue_summary = distinct_venues[0]
     else:
@@ -1527,7 +1527,7 @@ async def build_event_card_response(
         cover_image_url=event.cover_image_url,
         status=event.status,
         created_at=event.created_at,
-        # any(): Python built-in - kiểm tra có ít nhất 1 show bật queue
+        # any(): Python có sẵn - kiểm tra có ít nhất 1 show bật queue
         queue_enabled=any(show.queue_enabled for show in shows),
         max_price=max_price,
     )
@@ -1541,12 +1541,12 @@ async def build_event_detail_response(
     
     MỤC ĐÍCH: Tạo response cho màn hình chi tiết event (có danh sách shows).
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         event: Event
         
-    Returns:
-        EventDetailResponse - Pydantic schema
+    Đầu ra:
+        EventDetailResponse - lược đồ Pydantic
     """
 
     # Load danh sách shows của event
@@ -1572,11 +1572,11 @@ async def build_show_detail_response(
     
     MỤC ĐÍCH: Tạo response chi tiết show (có zones, thông tin event cha).
     
-    Args:
+    Đầu vào:
         session: AsyncSession
         show: Show
         
-    Returns:
+    Đầu ra:
         dict - dictionary chứa thông tin chi tiết show
     """
 
@@ -1621,15 +1621,15 @@ async def get_show_seat_matrix(
 ) -> tuple[list[SeatZoneResponse], list[SeatResponse]]:
     """Lấy ma trận ghế của một buổi diễn kèm thông tin sở hữu lock nếu cần.
 
-    MỤC ĐÍCH: API chính để frontend hiển thị sơ đồ ghế.
+    MỤC ĐÍCH: API chính để giao diện người dùng hiển thị sơ đồ ghế.
     Trả về danh sách zones + danh sách ghế với đầy đủ trạng thái.
     
-    Input:
+    Đầu vào:
     - `show_id`: buổi diễn cần xem.
     - `current_user_id`: user đang xem, có thể rỗng cho guest.
     - `include_user_details`: bật khi admin cần xem người giữ/người mua ghế.
 
-    Output:
+    Đầu ra:
     - Danh sách khu vực và danh sách ghế đã chuẩn hóa trạng thái.
 
     Cách hoạt động:
@@ -1657,9 +1657,9 @@ async def get_show_seat_matrix(
         )
     )
 
-    now = datetime.now(UTC)  # Python built-in: thời gian hiện tại
+    now = datetime.now(UTC)  # Python có sẵn: thời gian hiện tại
     
-    # Chuyển zones thành response schema
+    # Chuyển zones thành lược đồ phản hồi
     # .model_validate(): Pydantic method
     zone_responses = [SeatZoneResponse.model_validate(zone) for zone in zones]
     seat_responses: list[SeatResponse] = []
@@ -1739,7 +1739,7 @@ async def get_show_seat_matrix(
                 ),
                 order_id=row.order_id,
                 ticket_code=row.ticket_code,
-                issued_at=_as_utc(row.issued_at),  # Hàm tự viết: chuẩn hóa timezone
+                issued_at=_as_utc(row.issued_at),  # Hàm tự viết: chuẩn hóa múi giờ
             )
             for row in sold_rows
         }
@@ -1784,14 +1784,14 @@ async def get_show_seat_matrix(
 
         # Tạo SeatResponse object
         seat_responses.append(
-            SeatResponse(  # Pydantic schema tự viết
+            SeatResponse(  # lược đồ Pydantic tự viết
                 id=seat.id,
                 zone_id=seat.zone_id,
                 row_index=seat.row_index,
                 row_label=seat.row_label,
                 seat_number=seat.seat_number,
                 seat_label=seat.seat_label,
-                price=Decimal(str(seat.price)),  # Decimal Python built-in
+                price=Decimal(str(seat.price)),  # Decimal Python có sẵn
                 status=normalized_status,
                 lock_expires_at=lock_expires,
                 # Chỉ True nếu user đang đăng nhập VÀ là người giữ ghế này

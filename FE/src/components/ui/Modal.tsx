@@ -41,7 +41,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
         {title && (
           <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
             <h2 id="modal-title" className="text-lg font-display font-semibold text-white">{title}</h2>
-            <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/10 transition-colors" aria-label="Close modal">
+            <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/10 transition-colors" aria-label="Đóng hộp thoại">
               <X className="h-5 w-5 text-gray-400" />
             </button>
           </div>

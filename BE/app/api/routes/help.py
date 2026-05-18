@@ -79,7 +79,7 @@ def _thread_to_response(row: HelpThread) -> HelpThreadResponse:
 
 
 async def _mark_customer_thread_seen(session: AsyncSession, thread: HelpThread) -> None:
-    """Reset unread state for the customer side of one support thread."""
+    """Đánh dấu toàn bộ phản hồi admin trong một hội thoại là khách đã xem."""
 
     now = datetime.now(timezone.utc)
     rows = list(
@@ -97,7 +97,7 @@ async def _mark_customer_thread_seen(session: AsyncSession, thread: HelpThread) 
 
 
 async def _mark_admin_threads_seen(session: AsyncSession, threads: list[HelpThread]) -> None:
-    """Reset unread state for all admin-visible support threads."""
+    """Đánh dấu toàn bộ tin khách gửi trong các hội thoại admin đang xem là đã đọc."""
 
     if not threads:
         return
@@ -179,7 +179,7 @@ async def mark_my_thread_seen(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ) -> APIMessage:
-    """Mark all admin replies in the customer's latest support thread as seen."""
+    """Đánh dấu toàn bộ phản hồi admin trong hội thoại mới nhất của khách là đã xem."""
 
     if current_user.role != UserRole.CUSTOMER:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Chỉ khách hàng mới được đánh dấu đã xem")

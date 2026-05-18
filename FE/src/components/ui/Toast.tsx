@@ -42,7 +42,7 @@ export const Toast = forwardRef<HTMLDivElement, ToastProps>(
         {description && <p className="text-xs text-gray-300 mt-0.5">{description}</p>}
       </div>
       {onClose && (
-        <button onClick={onClose} className="p-1 rounded hover:bg-white/10 transition-colors" aria-label="Close notification">
+        <button onClick={onClose} className="p-1 rounded hover:bg-white/10 transition-colors" aria-label="Đóng thông báo">
           <X className="h-4 w-4" />
         </button>
       )}

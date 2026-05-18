@@ -4,7 +4,7 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
-# Import models for autogenerate
+# Nạp model để Alembic tự sinh migration từ metadata ORM.
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))

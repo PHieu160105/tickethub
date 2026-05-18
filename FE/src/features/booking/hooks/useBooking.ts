@@ -23,7 +23,7 @@ export function useLockSeats() {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Khong the giu ghe',
+        error: error instanceof Error ? error.message : 'Không thể giữ ghế',
       }))
       throw error
     }
@@ -48,7 +48,7 @@ export function useReleaseSeats() {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Khong the tra ghe',
+        error: error instanceof Error ? error.message : 'Không thể trả ghế',
       }))
       throw error
     }
@@ -73,7 +73,7 @@ export function useCheckout() {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Khong the thanh toan',
+        error: error instanceof Error ? error.message : 'Không thể thanh toán',
       }))
       throw error
     }
@@ -109,7 +109,7 @@ export function useMyTickets(params?: { search?: string; start_from?: string; en
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Khong the tai danh sach ve',
+        error: error instanceof Error ? error.message : 'Không thể tải danh sách vé',
       }))
     }
   }, [normalizedEndTo, normalizedSearch, normalizedStartFrom])

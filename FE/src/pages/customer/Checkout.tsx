@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 
@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useCheckout, useReleaseSeats } from '@/features/booking/hooks/useBooking'
 import { useShowSeats } from '@/features/events/hooks/useEvents'
-import { bookingApi, extractApiErrorMessage } from '@/lib/api'
-import { queueStorage } from '@/lib/storage'
+import { bookingApi, eventApi, extractApiErrorMessage, postAuthorizedJsonKeepalive } from '@/lib/api'
+import { checkoutReturnSeatStorage, queueStorage } from '@/lib/storage'
 import { formatCurrencyVnd } from '@/lib/utils'
 import type { Seat } from '@/types'
 import { AlertCircle, CreditCard, MapPin, QrCode, Rocket, Timer } from 'lucide-react'
@@ -46,7 +46,7 @@ export default function Checkout() {
   })
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [selectedDiscountCode] = useState<string>('')
-  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
+  const [currentTimestampMs, setCurrentTimestampMs] = useState<number>(() => Date.now())
 
   const stateLockedSeats = useMemo(() => state.lockedSeats ?? [], [state.lockedSeats])
   const shouldFetchMatrix = !stateLockedSeats.length
@@ -55,6 +55,8 @@ export default function Checkout() {
   const locksReleasedRef = useRef(false)
   const latestShowIdRef = useRef<number | null>(null)
   const latestLockedSeatIdsRef = useRef<number[]>([])
+  const pendingReleaseTimerRef = useRef<number | null>(null)
+  const keepSeatSelectionForBackButtonRef = useRef(false)
 
   const lockedSeats = useMemo(() => {
     if (stateLockedSeats.length > 0) {
@@ -81,6 +83,13 @@ export default function Checkout() {
     if (timestamps.length === 0) return null
     return Math.min(...timestamps)
   }, [lockedSeats])
+  const remainingSeconds = useMemo(() => {
+    if (!lockExpiryTimestamp) {
+      return null
+    }
+
+    return Math.max(0, Math.floor((lockExpiryTimestamp - currentTimestampMs) / 1000))
+  }, [currentTimestampMs, lockExpiryTimestamp])
   const countdownLabel = remainingSeconds === null
     ? '--:--'
     : `${String(Math.floor(remainingSeconds / 60)).padStart(2, '0')}:${String(remainingSeconds % 60).padStart(2, '0')}`
@@ -98,32 +107,109 @@ export default function Checkout() {
     latestLockedSeatIdsRef.current = lockedSeatIds
   }, [showId, lockedSeatIds])
 
-  useEffect(() => {
-    if (!lockExpiryTimestamp) {
-      setRemainingSeconds(null)
+  const releaseLockedSeatsInBackground = useCallback(() => {
+    /**
+     * Giải phóng ghế đã giữ khi người dùng rời trang thanh toán mà chưa thanh toán thật.
+     *
+     * Đầu vào:
+     * - Không nhận tham số trực tiếp. Hàm đọc `showId` và `seatIds` mới nhất từ `ref`
+     *   để luôn dùng đúng dữ liệu kể cả khi hàm được gọi lúc thành phần giao diện đang bị tháo.
+     *
+     * Đầu ra:
+     * - Không trả dữ liệu cho giao diện. Đây là nhánh dọn dẹp tài nguyên máy chủ ứng dụng.
+     *
+     * Cách hoạt động:
+     * - Bỏ qua nếu checkout đã hoàn tất hoặc ghế đã được trả trước đó.
+     * - Ưu tiên yêu cầu nền `keepalive` để tăng khả năng máy chủ ứng dụng nhận được lệnh mở khóa
+     *   ngay cả khi tab đang đóng.
+     * - Nếu trình duyệt không hỗ trợ hoặc yêu cầu nền không khởi tạo được, chuyển sang
+     *   API trả ghế thông thường.
+     */
+
+    if (checkoutCompletedRef.current || locksReleasedRef.current) {
       return
     }
 
-    const updateRemaining = () => {
-      const seconds = Math.max(0, Math.floor((lockExpiryTimestamp - Date.now()) / 1000))
-      setRemainingSeconds(seconds)
+    const currentShowId = latestShowIdRef.current
+    const currentSeatIds = latestLockedSeatIdsRef.current
+    if (!currentShowId || currentSeatIds.length === 0) {
+      return
     }
 
-    updateRemaining()
-    const timer = window.setInterval(updateRemaining, 1000)
-    return () => window.clearInterval(timer)
+    locksReleasedRef.current = true
+
+    const startedKeepaliveRequest = postAuthorizedJsonKeepalive('/bookings/release', {
+      show_id: currentShowId,
+      seat_ids: currentSeatIds,
+    })
+
+    if (startedKeepaliveRequest) {
+      return
+    }
+
+    void bookingApi.release(currentShowId, currentSeatIds).catch(() => {
+      locksReleasedRef.current = false
+    })
+  }, [])
+
+  useEffect(() => {
+    if (pendingReleaseTimerRef.current !== null) {
+      window.clearTimeout(pendingReleaseTimerRef.current)
+      pendingReleaseTimerRef.current = null
+    }
+
+    return () => {
+      /**
+       * Dọn lock khi người dùng rời trang thanh toán thật sự.
+       *
+       * Đầu vào:
+       * - Không nhận tham số. Hàm dùng trạng thái mới nhất trong các `ref` của component.
+       *
+       * Đầu ra:
+       * - Không trả dữ liệu cho giao diện.
+       *
+       * Cách hoạt động:
+       * - Trì hoãn một nhịp event loop để tránh React StrictMode trong môi trường dev
+       *   mount/unmount thử rồi làm mất lock ghế ngay khi người dùng vừa vào checkout.
+       * - Nếu component mount lại ngay, timeout này được hủy ở đầu effect phía trên.
+       * - Nếu người dùng rời checkout thật, timeout không bị hủy và hệ thống trả lock.
+       */
+      pendingReleaseTimerRef.current = window.setTimeout(() => {
+        pendingReleaseTimerRef.current = null
+        if (!keepSeatSelectionForBackButtonRef.current && latestShowIdRef.current) {
+          checkoutReturnSeatStorage.clear(latestShowIdRef.current)
+        }
+        releaseLockedSeatsInBackground()
+      }, 0)
+    }
+  }, [releaseLockedSeatsInBackground])
+
+  useEffect(() => {
+    if (!lockExpiryTimestamp) {
+      return
+    }
+
+    const syncTimestampNow = () => {
+      window.setTimeout(() => {
+        setCurrentTimestampMs(Date.now())
+      }, 0)
+    }
+
+    const frameId = window.requestAnimationFrame(syncTimestampNow)
+    const timer = window.setInterval(syncTimestampNow, 1000)
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      window.clearInterval(timer)
+    }
   }, [lockExpiryTimestamp])
 
   useEffect(() => {
     const handleBrowserUnload = () => {
-      if (checkoutCompletedRef.current || locksReleasedRef.current) return
-
-      const currentShowId = latestShowIdRef.current
-      const currentSeatIds = latestLockedSeatIdsRef.current
-      if (!currentShowId || currentSeatIds.length === 0) return
-
-      locksReleasedRef.current = true
-      void bookingApi.release(currentShowId, currentSeatIds).catch(() => undefined)
+      if (latestShowIdRef.current) {
+        checkoutReturnSeatStorage.clear(latestShowIdRef.current)
+      }
+      releaseLockedSeatsInBackground()
     }
 
     window.addEventListener('pagehide', handleBrowserUnload)
@@ -133,20 +219,25 @@ export default function Checkout() {
       window.removeEventListener('pagehide', handleBrowserUnload)
       window.removeEventListener('beforeunload', handleBrowserUnload)
     }
-  }, [])
+  }, [releaseLockedSeatsInBackground])
 
   const handleInputChange = (field: 'fullName' | 'email' | 'phone', value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
   const handleBackToSeatSelection = async () => {
-    if (!eventKey) {
+    if (!showId || Number.isNaN(showId)) {
       navigate('/search')
       return
     }
 
-    if (!showId || Number.isNaN(showId) || lockedSeatIds.length === 0 || locksReleasedRef.current) {
-      navigate(`/shows/${showId}/seats`)
+    const seatSelectionTarget = `/shows/${showId}/seats`
+    const seatSelectionState = { preselectedSeatIds: lockedSeatIds }
+    keepSeatSelectionForBackButtonRef.current = true
+    checkoutReturnSeatStorage.set(showId, lockedSeatIds)
+
+    if (lockedSeatIds.length === 0 || locksReleasedRef.current) {
+      navigate(seatSelectionTarget, { state: seatSelectionState })
       return
     }
 
@@ -155,9 +246,10 @@ export default function Checkout() {
       locksReleasedRef.current = true
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Không thể trả lại các ghế đang giữ')
-    } finally {
-      navigate(`/shows/${showId}/seats`)
+      return
     }
+
+    navigate(seatSelectionTarget, { state: seatSelectionState })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -181,9 +273,22 @@ export default function Checkout() {
     try {
       setErrorMessage('')
       const queueToken = showId ? queueStorage.getToken(showId) ?? undefined : undefined
+      const latestMatrix = await eventApi.seats(showId)
+      const lockedSeatIdSet = new Set(lockedSeatIds)
+      const validLockedSeatCount = latestMatrix.seats.filter((seat) => {
+        return lockedSeatIdSet.has(seat.id) && seat.status === 'locked' && seat.is_locked_by_me
+      }).length
+
+      if (validLockedSeatCount !== lockedSeatIds.length) {
+        checkoutReturnSeatStorage.clear(showId)
+        setErrorMessage('Ghế đang giữ đã hết hạn hoặc không còn thuộc phiên của bạn. Vui lòng quay lại chọn ghế.')
+        return
+      }
+
       const result = await checkout(showId, queueToken, selectedDiscountCode || undefined)
       checkoutCompletedRef.current = true
       locksReleasedRef.current = true
+      checkoutReturnSeatStorage.clear(showId)
       queueStorage.clearToken(showId)
       navigate('/confirmation', {
         state: {
@@ -200,7 +305,7 @@ export default function Checkout() {
     } catch (error) {
       if (showId && !Number.isNaN(showId) && isRecoverableQueueTokenError(error)) {
         queueStorage.clearToken(showId)
-        setErrorMessage('Phien queue khong con hop le. Vui long quay lai hang doi de nhan luot moi.')
+        setErrorMessage('Phiên hàng đợi không còn hợp lệ. Vui lòng quay lại hàng đợi để nhận lượt mới.')
         navigate(`/queue?showId=${showId}${eventKey ? `&eventKey=${encodeURIComponent(eventKey)}` : ''}`)
         return
       }

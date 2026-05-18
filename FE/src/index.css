@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @theme {
-  /* Colors - Map từ TicketRush config */
+  /* Bảng màu ánh xạ từ cấu hình TicketRush. */
   --color-primary: #e94560;
   --color-primary-container: #fc536d;
   --color-on-primary: #67001c;
@@ -21,7 +21,7 @@
   --color-on-error: #690005;
   --color-on-error-container: #ffdad6;
 
-  /* Light mode colors */
+  /* Bảng màu cho giao diện sáng. */
   --color-background-light: #f8fafc;
   --color-on-background-light: #0f172a;
   --color-surface-light: #ffffff;
@@ -29,7 +29,7 @@
   --color-surface-variant-light: #f1f5f9;
   --color-on-surface-variant-light: #334155;
 
-  /* Dark mode colors (default) */
+  /* Bảng màu cho giao diện tối mặc định. */
   --color-background-dark: #0d112a;
   --color-on-background-dark: #dee0ff;
   --color-surface-dark: #0d112a;
@@ -69,18 +69,18 @@
 
   --color-surface-tint: #ffb2b7;
 
-  /* Fonts */
+  /* Bộ chữ dùng trong toàn bộ giao diện. */
   --font-headline: "Space Grotesk", system-ui, sans-serif;
   --font-body: "Be Vietnam Pro", system-ui, sans-serif;
   --font-label: "Space Grotesk", system-ui, sans-serif;
 
-  /* Border Radius */
+  /* Bán kính bo góc chuẩn hóa. */
   --radius-DEFAULT: 0.125rem;
   --radius-lg: 0.25rem;
   --radius-xl: 0.5rem;
   --radius-full: 0.75rem;
 
-  /* Custom animations */
+  /* Hiệu ứng động tùy chỉnh. */
   --animate-float: float 6s ease-in-out infinite;
 
   @keyframes float {
@@ -97,7 +97,7 @@
     color: var(--color-on-background);
   }
 
-  /* Dark mode (default) */
+  /* Giao diện tối mặc định. */
   :root {
     --color-background: #0d112a;
     --color-on-background: #dee0ff;
@@ -146,7 +146,7 @@
       radial-gradient(2px 2px at 160px 120px, rgba(221, 221, 221, 0.75), rgba(0, 0, 0, 0));
   }
 
-  /* Light mode */
+  /* Giao diện sáng. */
   .dark {
     --color-background: #0d112a;
     --color-on-background: #dee0ff;

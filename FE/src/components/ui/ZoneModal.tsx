@@ -1,4 +1,4 @@
-// components/admin/ZoneModal.tsx
+// Hộp thoại quản lý khu vực ghế dành cho màn quản trị.
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { Modal } from '@/components/ui/Modal'
@@ -77,7 +77,7 @@ export function ZoneModal({ isOpen, onClose, zones, onChange, eventName }: ZoneM
   }
 
   const handleSubmit = () => {
-    // Validation
+    // Kiểm tra dữ liệu đầu vào trước khi lưu khu vực ghế.
     if (!form.code.trim() || !form.name.trim()) {
       setError('Zone code và Zone name là bắt buộc.')
       return
@@ -100,10 +100,10 @@ export function ZoneModal({ isOpen, onClose, zones, onChange, eventName }: ZoneM
 
     let updated: Zone[]
     if (editingZone) {
-      // Update existing zone (by code)
+      // Cập nhật khu vực đang sửa theo mã khu vực cũ.
       updated = localZones.map((z) => (z.code === editingZone.code ? newZone : z))
     } else {
-      // Check duplicate code
+      // Chặn trường hợp tạo mới nhưng trùng mã khu vực đã có.
       if (localZones.some((z) => z.code.toLowerCase() === newZone.code.toLowerCase())) {
         setError('Zone code đã tồn tại.')
         return
@@ -132,7 +132,7 @@ export function ZoneModal({ isOpen, onClose, zones, onChange, eventName }: ZoneM
       className="max-w-4xl"
     >
       <div className="space-y-6">
-        {/* Stats */}
+        {/* Khối thống kê nhanh tổng số ghế và doanh thu ước tính. */}
         <div className="grid grid-cols-2 gap-4">
           <div className="p-3 rounded-lg bg-space-700/50 border border-white/10">
             <p className="text-xs text-gray-400">Tổng ghế</p>
@@ -146,7 +146,7 @@ export function ZoneModal({ isOpen, onClose, zones, onChange, eventName }: ZoneM
           </div>
         </div>
 
-        {/* Zone List */}
+        {/* Danh sách khu vực ghế hiện có trong bộ nhớ tạm của hộp thoại. */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-gray-300">Danh sách Zone</h3>
@@ -173,7 +173,7 @@ export function ZoneModal({ isOpen, onClose, zones, onChange, eventName }: ZoneM
                   )}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    {/* Color Preview Box */}
+                    {/* Ô xem trước màu của khu vực ghế để admin nhận diện nhanh. */}
                     <div
                       className="w-8 h-8 rounded-md border border-white/20 flex-shrink-0"
                       style={{ backgroundColor: zone.color }}
@@ -219,7 +219,7 @@ export function ZoneModal({ isOpen, onClose, zones, onChange, eventName }: ZoneM
           )}
         </div>
 
-        {/* Zone Form */}
+        {/* Biểu mẫu nhập thông tin khu vực ghế. */}
         <div className="pt-4 border-t border-white/10">
           <h3 className="text-sm font-medium text-gray-300 mb-4">
             {editingZone ? 'Chỉnh sửa Zone' : 'Thêm Zone mới'}
@@ -287,7 +287,7 @@ export function ZoneModal({ isOpen, onClose, zones, onChange, eventName }: ZoneM
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Zone color</label>
               <div className="flex items-center gap-2">
-                {/* Color Preview Square */}
+                {/* Ô xem trước màu khu vực ghế. */}
                 <div
                   className="w-10 h-10 rounded-lg border border-white/20 flex-shrink-0 cursor-pointer"
                   style={{ backgroundColor: form.color }}
@@ -302,7 +302,7 @@ export function ZoneModal({ isOpen, onClose, zones, onChange, eventName }: ZoneM
                   pattern="^#[0-9A-F]{6}$"
                 />
               </div>
-              {/* Optional: Native color picker */}
+              {/* Bộ chọn màu gốc của trình duyệt, dùng khi admin muốn chọn trực quan. */}
               <input
                 type="color"
                 value={form.color}

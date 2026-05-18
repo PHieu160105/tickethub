@@ -1,4 +1,4 @@
-"""add_firebase_uid
+"""Thêm định danh Firebase cho người dùng.
 
 Revision ID: xxxxx
 Revises: d3b8c9ee25f1

@@ -252,7 +252,7 @@ export function Navbar() {
           <button
             className="md:hidden p-2 rounded-lg hover:customer-bg-soft transition-colors"
             onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label="Toggle menu"
+            aria-label="Mở hoặc đóng menu"
           >
             {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>

@@ -1,5 +1,5 @@
 /**
- * Auth API functions
+ * Tập hợp các hàm gọi API xác thực.
  */
 
 import { api, withRetry } from '../../../lib/api'
@@ -21,14 +21,14 @@ export interface UpdateProfilePayload {
 
 export const authApi = {
   /**
-   * Login with email and password
+   * Đăng nhập bằng email và mật khẩu.
    */
   async login(email: string, password: string) {
     return withRetry(() => api.post<AuthResponse>('/auth/login', { email, password }, { timeout: 10000 }), 2)
   },
 
   /**
-   * Register a new account
+   * Đăng ký tài khoản mới.
    */
   async register(payload: RegisterPayload) {
     const response = await api.post<AuthResponse>('/auth/register', payload)
@@ -36,14 +36,14 @@ export const authApi = {
   },
 
   /**
-   * Get current user profile
+   * Lấy hồ sơ của người dùng hiện tại.
    */
   async me() {
     return withRetry(() => api.get<AuthResponse['user']>('/auth/me', { timeout: 8000 }), 2)
   },
 
   /**
-   * Update current user profile
+   * Cập nhật hồ sơ của người dùng hiện tại.
    */
   async updateMe(payload: UpdateProfilePayload) {
     const response = await api.patch<AuthResponse['user']>('/auth/me', payload)

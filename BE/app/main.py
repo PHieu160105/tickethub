@@ -11,6 +11,7 @@ from sqlalchemy import text
 
 from app.api.router import api_router
 from app.api.routes import ws
+from app.core.cache import EVENT_DETAIL_CACHE_NAMESPACE, EVENT_LIST_CACHE_NAMESPACE, public_api_cache
 from app.core.config import get_settings
 from app.core.db import engine
 from app.models import Base
@@ -340,6 +341,27 @@ async def _ensure_show_refactor_schema() -> None:
         )
 
 
+async def _invalidate_bootstrap_caches() -> None:
+    """Xóa các cache public dễ bị stale sau khi local DB hoặc seed thay đổi.
+
+    Input:
+    - Không nhận tham số; hàm dùng trực tiếp cache store toàn cục của ứng dụng.
+
+    Output:
+    - Không trả dữ liệu. Mục tiêu là đảm bảo request đầu tiên sau startup luôn đọc
+      đúng dữ liệu mới nhất từ database.
+
+    Cách hoạt động:
+    - Xóa namespace danh sách và chi tiết sự kiện.
+    - Xóa toàn bộ cache sơ đồ ghế của các show vì những key này phụ thuộc mạnh
+      vào seed, migration và trạng thái ghế tại thời điểm chạy local.
+    """
+
+    await public_api_cache.invalidate_namespace(EVENT_LIST_CACHE_NAMESPACE)
+    await public_api_cache.invalidate_namespace(EVENT_DETAIL_CACHE_NAMESPACE)
+    await public_api_cache.invalidate_pattern("cache:shows:seats:*")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Khởi tạo schema, seed dữ liệu và bật worker nền trong vòng đời ứng dụng.
@@ -375,6 +397,7 @@ async def lifespan(_: FastAPI):
     async with AsyncSessionLocal() as session:
         await seed_demo_data(session)
 
+    await _invalidate_bootstrap_caches()
     await worker_orchestrator.start()
 
     yield
@@ -413,7 +436,7 @@ async def value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
 async def global_exception_handler(_: Request, __: Exception) -> JSONResponse:
     """Trả payload an toàn cho các lỗi runtime không mong muốn."""
 
-    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Internal server error"})
+    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Lỗi nội bộ máy chủ"})
 
 
 @app.get("/health")

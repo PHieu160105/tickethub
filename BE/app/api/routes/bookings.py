@@ -1,4 +1,4 @@
-"""Booking routes for lock, release, checkout, and customer tickets."""
+"""Khai báo các route đặt vé: giữ ghế, trả ghế, thanh toán và xem vé của khách hàng."""
 
 from datetime import datetime
 
@@ -51,7 +51,7 @@ async def release_event_seats(
         show_id=payload.show_id,
         seat_ids=payload.seat_ids,
     )
-    return APIMessage(detail=f"Da tra lai {released_count} ghe")
+    return APIMessage(detail=f"Đã trả lại {released_count} ghế")
 
 
 @router.post("/checkout", response_model=CheckoutResponse, dependencies=[Depends(rate_limit("bookings-checkout", times=10, seconds=60))])

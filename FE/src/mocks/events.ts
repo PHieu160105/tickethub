@@ -99,7 +99,7 @@ export const EVENT_DETAILS: EventDetail[] = [
   }
 ]
 
-// Helper function to get event by ID
+// Hàm tiện ích lấy sự kiện theo ID trong dữ liệu mô phỏng.
 export const getEventById = (id: number): EventDetail | undefined => {
   return EVENT_DETAILS.find(event => event.id === id)
 }
