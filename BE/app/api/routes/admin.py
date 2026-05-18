@@ -15,7 +15,7 @@ from app.core.db import get_db_session
 from app.core.search import build_ilike_pattern, sanitize_search_query
 from app.models.enums import OrderStatus, SeatStatus
 from app.models.event import Event, SeatZone, Show, ShowPolygon
-from app.models.order import Order, OrderItem, Ticket, TicketCancellation
+from app.models.order import Order, OrderItem, Ticket
 from app.models.seat import Seat
 from app.models.user import User
 from app.models.venue import Section
@@ -71,6 +71,7 @@ from app.services.event_service import (
     delete_show_zone,
     get_event_by_slug_or_id,
     get_show_by_id,
+    list_event_max_prices_for_event_ids,
     list_event_shows,
     list_live_events,
     list_shows_for_event_ids,
@@ -176,8 +177,6 @@ async def _build_show_stats_response(session: AsyncSession, show: Show, event: E
         or 0
     )
 
-    canceled_tickets = int((await session.scalar(select(func.count(TicketCancellation.id)).where(TicketCancellation.show_id == show.id))) or 0)
-
     zone_rows = (
         await session.execute(
             select(
@@ -233,7 +232,6 @@ async def _build_show_stats_response(session: AsyncSession, show: Show, event: E
         available_seats=available_seats,
         occupancy_rate=occupancy_rate,
         tickets_issued=ticket_count,
-        canceled_tickets=canceled_tickets,
         total_revenue=total_revenue,
         zone_stats=zone_stats,
     )
@@ -274,7 +272,16 @@ async def list_admin_events(
 
     events = await list_live_events(session, search=search, category=category, start_from=start_from, end_to=end_to, limit=limit, offset=offset)
     shows_by_event_id = await list_shows_for_event_ids(session, [event.id for event in events], include_deleted=True)
-    return [await build_event_card_response(session, event, shows=shows_by_event_id.get(event.id, [])) for event in events]
+    max_prices_by_event_id = await list_event_max_prices_for_event_ids(session, [event.id for event in events])
+    return [
+        await build_event_card_response(
+            session,
+            event,
+            shows=shows_by_event_id.get(event.id, []),
+            max_price=max_prices_by_event_id.get(event.id, 0),
+        )
+        for event in events
+    ]
 
 
 @router.get("/events/{event_key}", response_model=EventDetailResponse)
@@ -1176,6 +1183,7 @@ async def list_admin_ticket_sales(
         .join(User, Order.user_id == User.id)
         .join(Seat, OrderItem.seat_id == Seat.id)
         .outerjoin(SeatZone, Seat.zone_id == SeatZone.id)
+        .where(Order.status.in_([OrderStatus.PAID, OrderStatus.PENDING]))
         .order_by(Order.created_at.desc())
     )
 
@@ -1184,7 +1192,10 @@ async def list_admin_ticket_sales(
     if show_id:
         stmt = stmt.where(Order.show_id == show_id)
     if status_filter:
-        stmt = stmt.where(Order.status == status_filter.strip().lower())
+        normalized_status = status_filter.strip().lower()
+        if normalized_status not in {OrderStatus.PAID.value, OrderStatus.PENDING.value}:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Trang thai loc khong hop le")
+        stmt = stmt.where(Order.status == normalized_status)
 
     filtered_stmt = stmt.subquery()
     total = int((await session.scalar(select(func.count()).select_from(filtered_stmt))) or 0)

@@ -73,12 +73,12 @@ export default function Login() {
           {/* Khu vực logo. */}
           <Logo />
           {/* Thẻ form đăng nhập. */}
-          <div className="backdrop-blur-xl bg-slate-900/80 rounded-xl p-8 md:p-10 shadow-2xl relative overflow-hidden group border border-white/10">
+          <div className="backdrop-blur-xl customer-bg-surface rounded-xl p-8 md:p-10 shadow-2xl relative overflow-hidden group border border-[var(--customer-bg-opp)]">
             {/* Lớp ánh sáng nhẹ khi hover, chỉ dùng để tăng chiều sâu thị giác. */}
             <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
             <div className="relative z-10">
               <div className="mb-8">
-                <h2 className="text-2xl font-headline font-bold tracking-tight text-white mb-2">Chào mừng quay lại</h2>
+                <h2 className="text-2xl font-headline font-bold tracking-tight customer-text-header mb-2">Chào mừng quay lại</h2>
                 <p className="text-slate-400 text-sm font-body">Đăng nhập để tiếp tục đặt vé và quản lý sự kiện của bạn.</p>
               </div>
 
@@ -181,7 +181,7 @@ export default function Login() {
                   disabled={isLoading}
                 >
                   <FcGoogle className="w-5 h-5" />
-                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-white">Google</span>
+                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-slate-500">Google</span>
                 </button>
                 <button
                   className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc"
@@ -192,7 +192,7 @@ export default function Login() {
                   disabled={isLoading}
                 >
                   <SiDiscord className="w-5 h-5 text-[#5865F2]" />
-                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-white">Discord</span>
+                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-slate-500">Discord</span>
                 </button>
               </div>
 

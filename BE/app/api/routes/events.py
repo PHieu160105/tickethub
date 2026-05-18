@@ -19,6 +19,7 @@ from app.services.event_service import (
     build_show_detail_response,
     get_event_by_slug_or_id,
     get_show_by_id,
+    list_event_max_prices_for_event_ids,
     list_shows_for_event_ids,
     list_live_events,
 )
@@ -55,7 +56,16 @@ async def list_events(
 
     events = await list_live_events(session, search=search, category=category, start_from=start_from, end_to=end_to, limit=limit, offset=offset)
     shows_by_event_id = await list_shows_for_event_ids(session, [event.id for event in events])
-    response = [await build_event_card_response(session, event, shows=shows_by_event_id.get(event.id, [])) for event in events]
+    max_prices_by_event_id = await list_event_max_prices_for_event_ids(session, [event.id for event in events])
+    response = [
+        await build_event_card_response(
+            session,
+            event,
+            shows=shows_by_event_id.get(event.id, []),
+            max_price=max_prices_by_event_id.get(event.id, 0),
+        )
+        for event in events
+    ]
     return await public_api_cache.set(EVENT_LIST_CACHE_NAMESPACE, cache_key, response, ttl_seconds=300)
 
 

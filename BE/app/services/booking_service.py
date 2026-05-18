@@ -29,7 +29,6 @@ from app.models.order import (
     Order,              # Tự viết: ORM model đơn hàng
     OrderItem,          # Tự viết: ORM model dòng đơn hàng
     Ticket,             # Tự viết: ORM model vé
-    TicketCancellation, # Tự viết: ORM model lịch sử hủy vé
 )
 from app.models.seat import Seat                     # Tự viết: ORM model ghế
 from app.schemas.booking import (
@@ -487,18 +486,17 @@ async def fetch_my_tickets(
     limit: int = 20,                    # Python built-in: số lượng tối đa
     offset: int = 0,                    # Python built-in: vị trí bắt đầu (phân trang)
 ) -> list[MyTicketResponse]:            # Tự viết: Pydantic schema
-    """Trả về danh sách vé đã mua và lịch sử hủy vé của người dùng.
+    """Trả về danh sách vé đã mua còn hiệu lực của người dùng.
 
     Input:
     - `user_id`, bộ lọc tìm kiếm, khoảng thời gian, phân trang.
 
     Output:
-    - Danh sách `MyTicketResponse` đã gộp cả vé còn hiệu lực và vé đã hủy.
+    - Danh sách `MyTicketResponse` của các vé đã phát hành.
 
     Cách hoạt động:
-    - Chạy hai truy vấn riêng cho vé active và vé cancelled.
+    - Chạy một truy vấn join đủ thông tin vé, show và khu vực ghế.
     - Áp dụng bộ lọc text và thời gian.
-    - Chuẩn hóa dữ liệu trả về để frontend hiển thị thống nhất.
     """
 
     # ============================================================
@@ -520,19 +518,6 @@ async def fetch_my_tickets(
     )
 
     # ============================================================
-    # Query vé CANCELLED (đã hủy)
-    # ============================================================
-    cancelled_stmt = (
-        select(TicketCancellation, Event, Show, Seat, SeatZone)
-        .join(Show, TicketCancellation.show_id == Show.id)
-        .join(Event, Show.event_id == Event.id)
-        .join(Seat, TicketCancellation.seat_id == Seat.id)
-        .outerjoin(SeatZone, Seat.zone_id == SeatZone.id)
-        .where(TicketCancellation.user_id == user_id)
-        .order_by(TicketCancellation.canceled_at.desc())  # Mới nhất lên đầu
-    )
-
-    # ============================================================
     # Áp dụng bộ lọc TÌM KIẾM (nếu có)
     # ============================================================
     # `build_ilike_pattern()` là tự viết: tạo pattern LIKE không phân biệt hoa thường
@@ -548,24 +533,15 @@ async def fetch_my_tickets(
                 Show.title.ilike(pattern, escape="\\"),
             )
         )
-        cancelled_stmt = cancelled_stmt.where(
-            or_(
-                TicketCancellation.ticket_code.ilike(pattern, escape="\\"),
-                Event.title.ilike(pattern, escape="\\"),
-                Show.title.ilike(pattern, escape="\\"),
-            )
-        )
 
     # ============================================================
     # Áp dụng bộ lọc THỜI GIAN (nếu có)
     # ============================================================
     if start_from:
         active_stmt = active_stmt.where(Show.start_at >= start_from)
-        cancelled_stmt = cancelled_stmt.where(Show.start_at >= start_from)
 
     if end_to:
         active_stmt = active_stmt.where(Show.start_at <= end_to)
-        cancelled_stmt = cancelled_stmt.where(Show.start_at <= end_to)
 
     # ============================================================
     # Thực thi query với LIMIT và OFFSET (phân trang)
@@ -574,7 +550,6 @@ async def fetch_my_tickets(
     # `.offset()` là SQLAlchemy: bỏ qua N dòng đầu
     # `.all()` là SQLAlchemy: lấy tất cả kết quả
     active_rows = (await session.execute(active_stmt.limit(limit).offset(offset))).all()
-    cancelled_rows = (await session.execute(cancelled_stmt.limit(limit).offset(offset))).all()
 
     # ============================================================
     # Chuẩn hóa dữ liệu ACTIVE thành response
@@ -607,136 +582,7 @@ async def fetch_my_tickets(
         for ticket, order, event, show, order_item, seat, zone in active_rows
     ]
 
-    # ============================================================
-    # Chuẩn hóa dữ liệu CANCELLED thành response
-    # ============================================================
-    cancelled_tickets = [
-        MyTicketResponse(  # Tự viết: Pydantic schema
-            cancellation_id=cancel.id,  # Vé đã hủy có cancellation_id
-            ticket_code=cancel.ticket_code,
-            qr_payload=None,            # Vé hủy không còn QR
-            event_id=event.id,
-            event_slug=event.slug,
-            event_title=event.title,
-            show_id=show.id,
-            show_title=show.title,
-            show_start_at=show.start_at,
-            show_end_at=show.end_at,
-            event_cover_image_url=event.cover_image_url,
-            venue=show.venue,
-            seat_label=seat.seat_label,
-            zone_name=zone.name if zone else "Khu vực chung",
-            price=Decimal(str(cancel.canceled_price)),  # Giá lúc hủy
-            order_id=cancel.order_id,
-            seat_status=seat.status,
-            ticket_status="cancelled",   # Đánh dấu vé đã hủy
-            canceled_at=cancel.canceled_at,
-        )
-        for cancel, event, show, seat, zone in cancelled_rows
-    ]
-
-    # ============================================================
-    # Gộp và sắp xếp
-    # ============================================================
-    combined = active_tickets + cancelled_tickets  # Python list concatenation
-    # `sorted()` là Python built-in: sắp xếp
-    # `key=lambda` là Python: hàm ẩn danh để lấy giá trị so sánh
-    # `or` là Python: lấy canceled_at, nếu None thì lấy issued_at, nếu None thì dùng timestamp 0
-    # `datetime.fromtimestamp(0)` là Python: ngày 1/1/1970 (epoch)
-    # `reverse=True`: mới nhất lên đầu
-    return sorted(
-        combined,
-        key=lambda item: item.canceled_at or item.issued_at or datetime.fromtimestamp(0),
-        reverse=True,
-    )
-
-
-async def cancel_ticket(session: AsyncSession, user_id: int, ticket_id: int) -> None:
-    """Hủy một vé thuộc người dùng hiện tại và đưa ghế đã bán về kho ghế trống.
-
-    Input:
-    - `session`: SQLAlchemy AsyncSession
-    - `user_id`: int - ID người dùng
-    - `ticket_id`: int - ID vé cần hủy
-
-    Output:
-    - None; ném HTTPException nếu không tìm thấy vé
-    """
-
-    # SQLAlchemy query: JOIN 4 bảng, FOR UPDATE để khóa hàng
-    row = (
-        await session.execute(
-            select(Ticket, OrderItem, Order, Seat)
-            .join(OrderItem, Ticket.order_item_id == OrderItem.id)
-            .join(Order, OrderItem.order_id == Order.id)
-            .join(Seat, OrderItem.seat_id == Seat.id)
-            .where(Ticket.id == ticket_id, Order.user_id == user_id)  # Phải là vé của user này
-            .with_for_update()  # SQLAlchemy: khóa hàng
-        )
-    ).first()  # `.first()` là SQLAlchemy: lấy dòng đầu tiên hoặc None
-
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy vé")
-
-    # Tuple unpacking (Python): gán 4 object từ kết quả query
-    ticket, order_item, order, seat = row
-    
-    canceled_at = datetime.now(UTC)  # Python built-in
-    # Tạo payload cho WebSocket
-    changed_seat = {
-        "id": seat.id,
-        "status": SeatStatus.AVAILABLE.value,
-        "lock_expires_at": None,
-        "locked_by_user_id": None,
-    }
-
-    try:
-        # Đưa ghế về trạng thái AVAILABLE
-        seat.status = SeatStatus.AVAILABLE
-        seat.locked_by_user_id = None
-        seat.lock_expires_at = None
-
-        # Tạo bản ghi lịch sử hủy vé
-        session.add(
-            TicketCancellation(  # Tự viết: ORM model
-                ticket_code=ticket.ticket_code,
-                user_id=order.user_id,
-                event_id=order.event_id,
-                show_id=order.show_id,
-                order_id=order.id,
-                seat_id=seat.id,
-                canceled_price=order_item.price,  # Giá lúc hủy
-                canceled_at=canceled_at,
-            )
-        )
-
-        # Xóa vé và dòng đơn hàng (soft delete bằng cách xóa hẳn + lưu lịch sử)
-        await session.delete(ticket)       # SQLAlchemy: xóa object
-        await session.delete(order_item)   # SQLAlchemy: xóa object
-        await session.flush()              # SQLAlchemy: đẩy SQL nhưng chưa commit
-
-        # Tính lại tổng tiền đơn hàng sau khi xóa
-        # `func.coalesce()` là SQLAlchemy: COALESCE(NULL, 0) → nếu SUM NULL thì trả 0
-        # `func.sum()` là SQLAlchemy: SUM()
-        total_amount = await session.scalar(
-            select(func.coalesce(func.sum(OrderItem.price), 0)).where(OrderItem.order_id == order.id)
-        )
-        updated_total = Decimal(str(total_amount or 0))
-        order.total_amount = updated_total
-        
-        # Nếu đơn hàng không còn dòng nào → đánh dấu CANCELLED
-        if updated_total <= Decimal("0"):
-            order.status = OrderStatus.CANCELLED  # Enum tự viết
-
-        await session.commit()  # SQLAlchemy: lưu tất cả
-    except Exception:
-        await session.rollback()  # SQLAlchemy: hoàn tác
-        raise
-
-    # Xóa cache và broadcast
-    await public_api_cache.invalidate_namespace(user_ticket_cache_namespace(user_id))
-    await seat_ws_manager.broadcast_seat_changes(show_id=seat.show_id or 0, payload=[changed_seat])
-    await public_api_cache.invalidate_namespace(show_seat_cache_namespace(seat.show_id or 0))
+    return active_tickets
 
 
 async def release_expired_locks(session: AsyncSession) -> dict[int, list[dict[str, int | str | None]]]:

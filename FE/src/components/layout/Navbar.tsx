@@ -1,35 +1,18 @@
-﻿import { cn } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { SearchAutocompleteInput } from '@/components/ui/SearchAutocompleteInput'
-import { Search, Menu, X, Bell, LogOut } from 'lucide-react'
+import { Menu, X, Bell, LogOut } from 'lucide-react'
 import { NavLink, Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import LogoSVG from '@/assets/logo.svg'
 import { useAuth } from '@/context/AuthContext'
-import { bookingApi, eventApi } from '@/lib/api'
-import type { EventCard, TicketItem } from '@/types'
+import { helpApi } from '@/lib/api'
+import type { HelpThread } from '@/types'
 
 const navLinks = [
   { label: 'Sự kiện', href: '/search' },
-  { label: 'Hồ sơ', href: '/profile' },
-  { label: 'Vé của tôi', href: '/tickets' },
+  { label: 'Cá nhân', href: '/tickets' },
 ]
-
-type NotificationType = 'ticket' | 'event'
-
-interface AppNotification {
-  id: string
-  type: NotificationType
-  title: string
-  body: string
-  createdAt: string
-}
-
-function classifyTicketStatus(ticket: TicketItem): 'upcoming' | 'past' | 'cancelled' | null {
-  if (ticket.ticket_status === 'cancelled') return 'cancelled'
-  if (ticket.ticket_status !== 'active' || ticket.seat_status !== 'sold') return null
-  return new Date(ticket.show_start_at).getTime() < Date.now() ? 'past' : 'upcoming'
-}
 
 function formatNotificationTime(value: string): string {
   return new Date(value).toLocaleString('vi-VN', {
@@ -54,18 +37,12 @@ export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const [notificationOpen, setNotificationOpen] = useState(false)
-  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [supportThread, setSupportThread] = useState<HelpThread | null>(null)
+  const [openThread, setOpenThread] = useState<HelpThread | null>(null)
+  const [hasUnread, setHasUnread] = useState(false)
   const { user, isAuthenticated, logout } = useAuth()
   const navigate = useNavigate()
   const notifRef = useRef<HTMLDivElement | null>(null)
-
-  const storageScope = useMemo(() => String(user?.id ?? user?.email ?? 'guest'), [user?.id, user?.email])
-  const storageSeenKey = `ticketrush:notifications:seen:${storageScope}`
-  const storageSnapshotKey = `ticketrush:notifications:snapshot:${storageScope}`
-  const visibleNotifications = useMemo(
-    () => (isAuthenticated && user ? notifications : []),
-    [isAuthenticated, notifications, user],
-  )
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20)
@@ -85,110 +62,72 @@ export function Navbar() {
   }, [])
 
   useEffect(() => {
-    if (!isAuthenticated || !user) return
+    if (!isAuthenticated || !user) {
+      setSupportThread(null)
+      setOpenThread(null)
+      setHasUnread(false)
+      return
+    }
 
     let isMounted = true
 
-    const loadNotifications = async () => {
+    const loadSupportThread = async () => {
       try {
-        const [tickets, events] = await Promise.all([
-          bookingApi.myTickets({ limit: 8 }),
-          eventApi.list({ limit: 8 }),
-        ])
+        const thread = await helpApi.createOrGetMyThread()
         if (!isMounted) return
-
-        const now = new Date()
-        const sevenDaysAgo = new Date(now)
-        sevenDaysAgo.setDate(now.getDate() - 7)
-
-        const seenIds = new Set<string>(JSON.parse(localStorage.getItem(storageSeenKey) || '[]'))
-        const previousSnapshot = JSON.parse(localStorage.getItem(storageSnapshotKey) || '{}') as Record<string, string>
-        const nextSnapshot: Record<string, string> = {}
-        const built: AppNotification[] = []
-
-        tickets.forEach((ticket) => {
-          const status = classifyTicketStatus(ticket)
-          if (!status) return
-
-          const ticketKey = String(ticket.ticket_id ?? ticket.ticket_code)
-          nextSnapshot[`ticket:${ticketKey}`] = status
-
-          if (previousSnapshot[`ticket:${ticketKey}`] === status) return
-
-          const statusLabel = status === 'upcoming' ? 'Sắp tới' : status === 'past' ? 'Hết hạn' : 'Đã hủy'
-          built.push({
-            id: `ticket-status-${ticketKey}-${status}`,
-            type: 'ticket',
-            title: 'Cập nhật trạng thái vé',
-            body: `${ticket.ticket_code} chuyển sang trạng thái ${statusLabel}`,
-            createdAt: new Date().toISOString(),
-          })
-        })
-
-        events
-          .filter((event: EventCard) => {
-            const createdAt = new Date(event.created_at)
-            const startAt = new Date(event.start_at)
-            return createdAt >= sevenDaysAgo && startAt >= now
-          })
-          .forEach((event) => {
-            const eventSnapshotKey = `event:${event.id}`
-            nextSnapshot[eventSnapshotKey] = event.created_at
-
-            if (previousSnapshot[eventSnapshotKey] === event.created_at) return
-
-            built.push({
-              id: `event-new-${event.id}`,
-              type: 'event',
-              title: 'Sự kiện mới gần đây',
-              body: `${event.title} vừa được thêm mới`,
-              createdAt: event.created_at,
-            })
-          })
-
-        const uniqueMap = new Map<string, AppNotification>()
-        built
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .forEach((item) => {
-            if (!uniqueMap.has(item.id)) uniqueMap.set(item.id, item)
-          })
-
-        const finalList = Array.from(uniqueMap.values())
-        setNotifications(finalList)
-
-        const mergedSeen = Array.from(new Set([...seenIds]))
-        localStorage.setItem(storageSeenKey, JSON.stringify(mergedSeen))
-        localStorage.setItem(storageSnapshotKey, JSON.stringify(nextSnapshot))
+        setSupportThread(thread)
+        setHasUnread(thread.unread_customer > 0)
       } catch {
-        if (isMounted) setNotifications([])
+        if (!isMounted) return
+        setSupportThread(null)
+        setHasUnread(false)
       }
     }
 
-    void loadNotifications()
+    void loadSupportThread()
     const interval = window.setInterval(() => {
-      void loadNotifications()
-    }, 60000)
+      void loadSupportThread()
+    }, 30000)
 
     return () => {
       isMounted = false
       window.clearInterval(interval)
     }
-  }, [isAuthenticated, user, storageSeenKey, storageSnapshotKey])
+  }, [isAuthenticated, user])
 
-  const hasUnread = useMemo(() => {
-    const seenIds = new Set<string>(JSON.parse(localStorage.getItem(storageSeenKey) || '[]'))
-    return visibleNotifications.some((item) => !seenIds.has(item.id))
-  }, [storageSeenKey, visibleNotifications])
+  const hasNotificationItem = useMemo(
+    () => Boolean(openThread && openThread.last_message_preview.trim()),
+    [openThread],
+  )
 
-  const markAllAsSeen = () => {
-    const ids = visibleNotifications.map((item) => item.id)
-    localStorage.setItem(storageSeenKey, JSON.stringify(ids))
-  }
-
-  const toggleNotifications = () => {
+  const toggleNotifications = async () => {
     const next = !notificationOpen
     setNotificationOpen(next)
-    if (next) markAllAsSeen()
+
+    if (!next) return
+
+    setOpenThread(supportThread)
+    if (!supportThread || supportThread.unread_customer <= 0) return
+
+    setHasUnread(false)
+    setSupportThread((previous) => (previous ? { ...previous, unread_customer: 0 } : previous))
+    try {
+      await helpApi.markMyThreadSeen()
+    } finally {
+      try {
+        const thread = await helpApi.createOrGetMyThread()
+        setSupportThread(thread)
+        setHasUnread(thread.unread_customer > 0)
+      } catch {
+        setSupportThread(null)
+        setHasUnread(false)
+      }
+    }
+  }
+
+  const handleNotificationClick = () => {
+    setNotificationOpen(false)
+    navigate('/help')
   }
 
   const handleLogout = () => {
@@ -239,68 +178,66 @@ export function Navbar() {
           </nav>
 
           <div className="relative w-90 border-1 border-gray-500 rounded-xl">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 customer-text-muted" />
             <SearchAutocompleteInput
               value={searchValue}
               onChange={setSearchValue}
               onSelect={(item) => navigate(`/event/${item.value}`)}
               placeholder="Tìm kiếm sự kiện..."
               scope="events"
-              className="pl-10"
             />
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           {isAuthenticated && user ? (
-            <>
-              <div className="hidden sm:flex items-center gap-3" ref={notifRef}>
-                <div className="relative">
-                  <Button variant="ghost" size="icon" onClick={toggleNotifications} className="relative">
-                    <Bell className="h-5 w-5" />
-                    {hasUnread && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full" />}
-                  </Button>
-
-                  {notificationOpen && (
-                    <div className="absolute right-0 mt-2 w-[340px] max-h-[420px] overflow-auto rounded-xl border customer-border customer-bg-soft shadow-xl p-3 z-50">
-                      <p className="text-sm font-semibold customer-text-header mb-2">Thông báo</p>
-                      {visibleNotifications.length === 0 ? (
-                        <p className="text-sm customer-text-muted">Chưa có thông báo mới.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {visibleNotifications.map((item) => (
-                            <div key={item.id} className="rounded-lg border customer-border p-2.5">
-                              <p className="text-sm font-medium customer-text-header">{item.title}</p>
-                              <p className="text-xs customer-text-muted mt-0.5">{item.body}</p>
-                              <p className="text-[11px] customer-text-muted mt-1">{formatNotificationTime(item.createdAt)}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <Link to="/profile" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                  <img
-                    src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`}
-                    alt={user.name}
-                    className="h-9 w-9 rounded-full customer-bg-soft border-2 border-primary/50"
-                  />
-                  <span className="text-sm font-medium customer-text-header max-w-[120px] truncate">{user.name}</span>
-                </Link>
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleLogout}
-                  className="gap-2 customer-text-muted hover:customer-text-header"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Đăng xuất
+            <div className="hidden sm:flex items-center gap-3" ref={notifRef}>
+              <div className="relative">
+                <Button variant="ghost" size="icon" onClick={() => void toggleNotifications()} className="relative">
+                  <Bell className="h-5 w-5" />
+                  {hasUnread && <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-red-500" />}
                 </Button>
+
+                {notificationOpen && (
+                  <div className="absolute left-0 mt-2 w-[340px] max-h-[420px] overflow-auto rounded-xl border border border-[var(--customer-bg-opp)] customer-bg-surface shadow-xl p-3 z-50">
+                    <p className="text-sm font-semibold customer-text-header mb-2">Thông báo</p>
+                    {!hasNotificationItem ? (
+                      <p className="text-sm customer-text-muted">Chưa có thông báo mới.</p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleNotificationClick}
+                        className="w-full rounded-lg border customer-border p-2.5 text-left transition hover:bg-white/5"
+                      >
+                        <p className="text-sm font-medium customer-text-header">Bạn có phản hồi mới từ hỗ trợ</p>
+                        <p className="text-xs customer-text-muted mt-0.5">{openThread?.last_message_preview}</p>
+                        <p className="text-[11px] customer-text-muted mt-1">
+                          {openThread ? formatNotificationTime(openThread.last_message_at) : ''}
+                        </p>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
-            </>
+
+              <div className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                <img
+                  src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`}
+                  alt={user.name}
+                  className="h-9 w-9 rounded-full customer-bg-soft border-2 border-primary/50"
+                />
+                <span className="text-sm font-medium customer-text-header max-w-[120px] truncate">{user.name}</span>
+              </div>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                className="gap-2 customer-text-muted hover:customer-text-header"
+              >
+                <LogOut className="h-4 w-4" />
+                Đăng xuất
+              </Button>
+            </div>
           ) : (
             <>
               <Button variant="ghost" size="sm" className="hidden sm:inline-flex" onClick={() => navigate('/login')}>

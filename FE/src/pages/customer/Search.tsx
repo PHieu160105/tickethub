@@ -11,6 +11,7 @@ import { Calendar, ChevronLeft, ChevronRight, DollarSign, MapPin, Search as Sear
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80'
+const DEFAULT_PRICE_LIMIT = 5_000_000
 
 function formatDate(date: string) {
   return new Date(date).toLocaleDateString('vi-VN', {
@@ -28,7 +29,8 @@ export default function Search() {
   const [searchQuery, setSearchQuery] = useState(initialQuery)
   const [selectedCategory, setSelectedCategory] = useState(initialCategory || 'all')
   const [selectedVenue, setSelectedVenue] = useState('all')
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 5_000_000])
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, DEFAULT_PRICE_LIMIT])
+  const [hasTouchedPriceRange, setHasTouchedPriceRange] = useState(false)
   const [sortBy, setSortBy] = useState<'recommended' | 'date' | 'title'>('recommended')
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 6
@@ -58,12 +60,28 @@ export default function Search() {
     return ['all', ...uniqueVenues]
   }, [events])
 
+  const priceRangeLimit = useMemo(() => {
+    const highestEventPrice = events.reduce((currentMax, event) => Math.max(currentMax, Number(event.max_price) || 0), 0)
+    return Math.max(DEFAULT_PRICE_LIMIT, highestEventPrice)
+  }, [events])
+
+  useEffect(() => {
+    if (!hasTouchedPriceRange) {
+      setPriceRange([0, priceRangeLimit])
+      return
+    }
+
+    setPriceRange((prev) => (prev[1] > priceRangeLimit ? [0, priceRangeLimit] : prev))
+  }, [hasTouchedPriceRange, priceRangeLimit])
+
   const filteredResults = useMemo(() => {
     let results = [...events]
 
     if (selectedVenue !== 'all') {
       results = results.filter((event) => event.venue === selectedVenue)
     }
+
+    results = results.filter((event) => (Number(event.max_price) || 0) <= priceRange[1])
 
     if (sortBy === 'date') {
       results.sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
@@ -72,12 +90,13 @@ export default function Search() {
     }
 
     return results
-  }, [events, selectedVenue, sortBy])
+  }, [events, priceRange, selectedVenue, sortBy])
 
   const totalPages = Math.ceil(filteredResults.length / itemsPerPage)
   const paginatedResults = filteredResults.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
-  const activeFiltersCount = Number(selectedCategory !== 'all') + Number(selectedVenue !== 'all')
+  const activeFiltersCount =
+    Number(selectedCategory !== 'all') + Number(selectedVenue !== 'all') + Number(priceRange[1] < priceRangeLimit)
 
   const onSearchSubmit = () => {
     setCurrentPage(1)
@@ -96,7 +115,8 @@ export default function Search() {
     setSearchQuery('')
     setSelectedCategory('all')
     setSelectedVenue('all')
-    setPriceRange([0, 5_000_000])
+    setHasTouchedPriceRange(false)
+    setPriceRange([0, priceRangeLimit])
     setSortBy('recommended')
     setCurrentPage(1)
     setUrlParams({}, { replace: true })
@@ -207,10 +227,11 @@ export default function Search() {
                   <input
                     type="range"
                     min={0}
-                    max={5_000_000}
+                    max={2_000_000}
                     step={50_000}
                     value={priceRange[1]}
                     onChange={(event) => {
+                      setHasTouchedPriceRange(true)
                       setPriceRange([0, Number(event.target.value)])
                       setCurrentPage(1)
                     }}

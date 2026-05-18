@@ -100,14 +100,14 @@ export default function Register() {
           <Logo /> */}
 
           {/* Thẻ form đăng ký. */}
-          <div className="backdrop-blur-xl bg-slate-900/80 rounded-xl p-8 md:p-10 shadow-2xl relative overflow-hidden group border border-white/10">
+          <div className="backdrop-blur-xl customer-bg-surface rounded-xl p-8 md:p-10 shadow-2xl relative overflow-hidden group border border-[var(--customer-bg-opp)]">
             {/* Lớp ánh sáng nhẹ khi hover, chỉ dùng để tăng chiều sâu thị giác. */}
             <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
             
             <div className="relative z-10">
               <div className="mb-8 text-center">
-                <h2 className="text-3xl font-headline font-bold tracking-tight text-white mb-2">
-                  Tham gia <span className="text-primary">TicketRush</span>
+                <h2 className="text-3xl font-headline font-bold tracking-tight customer-text-header mb-2">
+                  Tham gia <span className="text-[var(--customer-bg-opt)]">TicketRush</span>
                 </h2>
                 <p className="text-slate-400 text-sm font-body">
                   Tạo tài khoản để đặt vé nhanh và quản lý vé điện tử của bạn.
@@ -123,7 +123,7 @@ export default function Register() {
                   <div className="relative group/input">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
                     <input
-                      className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-4 text-white placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 transition-all duration-300"
+                      className="w-full customer-bg-page border-0 rounded-lg py-4 pl-12 pr-4 customer-text-body placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 focus:text-white transition-all duration-300"
                       placeholder="Nhập họ và tên"
                       type="text"
                       name="fullName"
@@ -144,7 +144,7 @@ export default function Register() {
                     <div className="relative group/input">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
                       <input
-                        className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-4 text-white placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 transition-all duration-300"
+                        className="w-full customer-bg-page border-0 rounded-lg py-4 pl-12 pr-4 customer-text-body placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 focus:text-white transition-all duration-300"
                         placeholder="ten@example.com"
                         type="email"
                         name="email"
@@ -163,7 +163,7 @@ export default function Register() {
                     <div className="relative group/input">
                       <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
                       <input
-                        className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-4 text-white placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 transition-all duration-300"
+                        className="w-full customer-bg-page border-0 rounded-lg py-4 pl-12 pr-4 customer-text-body placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 focus:text-white transition-all duration-300"
                         placeholder="090 123 4567"
                         type="tel"
                         name="phone"
@@ -184,7 +184,7 @@ export default function Register() {
                     <div className="relative group/input">
                       <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
                       <input
-                        className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-4 text-white placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 transition-all duration-300"
+                        className="w-full customer-bg-page border-0 rounded-lg py-4 pl-12 pr-4 customer-text-body placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 focus:text-white transition-all duration-300"
                         type="date"
                         name="dateOfBirth"
                         value={formData.dateOfBirth}
@@ -202,7 +202,7 @@ export default function Register() {
                     <div className="relative group/input">
                       <Users className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
                       <select
-                        className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-4 text-white focus:ring-0 focus:bg-slate-800 transition-all duration-300 appearance-none cursor-pointer"
+                        className="w-full customer-bg-page border-0 rounded-lg py-4 pl-12 pr-4 text-slate-500 focus:ring-0 focus:bg-slate-800 transition-all duration-300 appearance-none cursor-pointer"
                         name="gender"
                         value={formData.gender}
                         onChange={handleChange}
@@ -233,7 +233,7 @@ export default function Register() {
                     <div className="relative group/input">
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
                       <input
-                        className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-12 text-white placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 transition-all duration-300"
+                        className="w-full customer-bg-page border-0 rounded-lg py-4 pl-12 pr-12 customer-text-body placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 focus:text-white transition-all duration-300"
                         placeholder="••••••••"
                         type={showPassword ? 'text' : 'password'}
                         name="password"
@@ -244,7 +244,7 @@ export default function Register() {
                       />
                       <button
                         type="button"
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-primary"
                         onClick={() => setShowPassword(!showPassword)}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -260,7 +260,7 @@ export default function Register() {
                     <div className="relative group/input">
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within/input:text-primary transition-colors duration-300" />
                       <input
-                        className="w-full bg-slate-800 border-0 rounded-lg py-4 pl-12 pr-12 text-white placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 transition-all duration-300"
+                        className="w-full customer-bg-page border-0 rounded-lg py-4 pl-12 pr-12 customer-text-body placeholder:text-slate-500 focus:ring-0 focus:bg-slate-800 focus:text-white transition-all duration-300"
                         placeholder="••••••••"
                         type={showConfirmPassword ? 'text' : 'password'}
                         name="confirmPassword"
@@ -271,7 +271,7 @@ export default function Register() {
                       />
                       <button
                         type="button"
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-primary"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       >
                         {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -292,7 +292,7 @@ export default function Register() {
                   />
                   <label className="text-xs text-slate-400 font-body leading-relaxed cursor-pointer select-none">
                     Tôi đồng ý với{' '}
-                    <a href="#terms" className="text-secondary font-bold hover:underline decoration-secondary/30 underline-offset-4">
+                    <a href="/info#dieu_khoan" className="text-secondary font-bold hover:underline decoration-secondary/30 underline-offset-4">
                       điều khoản sử dụng
                     </a>
                     {' '}và chính sách xử lý dữ liệu cá nhân của TicketRush.
@@ -355,7 +355,7 @@ export default function Register() {
                   disabled={isLoading}
                 >
                   <FcGoogle className="w-5 h-5" />
-                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-white">
+                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-slate-500">
                     Google
                   </span>
                 </button>
@@ -365,7 +365,7 @@ export default function Register() {
                   onClick={() => startDiscordLogin()}
                 >
                   <SiDiscord className="w-5 h-5 text-[#5865F2]" />
-                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-white">
+                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-slate-800">
                     Discord
                   </span>
                 </button>

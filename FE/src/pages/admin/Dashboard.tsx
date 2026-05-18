@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Link } from 'react-router-dom'
+import { Activity, BarChart3, CalendarDays, DollarSign, RefreshCcw, Ticket, Users } from 'lucide-react'
+
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
 import type { DashboardSummary, OccupancyItem, RevenuePoint } from '@/types'
-import { Activity, CalendarDays, DollarSign, RefreshCcw, Ticket, Users, BarChart3 } from 'lucide-react'
-import { Link } from 'react-router-dom'
 
 const DEFAULT_SUMMARY: DashboardSummary = {
   total_revenue: 0,
   tickets_sold: 0,
-  cancelled_tickets: 0,
   active_events: 0,
   waiting_queue_users: 0,
 }
@@ -55,7 +55,7 @@ export default function AdminDashboard() {
       setRevenue(revenueRes)
       setOccupancy(occupancyRes)
     } catch (errorValue) {
-      setError(extractApiErrorMessage(errorValue, 'Không thể tải dashboard. Vui lòng thử lại.'))
+      setError(extractApiErrorMessage(errorValue, 'Không thể tải dashboard.'))
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -89,7 +89,7 @@ export default function AdminDashboard() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-2">
             <p className="text-sm font-bold admin-text-body">Tổng doanh thu</p>
@@ -100,12 +100,6 @@ export default function AdminDashboard() {
           <CardContent className="pt-2">
             <p className="text-sm font-bold admin-text-body">Vé đã bán</p>
             <p className="text-xl font-bold text-primary mt-2">{summary.tickets_sold.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-2">
-            <p className="text-sm font-bold admin-text-body">Vé đã hủy</p>
-            <p className="text-xl font-bold text-yellow-400 mt-2">{summary.cancelled_tickets.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card>
@@ -144,7 +138,7 @@ export default function AdminDashboard() {
                         <span>{formatCurrency(point.revenue)}</span>
                       </div>
                       <div className="h-2 rounded bg-white/10 overflow-hidden">
-                        <div className="h-full" style={{background: `linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))`, width: `${width}%` }} />
+                        <div className="h-full" style={{ background: `linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))`, width: `${width}%` }} />
                       </div>
                     </div>
                   )
@@ -182,7 +176,7 @@ export default function AdminDashboard() {
                   <div className="h-2 rounded bg-white/10 mt-2 overflow-hidden">
                     <div
                       className="h-full"
-                      style={{background: `linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))`, width: `${Math.min(item.occupancy_rate, 100)}%` }}
+                      style={{ background: `linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))`, width: `${Math.min(item.occupancy_rate, 100)}%` }}
                     />
                   </div>
                 </div>
@@ -221,7 +215,7 @@ export default function AdminDashboard() {
 
       <div className="text-xs text-gray-500 flex items-center gap-2">
         <CalendarDays className="h-4 w-4" />
-        Dữ liệu được tải lúc mở trang và khi bấm "Làm mới".
+        Dữ liệu được tải lúc mở trang và khi bấm Làm mới.
       </div>
     </div>
   )

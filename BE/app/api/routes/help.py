@@ -12,6 +12,7 @@ from app.core.db import get_db_session
 from app.models.enums import UserRole
 from app.models.help import HelpMessage, HelpThread
 from app.models.user import User
+from app.schemas.common import APIMessage
 from app.schemas.help import HelpMessageCreateRequest, HelpMessageResponse, HelpThreadResponse
 from app.ws.connection_manager import help_ws_manager
 
@@ -77,6 +78,47 @@ def _thread_to_response(row: HelpThread) -> HelpThreadResponse:
     )
 
 
+async def _mark_customer_thread_seen(session: AsyncSession, thread: HelpThread) -> None:
+    """Reset unread state for the customer side of one support thread."""
+
+    now = datetime.now(timezone.utc)
+    rows = list(
+        await session.scalars(
+            select(HelpMessage).where(
+                HelpMessage.thread_id == thread.id,
+                HelpMessage.sender_role == UserRole.ADMIN,
+                HelpMessage.read_at.is_(None),
+            )
+        )
+    )
+    for row in rows:
+        row.read_at = now
+    thread.unread_customer = 0
+
+
+async def _mark_admin_threads_seen(session: AsyncSession, threads: list[HelpThread]) -> None:
+    """Reset unread state for all admin-visible support threads."""
+
+    if not threads:
+        return
+
+    now = datetime.now(timezone.utc)
+    thread_ids = [thread.id for thread in threads]
+    rows = list(
+        await session.scalars(
+            select(HelpMessage).where(
+                HelpMessage.thread_id.in_(thread_ids),
+                HelpMessage.sender_role == UserRole.CUSTOMER,
+                HelpMessage.read_at.is_(None),
+            )
+        )
+    )
+    for row in rows:
+        row.read_at = now
+    for thread in threads:
+        thread.unread_admin = 0
+
+
 @router.post("/threads/me", response_model=HelpThreadResponse)
 async def create_or_get_my_thread(
     session: AsyncSession = Depends(get_db_session),
@@ -130,6 +172,27 @@ async def get_my_messages(
         )
     )
     return [_message_to_response(row) for row in rows]
+
+
+@router.post("/threads/me/mark-seen", response_model=APIMessage)
+async def mark_my_thread_seen(
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+) -> APIMessage:
+    """Mark all admin replies in the customer's latest support thread as seen."""
+
+    if current_user.role != UserRole.CUSTOMER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Chỉ khách hàng mới được đánh dấu đã xem")
+
+    thread = await _get_latest_customer_thread(session, current_user.id)
+    if not thread:
+        return APIMessage(detail="Không có thông báo hỗ trợ để đánh dấu đã xem")
+
+    if thread.unread_customer > 0:
+        await _mark_customer_thread_seen(session, thread)
+        await session.commit()
+
+    return APIMessage(detail="Đã đánh dấu phản hồi hỗ trợ là đã xem")
 
 
 @router.post("/threads/me/messages", response_model=HelpMessageResponse)
@@ -206,6 +269,24 @@ async def admin_list_threads(
         reverse=True,
     )
     return [_thread_to_response(row) for row in deduped_rows]
+
+
+@router.post("/admin/threads/mark-seen", response_model=APIMessage)
+async def admin_mark_threads_seen(
+    session: AsyncSession = Depends(get_db_session),
+    _: User = Depends(get_current_active_admin),
+) -> APIMessage:
+    """Mark all unread customer support notifications as seen for admin."""
+
+    threads = list(
+        await session.scalars(select(HelpThread).where(HelpThread.unread_admin > 0))
+    )
+    if not threads:
+        return APIMessage(detail="Không có thông báo hỗ trợ chưa xem")
+
+    await _mark_admin_threads_seen(session, threads)
+    await session.commit()
+    return APIMessage(detail="Đã đánh dấu thông báo hỗ trợ là đã xem")
 
 
 @router.get("/admin/threads/{thread_id}/messages", response_model=list[HelpMessageResponse])

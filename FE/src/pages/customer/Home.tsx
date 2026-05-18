@@ -181,7 +181,7 @@ export default function Home() {
               <Link
                 key={category}
                 to={`/search?category=${encodeURIComponent(category)}`}
-                className="rounded-full border border-white/20 px-4 py-2 text-sm text-slate-200 hover:bg-white/10"
+                className="rounded-full border border-slate px-4 py-2 text-sm text-slate-500 hover:bg-white/10"
               >
                 {category}
               </Link>

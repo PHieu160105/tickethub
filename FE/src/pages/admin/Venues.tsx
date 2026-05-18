@@ -96,7 +96,7 @@ function computeCentroid(points: { x: number; y: number }[]) {
 
 function renderBackgroundPreview(source: string | null) {
     if (!source) {
-        return <div className="text-sm text-slate-400">Chưa có dữ liệu background.</div>
+        return <div className="text-sm text-slate-500">Chưa có dữ liệu background.</div>
     }
 
     if (isSvgMarkup(source)) {
@@ -109,7 +109,7 @@ function renderBackgroundPreview(source: string | null) {
     }
 
     return (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+        <div className="rounded-xl border border-white/10 customer-bg-page p-3">
             <img src={source} alt="Venue background preview" className="max-h-[420px] w-full rounded-lg object-contain" />
         </div>
     )
@@ -1593,7 +1593,7 @@ export default function AdminVenues() {
             <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
                     <h1 className="text-3xl font-black admin-text-body">Venue Studio</h1>
-                    <p className="text-slate-400 mt-1 max-w-2xl">
+                    <p className="text-slate-500 mt-1 max-w-2xl">
                         Thiết lập địa điểm theo từng bước: tạo địa điểm, tải nền sơ đồ, tạo bố cục, khai báo khu vực và dựng ghế.
                     </p>
                 </div>
@@ -1624,9 +1624,9 @@ export default function AdminVenues() {
                 <CardContent className="py-5 space-y-4">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                         <div>
-                            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Các bước thực hiện</p>
-                            <h2 className="text-xl font-black text-white">{stepSummary.title}</h2>
-                            <p className="mt-1 text-sm text-slate-400">{stepSummary.description}</p>
+                            <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Các bước thực hiện</p>
+                            <h2 className="text-xl font-black customer-text-header">{stepSummary.title}</h2>
+                            <p className="mt-1 text-sm text-slate-500">{stepSummary.description}</p>
                         </div>
                         <div className="flex gap-2">
                             <Button variant="outline" onClick={goToPreviousStep} disabled={activeStepIndex === 0}>
@@ -1648,14 +1648,14 @@ export default function AdminVenues() {
                                     onClick={() => goToStep(step)}
                                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                                         isActive
-                                            ? 'border-brand-red/40 bg-brand-red/10'
+                                            ? 'border-brand-red/40 bg-slate/10'
                                             : unlocked
-                                                ? 'border-white/10 bg-white/5 hover:bg-white/10'
+                                                ? 'border-white/10 customer-bg-page hover:bg-white/10'
                                                 : 'border-white/5 bg-white/[0.03] opacity-60'
                                     }`}
                                 >
-                                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Bước {index + 1}</p>
-                                    <p className="mt-1 font-semibold text-white">{STEP_META[step].title}</p>
+                                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Bước {index + 1}</p>
+                                    <p className="mt-1 font-semibold customer-text-body">{STEP_META[step].title}</p>
                                 </button>
                             )
                         })}
@@ -1666,42 +1666,42 @@ export default function AdminVenues() {
             <div className={`grid gap-6 ${studioStep === 'builder' ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-3'}`}>
                 <Card className={`xl:col-span-1 bg-space-900/90 border-white/10 ${studioStep === 'builder' ? 'hidden' : ''}`}>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-white">
-                            <Building2 className="h-5 w-5 text-brand-red" /> Danh sách địa điểm
+                        <CardTitle className="flex items-center gap-2 customer-text-body">
+                            <Building2 className="h-5 w-5 text-primary" /> Danh sách địa điểm
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-3">
                             <div>
-                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Tên địa điểm</label>
+                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Tên địa điểm</label>
                                 <Input value={venueForm.name} onChange={(event) => setVenueForm({ ...venueForm, name: event.target.value })} />
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Thành phố</label>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Thành phố</label>
                                     <Input value={venueForm.city} onChange={(event) => setVenueForm({ ...venueForm, city: event.target.value })} />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Loại hình</label>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Loại hình</label>
                                     <Input value={venueForm.venue_type} onChange={(event) => setVenueForm({ ...venueForm, venue_type: event.target.value })} />
                                 </div>
                             </div>
                             <div className="grid grid-cols-3 gap-3">
                                 <div>
-                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Sức chứa</label>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Sức chứa</label>
                                     <Input value={venueForm.capacity} onChange={(event) => setVenueForm({ ...venueForm, capacity: event.target.value })} />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Rộng</label>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Rộng</label>
                                     <Input value={venueForm.width} onChange={(event) => setVenueForm({ ...venueForm, width: event.target.value })} />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Cao</label>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Cao</label>
                                     <Input value={venueForm.height} onChange={(event) => setVenueForm({ ...venueForm, height: event.target.value })} />
                                 </div>
                             </div>
                             <div>
-                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Địa chỉ</label>
+                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Địa chỉ</label>
                                 <Input value={venueForm.address} onChange={(event) => setVenueForm({ ...venueForm, address: event.target.value })} />
                             </div>
                             <div className="flex gap-2">
@@ -1719,9 +1719,9 @@ export default function AdminVenues() {
 
                         <div className="border-t border-white/10 pt-4 space-y-2">
                             {loading ? (
-                                <p className="text-sm text-slate-400">Đang tải danh sách địa điểm...</p>
+                                <p className="text-sm text-slate-500">Đang tải danh sách địa điểm...</p>
                             ) : venues.length === 0 ? (
-                                <p className="text-sm text-slate-400">Chưa có địa điểm nào.</p>
+                                <p className="text-sm text-slate-500">Chưa có địa điểm nào.</p>
                             ) : (
                                 venues.map((venue) => (
                                     <button
@@ -1731,15 +1731,15 @@ export default function AdminVenues() {
                                             if (!confirmLeaveBuilderIfDirty()) return
                                             void loadVenueBundle(venue.id)
                                         }}
-                                        className={`w-full rounded-xl border px-4 py-3 text-left transition ${selectedVenueId === venue.id ? 'border-brand-red/40 bg-brand-red/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                                        className={`w-full rounded-xl border px-4 py-3 text-left transition ${selectedVenueId === venue.id ? 'border-brand-red/40 bg-slate-500/10' : 'border-white/10 customer-bg-page hover:bg-white/10'}`}
                                     >
                                         <div className="flex items-center justify-between gap-3">
                                             <div>
-                                                <p className="font-semibold text-white">{venue.name}</p>
-                                                <p className="text-xs text-slate-400">{venue.city ?? 'N/A'} · {venue.venue_type}</p>
+                                                <p className="font-semibold customer-text-body">{venue.name}</p>
+                                                <p className="text-xs text-slate-500">{venue.city ?? 'N/A'} · {venue.venue_type}</p>
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0">
-                                                <span className="text-xs text-slate-400">{venue.capacity ?? 0} chỗ</span>
+                                                <span className="text-xs text-slate-500">{venue.capacity ?? 0} chỗ</span>
                                                 <button
                                                     type="button"
                                                     className="rounded p-1.5 hover:bg-white/10"
@@ -1763,37 +1763,37 @@ export default function AdminVenues() {
                 <div className={`${studioStep === 'builder' ? 'space-y-6' : 'xl:col-span-2 space-y-6'}`}>
                     <Card className={`bg-space-900/90 border-white/10 ${studioStep === 'venue' ? '' : 'hidden'}`}>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-white">
-                            <Building2 className="h-5 w-5 text-brand-red" /> Thiết lập địa điểm
+                        <CardTitle className="flex items-center gap-2 customer-text-body">
+                            <Building2 className="h-5 w-5 text-primary" /> Thiết lập địa điểm
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3 text-sm text-slate-300">
+                    <CardContent className="space-y-3 text-sm text-slate-500">
                         <p>Tạo địa điểm mới hoặc chọn một địa điểm có sẵn ở cột trái.</p>
                         <p>Khi địa điểm đã sẵn sàng, dùng nút `Tiếp theo` hoặc bấm thẳng vào bước `Nền sơ đồ` để tải nền lên.</p>
-                        <p className="text-slate-400">Anh có thể quay lại bước này để sửa địa điểm bất kỳ lúc nào mà không làm mất nền, bố cục hay dữ liệu dựng ghế.</p>
+                        <p className="text-slate-500">Bạn có thể quay lại bước này để sửa địa điểm bất kỳ lúc nào mà không làm mất nền, bố cục hay dữ liệu dựng ghế.</p>
                     </CardContent>
                 </Card>
 
                     <Card className={`bg-space-900/90 border-white/10 ${studioStep === 'background' ? '' : 'hidden'}`}>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-white">
-                                <FileUp className="h-5 w-5 text-brand-red" /> Nền sơ đồ
+                            <CardTitle className="flex items-center gap-2 customer-text-body">
+                                <FileUp className="h-5 w-5 text-yellow" /> Nền sơ đồ
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <p className="text-sm text-slate-400">{selectedVenueLabel}</p>
+                            <p className="text-sm text-slate-500">{selectedVenueLabel}</p>
                             <div className="flex flex-col md:flex-row gap-3">
                                 <input
                                     type="file"
                                     accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp"
-                                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 file:mr-4 file:rounded-md file:border-0 file:bg-brand-red file:px-4 file:py-2 file:text-white"
+                                    className="w-full rounded-lg border border-white/10 customer-bg-page px-3 py-2 text-sm text-slate-500 file:mr-4 file:rounded-md file:border-0 file:bg-brand-red file:px-4 file:py-2 file:customer-text-body"
                                     onChange={(event) => handleBackgroundFileChange(event.target.files?.[0] ?? null)}
                                 />
                                 <Button variant="outline" onClick={() => void handleUploadBackground()} disabled={!selectedVenueId || !backgroundFile} isLoading={busy}>
                                     Tải lại
                                 </Button>
                             </div>
-                            <p className="text-xs text-slate-400">
+                            <p className="text-xs text-slate-500">
                                 Chọn file là hệ thống sẽ tự tải lên ngay. Anh có thể quay lại bước này bất kỳ lúc nào để thay nền.
                             </p>
 
@@ -1807,7 +1807,7 @@ export default function AdminVenues() {
                                     </span>
                                 )}
                                 {selectedVenue?.background_processed && (
-                                    <span className="rounded-full border border-brand-yellow/20 bg-brand-yellow/10 px-3 py-1 uppercase tracking-[0.2em] text-brand-yellow">
+                                    <span className="rounded-full border border-brand-yellow/20 bg-/10 px-3 py-1 uppercase tracking-[0.2em] text-brand-yellow">
                                         Có dữ liệu ghế đã phân tích
                                     </span>
                                 )}
@@ -1829,20 +1829,20 @@ export default function AdminVenues() {
                             {studioTab === 'builder' ? (
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                     <div>
-                                        <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-400">Nền hiện tại</p>
+                                        <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-500">Nền hiện tại</p>
                                         {renderBackgroundPreview(selectedVenue?.background_source ?? selectedVenue?.svg_source ?? null)}
                                     </div>
                                     <div className="space-y-3">
                                         <div>
-                                            <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-400">Chế độ nền</p>
-                                            <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300 space-y-2">
+                                            <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-500">Chế độ nền</p>
+                                            <div className="rounded-xl border border-white/10 customer-bg-page p-4 text-sm text-slate-500 space-y-2">
                                                 <p>Trình dựng hoạt động ngay sau khi tải nền lên. Phân tích chỉ là bước tùy chọn cho SVG.</p>
                                                 <p>Định dạng hỗ trợ: SVG, PNG, JPG/JPEG, WEBP.</p>
                                             </div>
                                         </div>
                                         {isSvgBackground && selectedVenue?.background_processed && (
                                             <div>
-                                                <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-400">Nguồn hiển thị trên canvas</p>
+                                                <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-500">Nguồn hiển thị trên canvas</p>
                                                 <div className="flex gap-2">
                                                     <Button variant={backgroundViewMode === 'original' ? 'primary' : 'outline'} onClick={() => setBackgroundViewMode('original')}>
                                                         Bản gốc
@@ -1857,10 +1857,10 @@ export default function AdminVenues() {
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
-                                        <div className="space-y-1 text-sm text-slate-300">
+                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-xl border border-white/10 customer-bg-page p-4">
+                                        <div className="space-y-1 text-sm text-slate-500">
                                             <p>Phân tích SVG là công cụ tùy chọn để tự tìm seat markers từ nền SVG hiện tại.</p>
-                                            <p className="text-slate-400">Nếu phân tích thất bại, trình dựng thủ công vẫn hoạt động bình thường.</p>
+                                            <p className="text-slate-500">Nếu phân tích thất bại, trình dựng thủ công vẫn hoạt động bình thường.</p>
                                         </div>
                                         <Button variant="primary" onClick={() => void handleProcessSvg()} disabled={!selectedVenueId || !selectedVenue?.can_parse_background} isLoading={busy}>
                                             <Check className="h-4 w-4" /> Chạy phân tích
@@ -1869,11 +1869,11 @@ export default function AdminVenues() {
 
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                         <div>
-                                            <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-400">SVG gốc</p>
+                                            <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-500">SVG gốc</p>
                                             {renderBackgroundPreview(selectedVenue?.background_source ?? selectedVenue?.svg_source ?? null)}
                                         </div>
                                         <div>
-                                            <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-400">SVG đã phân tích</p>
+                                            <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-500">SVG đã phân tích</p>
                                             {renderBackgroundPreview(selectedVenue?.background_processed ?? selectedVenue?.svg_processed ?? null)}
                                         </div>
                                     </div>
@@ -1885,8 +1885,8 @@ export default function AdminVenues() {
                     <div className={`grid grid-cols-1 xl:grid-cols-2 gap-6 ${studioStep === 'layout' || studioStep === 'section' ? '' : 'hidden'}`}>
                         <Card className={`bg-space-900/90 border-white/10 ${studioStep === 'layout' || studioStep === 'section' ? '' : 'hidden'}`}>
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-white">
-                                    <Layers3 className="h-5 w-5 text-brand-yellow" /> Bố cục
+                                <CardTitle className="flex items-center gap-2 customer-text-body ">
+                                    <Layers3 className="h-5 w-5 text-violet" /> Bố cục
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
@@ -1911,7 +1911,7 @@ export default function AdminVenues() {
 
                                 <div className="space-y-2 border-t border-white/10 pt-4">
                                     {layouts.length === 0 ? (
-                                        <p className="text-sm text-slate-400">Chưa có bố cục nào.</p>
+                                        <p className="text-sm text-slate-500">Chưa có bố cục nào.</p>
                                     ) : (
                                         layouts.map((layout) => (
                                             <button
@@ -1921,12 +1921,12 @@ export default function AdminVenues() {
                                                     if (!confirmLeaveBuilderIfDirty()) return
                                                     setSelectedLayoutId(layout.id)
                                                 }}
-                                                className={`w-full rounded-xl border px-4 py-3 text-left transition ${selectedLayoutId === layout.id ? 'border-brand-yellow/40 bg-brand-yellow/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                                                className={`w-full rounded-xl border px-4 py-3 text-left transition ${selectedLayoutId === layout.id ? 'border-brand-yellow/40 bg-slate-500/10' : 'border-white/10 customer-bg-page hover:bg-white/10'}`}
                                             >
                                                 <div className="flex items-center justify-between gap-3">
                                                     <div>
-                                                        <p className="font-semibold text-white">{layout.name}</p>
-                                                        <p className="text-xs text-slate-400">Thứ tự: {layout.sort_order}</p>
+                                                        <p className="font-semibold customer-text-body ">{layout.name}</p>
+                                                        <p className="text-xs text-slate-500">Thứ tự: {layout.sort_order}</p>
                                                     </div>
                                                     <div className="flex gap-1">
                                                         <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={(event) => { event.stopPropagation(); startEditLayout(layout) }}>
@@ -1946,13 +1946,13 @@ export default function AdminVenues() {
 
                         <Card className={`bg-space-900/90 border-white/10 ${studioStep === 'section' ? '' : 'hidden'}`}>
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-white">
+                                <CardTitle className="flex items-center gap-2 customer-text-body ">
                                     <Shapes className="h-5 w-5 text-brand-red" /> Khu vực ghế
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <p className="text-sm text-slate-400">
-                                    Bố cục đang chọn: <span className="text-white">{selectedLayout?.name ?? 'Chưa chọn'}</span>
+                                <p className="text-sm text-slate-500">
+                                    Bố cục đang chọn: <span className="customer-text-body ">{selectedLayout?.name ?? 'Chưa chọn'}</span>
                                 </p>
                                 <div className="space-y-3">
                                     <Input placeholder="Tên khu vực" value={sectionForm.name} onChange={(event) => setSectionForm({ ...sectionForm, name: event.target.value })} />
@@ -1984,15 +1984,15 @@ export default function AdminVenues() {
 
                                 <div className="space-y-2 border-t border-white/10 pt-4">
                                     {sections.length === 0 ? (
-                                        <p className="text-sm text-slate-400">Chưa có khu vực nào.</p>
+                                        <p className="text-sm text-slate-500">Chưa có khu vực nào.</p>
                                     ) : (
                                         sections.map((section) => (
-                                            <div key={section.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                                            <div key={section.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 customer-bg-page px-4 py-3">
                                                 <div className="flex items-center gap-3 min-w-0">
                                                     <span className="h-4 w-4 rounded-full border border-white/20" style={{ backgroundColor: section.color }} />
                                                     <div className="min-w-0">
-                                                        <p className="truncate font-semibold text-white">{section.name}</p>
-                                                        <p className="text-xs text-slate-400">{section.code} · {Number(section.price_base).toLocaleString('vi-VN')}</p>
+                                                        <p className="truncate font-semibold customer-text-body ">{section.name}</p>
+                                                        <p className="text-xs text-slate-500">{section.code} · {Number(section.price_base).toLocaleString('vi-VN')}</p>
                                                     </div>
                                                 </div>
                                                 <div className="flex gap-1 shrink-0">
@@ -2014,7 +2014,7 @@ export default function AdminVenues() {
                     <div className={`grid grid-cols-1 xl:grid-cols-[1.35fr_0.95fr] gap-6 ${studioStep === 'builder' ? '' : 'hidden'}`}>
                         <Card className="bg-space-900/90 border-white/10">
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-white">
+                                <CardTitle className="flex items-center gap-2 customer-text-body ">
                                     <MapPin className="h-5 w-5 text-brand-yellow" /> Trình dựng bố cục
                                 </CardTitle>
                             </CardHeader>
@@ -2033,7 +2033,7 @@ export default function AdminVenues() {
                                     gridSize={snapToGrid ? '5% 5%' : '10% 10%'}
                                     aspectRatio={selectedVenue ? selectedVenue.width / selectedVenue.height : undefined}
                                     toolbar={
-                                        <div className="flex flex-wrap items-center gap-2 text-white">
+                                        <div className="flex flex-wrap items-center gap-2 customer-text-body ">
                                             <Button size="icon" variant={activeBuilderPanel === 'seat' ? 'primary' : 'outline'} onClick={() => { resetSeatForm(); setSelectedSeatIds([]); setActiveBuilderPanel('seat'); setPlacementMode('seat') }} title="Thêm một ghế">
                                                 <Plus className="h-4 w-4" />
                                             </Button>
@@ -2066,7 +2066,7 @@ export default function AdminVenues() {
                                                     {editingPolygonId ? 'Thoát chỉnh polygon' : 'Xóa điểm nháp'}
                                                 </Button>
                                             )}
-                                            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15" title="Nhập file nền SVG/ảnh">
+                                            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm customer-text-body  hover:bg-white/15" title="Nhập file nền SVG/ảnh">
                                                 <FileUp className="h-4 w-4" />
                                                 Đổi nền
                                                 <input
@@ -2077,7 +2077,7 @@ export default function AdminVenues() {
                                                 />
                                             </label>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs text-slate-300">Ghế:</span>
+                                                <span className="text-xs text-slate-500">Ghế:</span>
                                                 <input
                                                     type="range"
                                                     min="0.5"
@@ -2088,7 +2088,7 @@ export default function AdminVenues() {
                                                     className="w-20 accent-brand-red"
                                                     title={`Kích thước ghế: ${seatSize}%`}
                                                 />
-                                                <span className="text-xs text-slate-300 w-8">{seatSize}%</span>
+                                                <span className="text-xs text-slate-500 w-8">{seatSize}%</span>
                                             </div>
                                             <Button variant={builderDirty ? 'primary' : 'outline'} onClick={() => void handleSaveBuilderChanges()} disabled={!builderDirty || builderBusy}>
                                                 <Save className="h-4 w-4" /> Lưu thay đổi
@@ -2137,7 +2137,7 @@ export default function AdminVenues() {
                                                     {(polygon.section_name ?? polygon.label) && (
                                                         <div
                                                             key={`clabel-${polygon.id}`}
-                                                            className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded bg-black/60 px-2 py-0.5 text-[9px] font-semibold text-white whitespace-nowrap"
+                                                            className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded bg-black/60 px-2 py-0.5 text-[9px] font-semibold customer-text-body  whitespace-nowrap"
                                                             style={{ left: `${centroid.x}%`, top: `${centroid.y}%` }}
                                                         >
                                                             {polygon.section_name ?? polygon.label}
@@ -2222,7 +2222,7 @@ export default function AdminVenues() {
                                 </InteractiveSeatCanvas>
                                 {tooltip && (
                                     <div
-                                        className="pointer-events-none fixed z-[9999] max-w-xs rounded-lg border border-white/20 bg-slate-900 px-3 py-2 text-xs text-white shadow-2xl"
+                                        className="pointer-events-none fixed z-[9999] max-w-xs rounded-lg border border-white/20 bg-slate-900 px-3 py-2 text-xs customer-text-body  shadow-2xl"
                                         style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}
                                     >
                                         {tooltip.content}
@@ -2235,14 +2235,14 @@ export default function AdminVenues() {
                             {selectedSeatIds.length > 1 && (
                                 <Card className="bg-space-900/90 border-white/10">
                                     <CardHeader>
-                                        <CardTitle className="text-white">Ghế đang chọn</CardTitle>
+                                        <CardTitle className="customer-text-body ">Ghế đang chọn</CardTitle>
                                     </CardHeader>
                                     <CardContent className="space-y-3">
-                                        <p className="text-sm text-slate-300">Đã chọn {selectedSeatIds.length} ghế.</p>
+                                        <p className="text-sm text-slate-500">Đã chọn {selectedSeatIds.length} ghế.</p>
                                         <div>
-                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Đổi khu vực cho nhóm ghế</label>
+                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Đổi khu vực cho nhóm ghế</label>
                                             <select
-                                                className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 px-3 text-white outline-none"
+                                                className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 px-3 customer-text-body  outline-none"
                                                 value={singleSeatForm.section_id}
                                                 onChange={(event) => setSingleSeatForm({ ...singleSeatForm, section_id: event.target.value })}
                                             >
@@ -2255,10 +2255,10 @@ export default function AdminVenues() {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Góc xoay</label>
+                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Góc xoay</label>
                                             <Input type="number" step="0.01" placeholder="Góc xoay" value={singleSeatForm.rotation} onChange={(event) => setSingleSeatForm({ ...singleSeatForm, rotation: event.target.value })} />
                                         </div>
-                                        <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200">
+                                        <label className="flex items-center gap-2 rounded-xl border border-white/10 customer-bg-page px-3 py-2 text-sm text-slate-500">
                                             <input
                                                 type="checkbox"
                                                 checked={singleSeatForm.is_admin_locked}
@@ -2280,17 +2280,17 @@ export default function AdminVenues() {
 
                             <Card className={`bg-space-900/90 border-white/10 ${(activeBuilderPanel === 'seat' || selectedSeatIds.length === 1) && selectedSeatIds.length <= 1 ? '' : 'hidden'}`}>
                                 <CardHeader>
-                                    <CardTitle className="text-white">{editingSeatId ? 'Chỉnh sửa ghế' : 'Ghế lẻ'}</CardTitle>
+                                    <CardTitle className="customer-text-body ">{editingSeatId ? 'Chỉnh sửa ghế' : 'Ghế lẻ'}</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     <div>
-                                        <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Nhãn ghế</label>
+                                        <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Nhãn ghế</label>
                                         <Input placeholder="Ví dụ A1" value={singleSeatForm.label} onChange={(event) => setSingleSeatForm({ ...singleSeatForm, label: event.target.value })} />
                                     </div>
                                     <div>
-                                        <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Khu vực ghế</label>
+                                        <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Khu vực ghế</label>
                                         <select
-                                            className="h-11 w-full rounded-lg border border-white/10 bg-slate-900 px-3 text-white outline-none"
+                                            className="h-11 w-full rounded-lg border border-white/10 customer-bg-page px-3 customer-text-body  outline-none"
                                             value={singleSeatForm.section_id}
                                             onChange={(event) => setSingleSeatForm({ ...singleSeatForm, section_id: event.target.value })}
                                         >
@@ -2304,19 +2304,19 @@ export default function AdminVenues() {
                                     </div>
                                     <div className="grid grid-cols-3 gap-3">
                                         <div>
-                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Tọa độ X</label>
+                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Tọa độ X</label>
                                             <Input type="number" step="0.01" placeholder="X %" value={singleSeatForm.x} onChange={(event) => setSingleSeatForm({ ...singleSeatForm, x: event.target.value })} />
                                         </div>
                                         <div>
-                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Tọa độ Y</label>
+                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Tọa độ Y</label>
                                             <Input type="number" step="0.01" placeholder="Y %" value={singleSeatForm.y} onChange={(event) => setSingleSeatForm({ ...singleSeatForm, y: event.target.value })} />
                                         </div>
                                         <div>
-                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Góc xoay</label>
+                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Góc xoay</label>
                                             <Input type="number" step="0.01" placeholder="Góc xoay" value={singleSeatForm.rotation} onChange={(event) => setSingleSeatForm({ ...singleSeatForm, rotation: event.target.value })} />
                                         </div>
                                     </div>
-                                    <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200">
+                                    <label className="flex items-center gap-2 rounded-xl border border-white/10 customer-bg-page px-3 py-2 text-sm text-slate-500">
                                         <input
                                             type="checkbox"
                                             checked={singleSeatForm.is_admin_locked}
@@ -2344,12 +2344,12 @@ export default function AdminVenues() {
 
                             <Card className={`bg-space-900/90 border-white/10 ${activeBuilderPanel === 'bulk' && selectedSeatIds.length === 0 ? '' : 'hidden'}`}>
                                 <CardHeader>
-                                    <CardTitle className="text-white">Tạo ghế hàng loạt</CardTitle>
+                                    <CardTitle className="customer-text-body ">Tạo ghế hàng loạt</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     <div className="grid grid-cols-2 gap-3">
                                         <select
-                                            className="h-11 rounded-lg border border-white/10 bg-slate-900 px-3 text-white outline-none"
+                                            className="h-11 rounded-lg border border-white/10 bg-slate-900 px-3 customer-text-body  outline-none"
                                             value={bulkSeatForm.section_id}
                                             onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, section_id: event.target.value })}
                                         >
@@ -2361,7 +2361,7 @@ export default function AdminVenues() {
                                             ))}
                                         </select>
                                         <select
-                                            className="h-11 rounded-lg border border-white/10 bg-slate-900 px-3 text-white outline-none"
+                                            className="h-11 rounded-lg border border-white/10 bg-slate-900 px-3 customer-text-body  outline-none"
                                             value={bulkSeatForm.pattern}
                                             onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, pattern: event.target.value as 'straight' | 'arc' | 'zigzag' })}
                                         >
@@ -2384,7 +2384,7 @@ export default function AdminVenues() {
                                     </div>
                                     <Input placeholder="Tiền tố nhãn ghế" value={bulkSeatForm.label_prefix} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, label_prefix: event.target.value })} />
                                     {bulkSeatForm.pattern === 'arc' && (
-                                        <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-3">
+                                        <div className="space-y-3 rounded-xl border border-white/10 customer-bg-page p-3">
                                             <div className="grid grid-cols-2 gap-3">
                                                 <Input type="number" step="0.01" placeholder="Tâm X" value={bulkSeatForm.arc_center_x} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, arc_center_x: event.target.value })} />
                                                 <Input type="number" step="0.01" placeholder="Tâm Y" value={bulkSeatForm.arc_center_y} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, arc_center_y: event.target.value })} />
@@ -2404,12 +2404,12 @@ export default function AdminVenues() {
 
                             <Card className={`bg-space-900/90 border-white/10 ${activeBuilderPanel === 'polygon' && selectedSeatIds.length === 0 ? '' : 'hidden'}`}>
                                 <CardHeader>
-                                    <CardTitle className="text-white">Vùng đa giác</CardTitle>
+                                    <CardTitle className="customer-text-body ">Vùng đa giác</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     <Input placeholder="Tên vùng đa giác" value={polygonForm.label} onChange={(event) => setPolygonForm({ ...polygonForm, label: event.target.value })} />
                                     <select
-                                        className="h-11 rounded-lg border border-white/10 bg-slate-900 px-3 text-white outline-none"
+                                        className="h-11 rounded-lg border border-white/10 bg-slate-900 px-3 customer-text-body  outline-none"
                                         value={polygonForm.section_id}
                                         onChange={(event) => setPolygonForm({ ...polygonForm, section_id: event.target.value })}
                                     >
@@ -2420,7 +2420,7 @@ export default function AdminVenues() {
                                             </option>
                                         ))}
                                     </select>
-                                    <p className="text-xs text-slate-400">
+                                    <p className="text-xs text-slate-500">
                                         {editingPolygonId ? `Đang chỉnh polygon #${editingPolygonId}.` : `${draftPolygonPoints.length} điểm nháp. Cần ít nhất 3 điểm để lưu.`}
                                     </p>
                                     <div className="flex gap-2">
@@ -2446,17 +2446,17 @@ export default function AdminVenues() {
                     <div className={`grid grid-cols-1 xl:grid-cols-2 gap-6 ${studioStep === 'builder' ? '' : 'hidden'}`}>
                         <Card className="bg-space-900/90 border-white/10">
                             <CardHeader>
-                                <CardTitle className="text-white">Danh sách ghế mẫu</CardTitle>
+                                <CardTitle className="customer-text-body ">Danh sách ghế mẫu</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-2">
                                 {venueSeats.length === 0 ? (
-                                    <p className="text-sm text-slate-400">Chưa có ghế template.</p>
+                                    <p className="text-sm text-slate-500">Chưa có ghế template.</p>
                                 ) : (
                                     venueSeats.map((seat) => (
-                                        <div key={seat.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                                        <div key={seat.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 customer-bg-page px-4 py-3">
                                             <div className="min-w-0">
-                                                <p className="font-semibold text-white">{seat.label}</p>
-                                                <p className="text-xs text-slate-400">
+                                                <p className="font-semibold customer-text-body ">{seat.label}</p>
+                                                <p className="text-xs text-slate-500">
                                                     {seat.section_name ?? 'Chưa gán khu vực'} · x {seat.x ?? 0}% · y {seat.y ?? 0}% · xoay {seat.rotation}
                                                 </p>
                                             </div>
@@ -2476,17 +2476,17 @@ export default function AdminVenues() {
 
                         <Card className="bg-space-900/90 border-white/10">
                             <CardHeader>
-                                <CardTitle className="text-white">Danh sách vùng đa giác</CardTitle>
+                                <CardTitle className="customer-text-body ">Danh sách vùng đa giác</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-2">
                                 {venuePolygons.length === 0 ? (
-                                    <p className="text-sm text-slate-400">Chưa có polygon nào.</p>
+                                    <p className="text-sm text-slate-500">Chưa có polygon nào.</p>
                                 ) : (
                                     venuePolygons.map((polygon) => (
-                                        <div key={polygon.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                                        <div key={polygon.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 customer-bg-page px-4 py-3">
                                             <div className="min-w-0">
-                                                <p className="font-semibold text-white">{polygon.label || `Polygon #${polygon.id}`}</p>
-                                                <p className="text-xs text-slate-400">
+                                                <p className="font-semibold customer-text-body ">{polygon.label || `Polygon #${polygon.id}`}</p>
+                                                <p className="text-xs text-slate-500">
                                                     {polygon.section_name ?? 'Chưa gán khu vực'} · {polygon.points.length} điểm
                                                 </p>
                                             </div>

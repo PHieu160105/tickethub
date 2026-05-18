@@ -19,19 +19,19 @@ export function SeatSelectionSummary({
           <span>Ghế đã chọn</span>
           <span>{selectedSeats.length}</span>
         </div>
-        <div className="mt-3 max-h-56 space-y-2 overflow-auto">
+        <div className="mt-3 max-h-56 space-y-2 overflow-auto border border-dashed border-[var(--customer-bg-opp)] customer-bg-surface">
           {selectedSeats.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-white/10 bg-slate-950/50 px-3 py-4 text-sm text-slate-400">
+            <p className="rounded-xl border border-dashed border-[var(--customer-bg-opp)] customer-bg-surface px-3 py-4 text-sm text-slate-400">
               Chưa chọn ghế nào.
             </p>
           ) : (
             selectedSeats.map((seat) => (
-              <div key={seat.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-800/70 px-3 py-2">
+              <div key={seat.id} className="flex items-center justify-between rounded-xl border border-dashed border-[var(--customer-bg-opp)] customer-bg-surface px-3 py-2">
                 <div>
-                  <p className="text-sm font-semibold text-white">{seat.label}</p>
-                  <p className="text-xs text-slate-400">{seat.section_name ?? 'Vé phổ thông'}</p>
+                  <p className="text-sm font-semibold customer-text-body">{seat.label}</p>
+                  <p className="text-xs text-gray-500">{seat.section_name ?? 'Vé phổ thông'}</p>
                 </div>
-                <p className="text-sm font-semibold text-white">{formatCurrencyVnd(seat.price)}</p>
+                <p className="text-sm font-semibold customer-text-body">{formatCurrencyVnd(seat.price)}</p>
               </div>
             ))
           )}
@@ -62,7 +62,7 @@ export function SeatSelectionSummary({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+      <div className="rounded-2xl border border-[var(--customer-bg-opp)] customer-bg-surface p-4">
         <div className="flex items-center justify-between text-sm text-slate-300">
           <span>Tạm tính</span>
           <span className="font-semibold text-white">{formatCurrencyVnd(subtotal)}</span>

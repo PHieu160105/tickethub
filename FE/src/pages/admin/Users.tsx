@@ -12,8 +12,8 @@ import { Listbox } from '@headlessui/react';
 
 const PAGE_SIZE = 10
 
-function roleVariant(role: string): 'default' | 'warning' | 'info' {
-  if (role === 'admin') return 'default'
+function roleVariant(role: string): 'success' | 'warning' | 'info' {
+  if (role === 'admin') return 'success'
   return role === 'customer' ? 'info' : 'warning'
 }
 

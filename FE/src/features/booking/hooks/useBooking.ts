@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import type { TicketItem } from '../../../types'
 import { bookingApi } from '../api/bookingApi'
 
@@ -23,7 +23,7 @@ export function useLockSeats() {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Không thể giữ ghế',
+        error: error instanceof Error ? error.message : 'Khong the giu ghe',
       }))
       throw error
     }
@@ -48,7 +48,7 @@ export function useReleaseSeats() {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Không thể trả ghế',
+        error: error instanceof Error ? error.message : 'Khong the tra ghe',
       }))
       throw error
     }
@@ -73,7 +73,7 @@ export function useCheckout() {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Không thể thanh toán',
+        error: error instanceof Error ? error.message : 'Khong the thanh toan',
       }))
       throw error
     }
@@ -109,35 +109,10 @@ export function useMyTickets(params?: { search?: string; start_from?: string; en
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Không thể tải danh sách vé',
+        error: error instanceof Error ? error.message : 'Khong the tai danh sach ve',
       }))
     }
   }, [normalizedEndTo, normalizedSearch, normalizedStartFrom])
 
   return { ...state, refetch: fetchTickets }
-}
-
-export function useCancelTicket() {
-  const [state, setState] = useState<UseBookingState>({
-    isLoading: false,
-    error: null,
-  })
-
-  const cancelTicket = useCallback(async (ticketId: number) => {
-    setState((prev) => ({ ...prev, isLoading: true, error: null }))
-    try {
-      const response = await bookingApi.cancelTicket(ticketId)
-      setState({ isLoading: false, error: null })
-      return response
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Không thể hủy vé',
-      }))
-      throw error
-    }
-  }, [])
-
-  return { ...state, cancelTicket }
 }

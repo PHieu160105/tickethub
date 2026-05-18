@@ -1,32 +1,18 @@
-﻿import { useEffect, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
+import { useEffect, useState } from 'react'
+import { Listbox } from '@headlessui/react'
+import { Calendar, DollarSign, Download, RefreshCcw, Ticket, TrendingUp } from 'lucide-react'
+
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
 import type { AdminEventRevenueItem, AdminTicketSaleItem, DashboardSummary } from '@/types'
-import { Calendar, DollarSign, Download, RefreshCcw, Ticket, TrendingUp } from 'lucide-react'
-import { Listbox } from '@headlessui/react'
 
 const PAGE_SIZE = 10
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(amount)
-}
-
-function statusBadge(status: string) {
-  if (status === 'paid') return <Badge variant="success" size="sm">Đã thanh toán</Badge>
-  if (status === 'pending') return <Badge variant="warning" size="sm">Đang chờ</Badge>
-  return <Badge variant="default" size="sm">Đã hủy</Badge>
-}
 
 const DEFAULT_SUMMARY: DashboardSummary = {
   total_revenue: 0,
   tickets_sold: 0,
-  cancelled_tickets: 0,
   active_events: 0,
   waiting_queue_users: 0,
 }
@@ -43,15 +29,27 @@ interface FilterListboxProps {
   buttonClassName?: string
 }
 
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
+function statusBadge(status: string) {
+  if (status === 'paid') return <Badge variant="success" size="sm">Đã thanh toán</Badge>
+  if (status === 'pending') return <Badge variant="warning" size="sm">Đang chờ</Badge>
+  return <Badge variant="default" size="sm">Khác</Badge>
+}
+
 function FilterListbox({ value, options, onChange, buttonClassName = 'w-full sm:w-48' }: FilterListboxProps) {
   const selectedLabel = options.find((option) => option.value === value)?.label ?? options[0]?.label ?? ''
 
   return (
     <Listbox value={value} onChange={onChange}>
       <div className="relative">
-        <Listbox.Button
-          className={`${buttonClassName} h-9 px-3 admin-bg-listbox admin-text-header border admin-border rounded-md shadow-sm text-left text-sm`}
-        >
+        <Listbox.Button className={`${buttonClassName} h-9 px-3 admin-bg-listbox admin-text-header border admin-border rounded-md shadow-sm text-left text-sm`}>
           {selectedLabel}
         </Listbox.Button>
         <Listbox.Options className={`absolute z-50 mt-1 ${buttonClassName} admin-bg-listbox admin-text-header border admin-border rounded-md shadow-lg`}>
@@ -138,7 +136,6 @@ export default function AdminTickets() {
     { value: 'all', label: 'Tất cả trạng thái' },
     { value: 'paid', label: 'Đã thanh toán' },
     { value: 'pending', label: 'Đang chờ' },
-    { value: 'cancelled', label: 'Đã hủy' },
   ]
 
   return (
@@ -146,7 +143,7 @@ export default function AdminTickets() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-2xl font-display font-bold admin-text-header">Vé và Doanh thu</h2>
-          <p className="text-gray-400 mt-1">Thông tin vé và doanh thu </p>
+          <p className="text-gray-400 mt-1">Thông tin vé và doanh thu</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => void loadTicketsData(true)} isLoading={refreshing}>
@@ -178,7 +175,10 @@ export default function AdminTickets() {
                 <DollarSign className="h-6 w-6 text-green-400" />
               </div>
             </div>
-            <div className="mt-4 flex items-center gap-2 text-sm text-green-400"><TrendingUp className="h-4 w-4" /><span>Cập nhật từ /admin/dashboard/summary</span></div>
+            <div className="mt-4 flex items-center gap-2 text-sm text-green-400">
+              <TrendingUp className="h-4 w-4" />
+              <span>Cập nhật từ /admin/dashboard/summary</span>
+            </div>
           </CardContent>
         </Card>
 
@@ -189,9 +189,14 @@ export default function AdminTickets() {
                 <p className="text-sm font-bold admin-text-body mb-1">Vé đã bán</p>
                 <p className="text-2xl font-bold text-brand-red">{totalTicketsSold.toLocaleString()}</p>
               </div>
-              <div className="h-12 w-12 rounded-lg bg-brand-red/20 flex items-center justify-center"><Ticket className="h-6 w-6 text-brand-red" /></div>
+              <div className="h-12 w-12 rounded-lg bg-brand-red/20 flex items-center justify-center">
+                <Ticket className="h-6 w-6 text-brand-red" />
+              </div>
             </div>
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-400"><Ticket className="h-4 w-4" /><span>{summary.cancelled_tickets} Vé đã hủy</span></div>
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-400">
+              <Ticket className="h-4 w-4" />
+              <span>Chỉ hiện giao dịch đang hoạt động.</span>
+            </div>
           </CardContent>
         </Card>
 
@@ -202,15 +207,21 @@ export default function AdminTickets() {
                 <p className="text-sm font-bold admin-text-body mb-1">Kết quả filter</p>
                 <p className="text-2xl font-bold text-brand-yellow">{totalSales}</p>
               </div>
-              <div className="h-12 w-12 rounded-lg bg-brand-yellow/20 flex items-center justify-center"><Calendar className="h-6 w-6 text-brand-yellow" /></div>
+              <div className="h-12 w-12 rounded-lg bg-brand-yellow/20 flex items-center justify-center">
+                <Calendar className="h-6 w-6 text-brand-yellow" />
+              </div>
             </div>
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-400"><span>Trang {page}/{totalPages}</span></div>
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-400">
+              <span>Trang {page}/{totalPages}</span>
+            </div>
           </CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Doanh thu theo show</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Doanh thu theo show</CardTitle>
+        </CardHeader>
         <CardContent>
           {loading ? (
             <p className="text-sm admin-text-body">Đang tải doanh thu...</p>
@@ -225,12 +236,17 @@ export default function AdminTickets() {
                     <div className="flex items-center justify-between text-sm">
                       <div>
                         <span className="admin-text-body font-medium">{item.show_title}</span>
-                        <p className="text-xs text-gray-400">{item.event_title} • {new Date(item.show_start_at).toLocaleString('vi-VN')}</p>
+                        <p className="text-xs text-gray-400">
+                          {item.event_title} • {new Date(item.show_start_at).toLocaleString('vi-VN')}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-4"><span className="text-gray-400">{item.tickets_sold} vé</span><span className="text-green-400 font-medium">{formatCurrency(item.revenue)}</span></div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-gray-400">{item.tickets_sold} vé</span>
+                        <span className="text-green-400 font-medium">{formatCurrency(item.revenue)}</span>
+                      </div>
                     </div>
                     <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{background: `linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))`, width: `${Math.max(progress, 2)}%` }} />
+                      <div className="h-full rounded-full" style={{ background: `linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))`, width: `${Math.max(progress, 2)}%` }} />
                     </div>
                   </div>
                 )
@@ -309,8 +325,12 @@ export default function AdminTickets() {
           )}
 
           <div className="mt-4 flex flex-wrap justify-end gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>Trước</Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>Sau</Button>
+            <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+              Trước
+            </Button>
+            <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
+              Sau
+            </Button>
           </div>
         </CardContent>
       </Card>

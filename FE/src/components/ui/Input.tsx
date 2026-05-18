@@ -8,7 +8,7 @@ const inputVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border-gray-500 focus:border-gray-500 focus:ring-gray-500',
+        default: 'border-slate-500 focus:border-salte-500 focus:ring-slate-500',
         error: 'border-red-500 focus:border-red-500 focus:ring-red-500/20',
         success: 'border-green-500 focus:border-green-500 focus:ring-green-500/20',
       },

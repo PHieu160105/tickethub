@@ -21,8 +21,8 @@ import { AlertCircle, MapPin, Ticket } from 'lucide-react'
 function seatClass(seat: Seat, isSelected: boolean) {
   if (seat.status === 'sold') return 'bg-slate-700 text-slate-300 border-slate-500 cursor-not-allowed'
   if (seat.status === 'locked' && !seat.is_locked_by_me) return 'bg-amber-900/70 text-amber-100 border-amber-500 cursor-not-allowed'
-  if (seat.is_locked_by_me) return 'bg-emerald-700 text-white border-emerald-500'
-  if (isSelected) return 'bg-sky-700 text-white border-sky-400'
+  if (seat.is_locked_by_me) return 'bg-emerald-700 customer-text-body border-emerald-500'
+  if (isSelected) return 'bg-sky-700 customer-text-body border-sky-400'
   return 'bg-slate-800 text-slate-200 hover:bg-slate-700 border-white/10'
 }
 
@@ -389,7 +389,7 @@ export default function SeatSelection() {
 
   if (error || !matrix) {
     return (
-      <div className="min-h-screen text-white">
+      <div className="min-h-screen cutsomer-text-body">
         <main className="mx-auto max-w-7xl px-4 py-24 text-center">
           <p className="mb-6 text-red-400">{error ?? 'Không tải được sơ đồ ghế.'}</p>
           <Link to="/search">
@@ -406,7 +406,7 @@ export default function SeatSelection() {
 
   if (matrix.queue_enabled && isAuthenticated && queueAccessStatus !== 'admitted') {
     return (
-      <div className="min-h-screen text-white">
+      <div className="min-h-screen customer-text-body">
         <main className="mx-auto max-w-3xl space-y-4 px-6 py-24 text-center">
           <p className="text-amber-300">{queueAccessMessage || 'Sự kiện này yêu cầu vào hàng đợi trước khi chọn ghế.'}</p>
           <Link to={`/queue?showId=${matrix.show_id}&eventKey=${matrix.event_slug}`}>
@@ -418,13 +418,13 @@ export default function SeatSelection() {
   }
 
   return (
-    <div className="min-h-screen text-white">
+    <div className="min-h-screen customer-text-body">
       <main className="mx-auto grid max-w-screen-2xl grid-cols-1 gap-8 px-6 py-10 xl:grid-cols-[1.65fr_0.85fr]">
         <section className="space-y-6">
-          <div className="flex flex-wrap items-start justify-between gap-4 rounded-3xl border border-white/10 bg-slate-900/70 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4 rounded-3xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Chọn chỗ ngồi</p>
-              <h1 className="mt-2 text-3xl font-black">{seatMap?.show_title ?? 'Chọn ghế trên sơ đồ'}</h1>
+              <p className="text-[11px] uppercase tracking-[0.24em] text-gray-500">Chọn chỗ ngồi</p>
+              <h1 className="mt-2 text-3xl font-black customer-text-header">{seatMap?.show_title ?? 'Chọn ghế trên sơ đồ'}</h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-400">
                 {useCanvas
                   ? 'Click vào ghế trống để xem giá và chọn thử. Ghế chỉ được giữ khi bạn đăng nhập, qua hàng đợi hợp lệ và bấm tiếp tục thanh toán.'
@@ -507,29 +507,39 @@ export default function SeatSelection() {
             </div>
           )}
 
-          {useCanvas && <SeatMapLegend zones={seatMap?.zones ?? []} />}
+          {useCanvas && (
+            <div className="xl:hidden">
+              <SeatMapLegend zones={seatMap?.zones ?? []} />
+            </div>
+          )}
         </section>
 
         <aside className="space-y-4">
-          <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-6">
-            <div className="mb-4 flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] text-slate-500">
+          {useCanvas && (
+            <div className="hidden xl:block">
+              <SeatMapLegend zones={seatMap?.zones ?? []} />
+            </div>
+          )}
+
+          <div className="rounded-3xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6">
+            <div className="mb-4 flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] text-gray-500">
               <MapPin className="h-4 w-4" />
               {seatMap?.venue_name ?? ''}
             </div>
 
             <div className="max-h-56 space-y-2 overflow-auto">
               {selectedSeats.length === 0 ? (
-                <p className="text-sm text-slate-400">Chưa chọn ghế nào.</p>
+                <p className="text-sm customer-text-body">Chưa chọn ghế nào.</p>
               ) : (
                 selectedSeats.map((seat) => (
-                  <div key={seat.id} className="flex items-center justify-between rounded-lg bg-slate-800/60 px-3 py-2">
+                  <div key={seat.id} className="flex items-center justify-between rounded-lg customer-bg-page px-3 py-2">
                     <div>
                       <p className="text-sm font-medium">{seat.seat_label}</p>
                       <p className="text-xs text-slate-400">{formatCurrencyVnd(seat.price)}</p>
                     </div>
                     <button
                       type="button"
-                      className="text-xs text-primary hover:underline"
+                      className="text-xs text-[var(--customer-bg-opt)] hover:underline"
                       onClick={() => handleSeatClick(seat)}
                     >
                       Bỏ chọn
@@ -540,9 +550,9 @@ export default function SeatSelection() {
             </div>
           </div>
 
-          <div className="space-y-4 rounded-3xl border border-white/10 bg-slate-900/70 p-6">
+          <div className="space-y-4 rounded-3xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6">
             <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Tổng cộng</span>
+              <span className=" text-md customer-text-header">Tổng cộng</span>
               <span className="font-bold">{formatCurrencyVnd(subtotal)}</span>
             </div>
             <div className="flex justify-between text-xs text-slate-500">
@@ -550,7 +560,7 @@ export default function SeatSelection() {
             </div>
 
             <Button
-              className="w-full"
+              className="w-full bg-[var(--customer-bg-opt)] hover:bg-[var(--customer-bg-opt)]/50"
               onClick={() => void handleCheckout()}
               disabled={selectedSeats.length === 0}
               isLoading={isLocking || isReleasing}

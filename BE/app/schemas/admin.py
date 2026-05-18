@@ -8,7 +8,6 @@ class DashboardSummaryResponse(BaseModel):
 
     total_revenue: float
     tickets_sold: int
-    cancelled_tickets: int
     active_events: int
     waiting_queue_users: int
 
@@ -32,7 +31,6 @@ class DashboardStreamResponse(BaseModel):
 
     total_revenue: float
     tickets_sold: int
-    cancelled_tickets: int
     active_events: int
     waiting_queue_users: int
 
@@ -74,7 +72,6 @@ class EventDetailStatsResponse(BaseModel):
     available_seats: int
     occupancy_rate: float
     tickets_issued: int
-    canceled_tickets: int
     total_revenue: float
     zone_stats: list[EventZoneStatsResponse]
 

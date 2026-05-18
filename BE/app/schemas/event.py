@@ -142,6 +142,7 @@ class EventCardResponse(BaseModel):
     status: EventStatus
     created_at: datetime
     queue_enabled: bool
+    max_price: float
 
 
 class EventDetailResponse(EventCardResponse):

@@ -961,6 +961,29 @@ async def list_shows_for_event_ids(
     return grouped
 
 
+async def list_event_max_prices_for_event_ids(
+    session: AsyncSession,
+    event_ids: list[int],
+) -> dict[int, float]:
+    """Tổng hợp giá ghế lớn nhất của từng sự kiện từ bảng seats."""
+
+    if not event_ids:
+        return {}
+
+    rows = (
+        await session.execute(
+            select(
+                Seat.event_id,
+                func.max(Seat.price).label("max_price"),
+            )
+            .where(Seat.event_id.in_(event_ids))
+            .group_by(Seat.event_id)
+        )
+    ).all()
+
+    return {int(row.event_id): float(row.max_price or 0) for row in rows if row.event_id is not None}
+
+
 # ============================================================
 # HÀM LẤY SHOW THEO ID
 # ============================================================
@@ -1444,6 +1467,7 @@ async def build_event_card_response(
     session: AsyncSession,
     event: Event,
     shows: list[Show] | None = None,  # Python: có thể None (sẽ tự load)
+    max_price: float | None = None,
 ) -> EventCardResponse:
     """Dựng payload thẻ sự kiện, có bổ sung thông tin từ các buổi diễn con.
     
@@ -1462,6 +1486,16 @@ async def build_event_card_response(
     # Nếu không truyền shows → tự load
     if shows is None:
         shows = await list_event_shows(session, event.id)  # Hàm tự viết
+
+    if max_price is None:
+        max_price = float(
+            (
+                await session.scalar(
+                    select(func.max(Seat.price)).where(Seat.event_id == event.id)
+                )
+            )
+            or 0
+        )
 
     # Gọi hàm tự viết: chuyển date → datetime cho response
     start_at, end_at = _event_range_to_datetimes(event.start_date, event.end_date)
@@ -1495,6 +1529,7 @@ async def build_event_card_response(
         created_at=event.created_at,
         # any(): Python built-in - kiểm tra có ít nhất 1 show bật queue
         queue_enabled=any(show.queue_enabled for show in shows),
+        max_price=max_price,
     )
 
 

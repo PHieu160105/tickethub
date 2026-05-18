@@ -76,7 +76,6 @@ export const ENDPOINTS = {
     RELEASE: '/bookings/release',
     CHECKOUT: '/bookings/checkout',
     MY_TICKETS: '/bookings/my-tickets',
-    CANCEL_TICKET: (ticketId: number) => `/bookings/my-tickets/${ticketId}`,
   },
   // Endpoint quản trị.
   ADMIN: {

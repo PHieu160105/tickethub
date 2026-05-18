@@ -9,7 +9,7 @@ from sqlalchemy.sql.sqltypes import Date
 
 from app.models.enums import EventStatus, OrderStatus, QueueStatus
 from app.models.event import Show
-from app.models.order import Order, OrderItem, TicketCancellation
+from app.models.order import Order, OrderItem
 from app.models.queue import QueueEntry
 from app.models.user import User
 from app.schemas.admin import AudienceDistributionResponse, DashboardSummaryResponse, RevenuePoint
@@ -22,7 +22,7 @@ async def get_dashboard_summary(session: AsyncSession) -> DashboardSummaryRespon
     - `session`: phiên SQLAlchemy async dùng để đọc dữ liệu thống kê.
 
     Output:
-    - `DashboardSummaryResponse` gồm doanh thu, số vé bán, số vé hủy, số show live và số user đang chờ queue.
+    - `DashboardSummaryResponse` gồm doanh thu, số vé bán, số show live và số user đang chờ queue.
 
     Cách hoạt động:
     - Dùng các scalar subquery độc lập trong một câu select để giảm số round-trip tới DB.
@@ -41,8 +41,6 @@ async def get_dashboard_summary(session: AsyncSession) -> DashboardSummaryRespon
                 .label("total_revenue"),
                 # Mỗi `OrderItem` tương ứng một ghế/vé đã đi vào đơn hàng.
                 select(func.count(OrderItem.id)).scalar_subquery().label("tickets_sold"),
-                # Vé hủy được lưu ở bảng audit riêng để dashboard vẫn thống kê được sau khi xóa item gốc.
-                select(func.count(TicketCancellation.id)).scalar_subquery().label("cancelled_tickets"),
                 # Show active là show đang live và chưa bị soft-delete.
                 select(func.count(Show.id))
                 .where(Show.status == EventStatus.LIVE, Show.is_deleted.is_(False))
@@ -61,7 +59,6 @@ async def get_dashboard_summary(session: AsyncSession) -> DashboardSummaryRespon
     return DashboardSummaryResponse(
         total_revenue=float(summary_row.total_revenue or 0),
         tickets_sold=int(summary_row.tickets_sold or 0),
-        cancelled_tickets=int(summary_row.cancelled_tickets or 0),
         active_events=int(summary_row.active_events or 0),
         waiting_queue_users=int(summary_row.waiting_queue_users or 0),
     )

@@ -224,10 +224,6 @@ export const bookingApi = {
   async myTickets(params?: { search?: string; start_from?: string; end_to?: string; limit?: number; offset?: number }) {
     return withRetry(() => api.get<TicketItem[]>('/bookings/my-tickets', { params }))
   },
-  async cancelTicket(ticketId: number) {
-    const response = await api.delete<ApiMessage>(`/bookings/my-tickets/${ticketId}`)
-    return response.data
-  },
 }
 
 export const adminApi = {
@@ -600,6 +596,10 @@ export const helpApi = {
   async createOrGetMyThread() {
     return withRetry(() => api.post<HelpThread>('/help/threads/me'))
   },
+  async markMyThreadSeen() {
+    const response = await api.post<ApiMessage>('/help/threads/me/mark-seen')
+    return response.data
+  },
   async myMessages() {
     return withRetry(() => api.get<HelpMessage[]>('/help/threads/me/messages'))
   },
@@ -609,6 +609,10 @@ export const helpApi = {
   },
   async adminThreads() {
     return withRetry(() => api.get<HelpThread[]>('/help/admin/threads'))
+  },
+  async adminMarkThreadsSeen() {
+    const response = await api.post<ApiMessage>('/help/admin/threads/mark-seen')
+    return response.data
   },
   async adminMessages(threadId: number) {
     return withRetry(() => api.get<HelpMessage[]>(`/help/admin/threads/${threadId}/messages`))

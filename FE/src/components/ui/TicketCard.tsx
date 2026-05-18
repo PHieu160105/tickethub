@@ -1,20 +1,20 @@
-import React from 'react';
-import { Calendar, MapPin, Download } from "lucide-react"
+import React from 'react'
+import { Calendar, MapPin } from 'lucide-react'
 
 interface TicketCardProps {
-  eventTitle: string;
-  ticketNumber: string;
-  date: string;
-  location: string;
-  imageUrl: string;
-  status?: 'confirmed' | 'pending' | 'cancelled';
-  isFeatured?: boolean;
+  eventTitle: string
+  ticketNumber: string
+  date: string
+  location: string
+  imageUrl: string
+  status?: 'confirmed' | 'pending'
+  isFeatured?: boolean
   additionalInfo?: {
-    label: string;
-    value: string;
-  }[];
-  onDownload?: () => void;
-  onViewDetails?: () => void;
+    label: string
+    value: string
+  }[]
+  onDownload?: () => void
+  onViewDetails?: () => void
 }
 
 export const TicketCard: React.FC<TicketCardProps> = ({
@@ -26,14 +26,11 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   status = 'confirmed',
   isFeatured = false,
   additionalInfo = [],
-  onDownload,
-  onViewDetails,
 }) => {
   const statusColors = {
     confirmed: 'bg-secondary/10 text-secondary border-secondary/20',
     pending: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-    cancelled: 'bg-red-500/10 text-red-400 border-red-500/20',
-  };
+  }
 
   return (
     <div
@@ -41,22 +38,13 @@ export const TicketCard: React.FC<TicketCardProps> = ({
         isFeatured ? 'xl:col-span-2 border-primary-container/30' : ''
       }`}
     >
-      {/* Khu vực hiển thị ảnh đại diện của sự kiện. */}
-      <div
-        className={`w-full md:w-48 h-64 md:h-auto overflow-hidden relative ${
-          isFeatured ? 'md:w-72' : ''
-        }`}
-      >
-        <img
-            alt="Ảnh đại diện sự kiện"
-          src={imageUrl}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-        />
+      <div className={`w-full md:w-48 h-64 md:h-auto overflow-hidden relative ${isFeatured ? 'md:w-72' : ''}`}>
+        <img alt="Ảnh đại diện sự kiện" src={imageUrl} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
         <div
           className={`absolute inset-0 bg-gradient-to-t from-background/80 to-transparent md:hidden ${
             isFeatured ? 'bg-gradient-to-r from-transparent via-transparent to-surface-container/60' : ''
           }`}
-        ></div>
+        />
         {isFeatured && (
           <div className="absolute top-4 left-4">
             <span className="px-4 py-1 bg-secondary text-background font-black text-xs uppercase tracking-[0.2em] rounded-full">
@@ -66,18 +54,11 @@ export const TicketCard: React.FC<TicketCardProps> = ({
         )}
       </div>
 
-      {/* Khu vực hiển thị thông tin chính của vé. */}
-      <div
-        className={`flex-1 p-8 flex flex-col justify-between ${
-          isFeatured ? 'p-8 md:p-12 flex flex-col justify-center' : ''
-        }`}
-      >
+      <div className={`flex-1 p-8 flex flex-col justify-between ${isFeatured ? 'p-8 md:p-12 flex flex-col justify-center' : ''}`}>
         <div>
           <div className="flex justify-between items-start mb-4">
-            <span
-              className={`px-3 py-1 border rounded-full text-[10px] font-black uppercase tracking-widest ${statusColors[status]}`}
-            >
-              {status === 'confirmed' ? 'Đã xác nhận' : status === 'pending' ? 'Đang xử lý' : 'Đã hủy'}
+            <span className={`px-3 py-1 border rounded-full text-[10px] font-black uppercase tracking-widest ${statusColors[status]}`}>
+              {status === 'confirmed' ? 'Đã xác nhận' : 'Đang xử lý'}
             </span>
           </div>
           <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-slate-500">{ticketNumber}</p>
@@ -95,22 +76,16 @@ export const TicketCard: React.FC<TicketCardProps> = ({
             </p>
           )}
 
-          <div
-            className={`flex flex-wrap gap-x-6 gap-y-2 text-on-surface-variant text-sm mb-6 ${
-              isFeatured ? 'gap-8 mb-10' : ''
-            }`}
-          >
+          <div className={`flex flex-wrap gap-x-6 gap-y-2 text-on-surface-variant text-sm mb-6 ${isFeatured ? 'gap-8 mb-10' : ''}`}>
             {isFeatured && additionalInfo.length > 0 ? (
               additionalInfo.map((info, index) => (
                 <div key={index} className="flex flex-col">
-                  <span className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">
-                    {info.label}
-                  </span>
+                  <span className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">{info.label}</span>
                   <span className="text-white font-bold text-lg">{info.value}</span>
                 </div>
               ))
             ) : (
-              <div className='flex-col'>
+              <div className="flex-col">
                 <div className="flex items-center gap-1.5">
                   <Calendar className="text-primary w-4 h-4" />
                   <span>{date}</span>
@@ -125,38 +100,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onViewDetails}
-            className={`bg-[var(--customer-bg-opt)] text-on-primary-container rounded-xl font-bold hover:bg-[var(--customer-bg-opt)] hover:opacity-50 tracking-widest transition-all active:scale-95 ${
-              isFeatured
-                ? 'px-8 py-3 text-sm'
-                : 'flex-1 py-3 text-xs'
-            }`}
-            style={
-              isFeatured
-                ? {
-                    boxShadow: `0 0 20px color-mix(in srgb, var(--customer-bg-opt) 50%, transparent)`
-                  }
-                : {
-                    boxShadow: `0 0 15px color-mix(in srgb, var(--customer-bg-opt) 40%, transparent)`
-                  }
-            }
-          >
-            {isFeatured ? 'Nhận quyền lợi đặc biệt' : 'CHI TIẾT'}
-          </button>
-
-          <button
-            onClick={onDownload}
-            className="flex items-center gap-2 p-2 border border-[var(--customer-help)] rounded-xl hover:bg-[var(--customer-bg-help)] transition-all"
-          >
-            <span className="material-symbols-outlined customer-text-body">
-              Tải xuống
-              </span>
-            <Download className="customer-text-body w-4 h-4"/>
-          </button>
-        </div>
       </div>
     </div>
-  );
-};
+  )
+}

@@ -39,7 +39,12 @@ export default function Help() {
 
     void (async () => {
       const myThread = await helpApi.createOrGetMyThread()
-      setThread(myThread)
+      if (myThread.unread_customer > 0) {
+        setThread({ ...myThread, unread_customer: 0 })
+        await helpApi.markMyThreadSeen()
+      } else {
+        setThread(myThread)
+      }
       const history = await helpApi.myMessages()
       setMessages(history)
     })()
@@ -54,10 +59,16 @@ export default function Help() {
       const parsed = JSON.parse(event.data) as { type: string; payload: HelpMessage }
       if (parsed.type === 'help_message') {
         setMessages((prev) => [...prev, parsed.payload])
+        if (parsed.payload.sender_id !== user?.id) {
+          setThread((prev) => (prev ? { ...prev, unread_customer: 0, last_message_at: parsed.payload.created_at, last_message_preview: parsed.payload.content } : prev))
+          void helpApi.markMyThreadSeen()
+        } else {
+          setThread((prev) => (prev ? { ...prev, last_message_at: parsed.payload.created_at, last_message_preview: parsed.payload.content } : prev))
+        }
       }
     }
     return () => ws.close()
-  }, [isAuthenticated, thread])
+  }, [isAuthenticated, thread?.id, user?.id])
 
   useEffect(() => {
     document.body.style.overflow = drawerOpen ? 'hidden' : ''

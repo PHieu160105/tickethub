@@ -31,7 +31,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
   return createPortal(
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={(e) => e.target === overlayRef.current && onClose()}
       role="dialog"
       aria-modal="true"

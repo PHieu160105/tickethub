@@ -45,7 +45,7 @@ export default function Checkout() {
     phone: '',
   })
   const [errorMessage, setErrorMessage] = useState<string>('')
-  const [selectedDiscountCode, setSelectedDiscountCode] = useState<string>('')
+  const [selectedDiscountCode] = useState<string>('')
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
 
   const stateLockedSeats = useMemo(() => state.lockedSeats ?? [], [state.lockedSeats])
@@ -210,7 +210,7 @@ export default function Checkout() {
   }
 
   return (
-    <div className="min-h-screen text-white font-body">
+    <div className="min-h-screen customer-text-body font-body">
       <main className="max-w-screen-2xl mx-auto px-6 py-12">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
           <form className="lg:col-span-7 space-y-8" onSubmit={handleSubmit}>
@@ -218,27 +218,27 @@ export default function Checkout() {
               <h2 className="text-3xl font-headline font-bold tracking-tight mb-8">Thông tin người mua</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="block text-[10px] font-headline uppercase tracking-[0.2em] text-slate-400 font-bold">Họ tên</label>
+                  <label className="block text-[10px] font-headline uppercase tracking-[0.2em] text-slate-500 font-bold">Họ tên</label>
                   <Input
-                    className="w-full bg-slate-800 border-none rounded-xl py-4 px-5 text-white"
+                    className="w-full bg-[var(--customer-bg-surface)] border-none rounded-xl py-4 px-5 customer-text-body"
                     value={formData.fullName}
                     onChange={(e) => handleInputChange('fullName', e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="block text-[10px] font-headline uppercase tracking-[0.2em] text-slate-400 font-bold">Địa chỉ email</label>
+                  <label className="block text-[10px] font-headline uppercase tracking-[0.2em] text-slate-500 font-bold">Địa chỉ email</label>
                   <Input
                     type="email"
-                    className="w-full bg-slate-800 border-none rounded-xl py-4 px-5 text-white"
+                    className="w-full bg-[var(--customer-bg-surface)] border-none rounded-xl py-4 px-5 customer-text-body"
                     value={formData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
                   />
                 </div>
                 <div className="md:col-span-2 space-y-2">
-                  <label className="block text-[10px] font-headline uppercase tracking-[0.2em] text-slate-400 font-bold">Số điện thoại</label>
+                  <label className="block text-[10px] font-headline uppercase tracking-[0.2em] text-slate-500 font-bold">Số điện thoại</label>
                   <Input
                     type="tel"
-                    className="w-full bg-slate-800 border-none rounded-xl py-4 px-5 text-white"
+                    className="w-full bg-[var(--customer-bg-surface)] border-none rounded-xl py-4 px-5 customer-text-body"
                     value={formData.phone}
                     onChange={(e) => handleInputChange('phone', e.target.value)}
                     placeholder="+84 900 000 000"
@@ -247,12 +247,12 @@ export default function Checkout() {
               </div>
             </section>
 
-            <section className="backdrop-blur-xl bg-slate-900/70 p-6 rounded-2xl border border-white/10">
-              <div className="flex items-center gap-2 mb-4 text-slate-300">
+            <section className="backdrop-blur-xl customer-bg-surface p-6 rounded-2xl border border-[var(--customer-bg-opp)]">
+              <div className="flex items-center gap-2 mb-4 customer-text-body">
                 <CreditCard className="w-5 h-5 text-primary" />
                 <p className="font-semibold">Thanh toán mô phỏng</p>
               </div>
-              <p className="text-sm text-slate-400">Luồng demo này chỉ xác nhận thanh toán ở phía server, không xử lý thẻ thật.</p>
+              <p className="text-sm text-slate-500">Luồng demo này chỉ xác nhận thanh toán ở phía server, không xử lý thẻ thật.</p>
             </section>
 
             {errorMessage && (
@@ -274,7 +274,7 @@ export default function Checkout() {
           </form>
 
           <aside className="lg:col-span-5 sticky top-28">
-            <div className="backdrop-blur-xl bg-slate-900/80 p-8 rounded-3xl overflow-hidden relative border border-white/10">
+            <div className="backdrop-blur-xl customer-bg-surface p-8 rounded-3xl overflow-hidden relative border border-[var(--customer-bg-opp)]">
               <h3 className="text-xl font-headline font-bold uppercase tracking-widest mb-6 border-b border-white/5 pb-4">Tóm tắt đơn hàng</h3>
 
               <div className="space-y-3 mb-8 max-h-64 overflow-auto">
@@ -282,7 +282,7 @@ export default function Checkout() {
                   <p className="text-slate-400 text-sm">Không tìm thấy ghế đang giữ. Vui lòng quay lại bước chọn ghế.</p>
                 ) : (
                   lockedSeats.map((seat: Seat) => (
-                    <div key={seat.id} className="flex justify-between items-center text-sm bg-slate-800/60 rounded-lg px-3 py-2">
+                    <div key={seat.id} className="flex justify-between items-center text-sm customer-bg-page rounded-lg px-3 py-2">
                       <span>{seat.seat_label}</span>
                       <span>{formatCurrencyVnd(seat.price)}</span>
                     </div>
@@ -305,7 +305,7 @@ export default function Checkout() {
                 <div className="flex justify-between items-end">
                   <div>
                     <span className="text-[10px] font-headline font-black uppercase tracking-[0.3em] text-slate-500">Tổng thanh toán</span>
-                    <p className="text-4xl font-headline font-black text-white mt-1">{formatCurrencyVnd(total)}</p>
+                    <p className="text-4xl font-headline font-black customer-text-header mt-1">{formatCurrencyVnd(total)}</p>
                   </div>
                   <div className="bg-white p-2 rounded-lg">
                     <div className="w-16 h-16 bg-slate-100 flex items-center justify-center">
@@ -321,15 +321,6 @@ export default function Checkout() {
                   {eventKey}
                 </div>
               )}
-              <div className="mt-4">
-                <label className="text-xs text-slate-400 uppercase tracking-wider">Mã giảm giá</label>
-                <Input
-                  className="mt-2 w-full rounded-lg border bg-slate-800 border-white/20 px-3 py-2 text-white"
-                  value={selectedDiscountCode}
-                  onChange={(e) => setSelectedDiscountCode(e.target.value)}
-                  placeholder="Nhập mã giảm giá"
-                />
-              </div>
             </div>
 
             <div className="mt-6 flex items-center gap-4 bg-secondary/5 border border-secondary/20 p-4 rounded-2xl">

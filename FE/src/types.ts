@@ -41,6 +41,7 @@ export interface EventCard {
   status: EventStatus
   created_at: string
   queue_enabled: boolean
+  max_price: number
 }
 
 export interface ShowSummary {
@@ -335,7 +336,6 @@ export interface CheckoutResponse {
 
 export interface TicketItem {
   ticket_id?: number
-  cancellation_id?: number
   ticket_code: string
   qr_payload?: string
   event_id: number
@@ -352,15 +352,13 @@ export interface TicketItem {
   price: number
   order_id?: number
   seat_status: SeatStatus
-  ticket_status: 'active' | 'cancelled'
+  ticket_status: 'active'
   issued_at?: string
-  canceled_at?: string
 }
 
 export interface DashboardSummary {
   total_revenue: number
   tickets_sold: number
-  cancelled_tickets: number
   active_events: number
   waiting_queue_users: number
 }
@@ -423,7 +421,6 @@ export interface EventDetailStats {
   available_seats: number
   occupancy_rate: number
   tickets_issued: number
-  canceled_tickets: number
   total_revenue: number
   zone_stats: EventZoneStats[]
 }

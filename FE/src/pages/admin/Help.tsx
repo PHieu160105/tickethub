@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { helpApi } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { authStorage } from '@/lib/storage'
@@ -9,6 +10,8 @@ const WS_BASE = API_BASE.replace(/^http/, 'ws').replace(/\/api$/, '')
 
 export default function AdminHelp() {
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedThreadIdParam = searchParams.get('threadId')
   const [threads, setThreads] = useState<HelpThread[]>([])
   const [activeThread, setActiveThread] = useState<HelpThread | null>(null)
   const [messages, setMessages] = useState<HelpMessage[]>([])
@@ -17,10 +20,36 @@ export default function AdminHelp() {
   useEffect(() => {
     void (async () => {
       const data = await helpApi.adminThreads()
-      setThreads(data)
-      if (data[0]) setActiveThread(data[0])
+      const hasUnread = data.some((thread) => thread.unread_admin > 0)
+      const normalizedThreads = hasUnread ? data.map((thread) => ({ ...thread, unread_admin: 0 })) : data
+      const requestedThreadId = requestedThreadIdParam ? Number(requestedThreadIdParam) : null
+      const nextActiveThread =
+        normalizedThreads.find((thread) => thread.id === requestedThreadId) ??
+        normalizedThreads[0] ??
+        null
+
+      setThreads(normalizedThreads)
+      setActiveThread(nextActiveThread)
+
+      if (hasUnread) {
+        try {
+          await helpApi.adminMarkThreadsSeen()
+        } catch {
+          setThreads(data)
+          setActiveThread(data.find((thread) => thread.id === requestedThreadId) ?? data[0] ?? null)
+        }
+      }
     })()
-  }, [])
+  }, [requestedThreadIdParam])
+
+  useEffect(() => {
+    if (!activeThread) return
+    setSearchParams((currentParams) => {
+      const nextParams = new URLSearchParams(currentParams)
+      nextParams.set('threadId', String(activeThread.id))
+      return nextParams
+    }, { replace: true })
+  }, [activeThread, setSearchParams])
 
   useEffect(() => {
     if (!activeThread) return
@@ -39,10 +68,25 @@ export default function AdminHelp() {
       const parsed = JSON.parse(event.data) as { type: string; payload: HelpMessage }
       if (parsed.type === 'help_message') {
         setMessages((prev) => [...prev, parsed.payload])
+        setThreads((prev) =>
+          prev.map((thread) =>
+            thread.id === activeThread.id
+              ? {
+                  ...thread,
+                  last_message_at: parsed.payload.created_at,
+                  last_message_preview: parsed.payload.content,
+                  unread_admin: 0,
+                }
+              : thread,
+          ),
+        )
+        if (parsed.payload.sender_id !== user?.id) {
+          void helpApi.adminMarkThreadsSeen()
+        }
       }
     }
     return () => ws.close()
-  }, [activeThread?.id])
+  }, [activeThread?.id, user?.id])
 
   const canSend = useMemo(() => input.trim().length > 0 && Boolean(activeThread), [input, activeThread])
 
@@ -61,7 +105,11 @@ export default function AdminHelp() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 min-h-[60vh] lg:h-[70vh]">
         <div className="rounded-xl border admin-border admin-bg-help overflow-y-auto max-h-[280px] lg:max-h-none">
           {threads.map((thread) => (
-            <button key={thread.id} onClick={() => setActiveThread(thread)} className={`w-full text-left p-4 border-b admin-border ${activeThread?.id === thread.id ? 'admin-bg-soft' : ''}`}>
+            <button
+              key={thread.id}
+              onClick={() => setActiveThread(thread)}
+              className={`w-full text-left p-4 border-b admin-border ${activeThread?.id === thread.id ? 'admin-bg-soft' : ''}`}
+            >
               <p className="text-sm font-semibold admin-text-header">{thread.customer_name}</p>
               <p className="text-xs admin-text-muted">{thread.customer_email}</p>
               <p className="text-xs admin-text-body mt-1 line-clamp-1">{thread.last_message_preview}</p>

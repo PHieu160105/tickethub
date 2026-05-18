@@ -1,4 +1,4 @@
-"""Kiểm thử vòng đời đặt vé: giữ ghế, thanh toán, phát hành vé và hủy vé."""
+"""Kiểm thử vòng đời đặt vé: giữ ghế, thanh toán, phát hành vé và mở khóa."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import OrderStatus, SeatStatus
 from app.models.seat import Seat
-from app.services.booking_service import cancel_ticket, checkout_locked_seats, fetch_my_tickets, lock_seats, release_expired_locks
+from app.services.booking_service import checkout_locked_seats, fetch_my_tickets, lock_seats, release_expired_locks
 
 
 @pytest.mark.asyncio
@@ -102,33 +102,6 @@ async def test_expired_lock_worker_releases_seat(
     refreshed_seat = await db_session.scalar(select(Seat).where(Seat.id == seat.id))
     assert refreshed_seat is not None
     assert refreshed_seat.status == SeatStatus.AVAILABLE
-
-
-@pytest.mark.asyncio
-async def test_user_can_cancel_ticket_and_release_sold_seat(
-    db_session: AsyncSession,
-    sample_show,
-    customer_users,
-):
-    """Khách hủy một vé thì ghế quay lại trạng thái còn trống."""
-
-    user1, _ = customer_users
-    seat = await db_session.scalar(select(Seat).where(Seat.show_id == sample_show.id).order_by(Seat.id.asc()))
-    assert seat is not None
-
-    await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[seat.id], queue_token=None)
-    checkout = await checkout_locked_seats(db_session, user_id=user1.id, show_id=sample_show.id, queue_token=None)
-    ticket_id = (await fetch_my_tickets(db_session, user_id=user1.id))[0].ticket_id
-
-    await cancel_ticket(db_session, user_id=user1.id, ticket_id=ticket_id)
-
-    refreshed_seat = await db_session.scalar(select(Seat).where(Seat.id == seat.id))
-    assert refreshed_seat is not None
-    assert refreshed_seat.status == SeatStatus.AVAILABLE
-    tickets_after_cancel = await fetch_my_tickets(db_session, user_id=user1.id)
-    assert len(tickets_after_cancel) == 1
-    assert tickets_after_cancel[0].ticket_status == "cancelled"
-    assert checkout.items[0].ticket_code.startswith("TR-")
 
 
 @pytest.mark.asyncio

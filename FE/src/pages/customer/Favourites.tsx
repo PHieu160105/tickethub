@@ -80,7 +80,7 @@ export default function Favourites() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {favourites.map((event) => (
-                <div key={event.id} className="glass-panel rounded-xl overflow-hidden group hover:border-primary/30 transition-all duration-300">
+                <div key={event.id} className="customer-bg-surface border border-[var(--customer-bg-opp)] rounded-xl overflow-hidden group hover:border-primary/30 transition-all duration-300">
                   <div className="relative h-48 overflow-hidden">
                     <img src={event.cover_image_url} alt={event.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                     <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
@@ -94,11 +94,13 @@ export default function Favourites() {
                   </div>
 
                   <div className="p-5 space-y-3">
-                    <h3 className="text-lg font-black text-on-background font-headline leading-tight line-clamp-2">{event.title}</h3>
+                    <div className='min-h-[64px]'>
+                      <h3 className="text-lg font-black text-on-background font-headline leading-tight line-clamp-2">{event.title}</h3>
+                    </div>
                     <p className="text-on-surface-variant text-sm">{event.venue}</p>
                     <button
                       onClick={() => navigate(`/event/${event.slug}`)}
-                      className="w-full mt-4 bg-primary-container text-on-primary-container py-3 rounded-xl font-bold text-sm uppercase tracking-widest hover:shadow-[0_0_15px_rgba(252,83,109,0.4)] transition-all active:scale-95"
+                      className="w-full mt-4 bg-primary-container text-on-primary-container py-3 rounded-xl font-bold text-sm uppercase tracking-widest hover:shadow-[0_0_15px_rgba(252,83,109,0.4)] hover:bg-primary/50 transition-all active:scale-95"
                     >
                       Xem sự kiện
                     </button>

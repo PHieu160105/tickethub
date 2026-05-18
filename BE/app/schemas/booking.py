@@ -67,7 +67,6 @@ class MyTicketResponse(BaseModel):
     """Payload vé của khách hàng trên màn quản lý vé cá nhân."""
 
     ticket_id: int | None = None
-    cancellation_id: int | None = None
     ticket_code: str
     qr_payload: str | None = None
     event_id: int
@@ -84,6 +83,5 @@ class MyTicketResponse(BaseModel):
     price: Decimal
     order_id: int | None = None
     seat_status: SeatStatus
-    ticket_status: Literal['active', 'cancelled'] = 'active'
+    ticket_status: Literal['active'] = 'active'
     issued_at: datetime | None = None
-    canceled_at: datetime | None = None
