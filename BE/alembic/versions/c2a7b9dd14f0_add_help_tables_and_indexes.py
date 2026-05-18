@@ -1,4 +1,4 @@
-"""add_help_tables_and_indexes
+"""Thêm bảng hỗ trợ khách hàng và các index quan trọng.
 
 Revision ID: c2a7b9dd14f0
 Revises: 7f3c1a5c2d11
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-# revision identifiers, used by Alembic.
+# Định danh revision do Alembic sử dụng.
 revision: str = "c2a7b9dd14f0"
 down_revision: Union[str, Sequence[str], None] = "b16913c86cb7"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -95,4 +95,3 @@ def downgrade() -> None:
     op.drop_index("ix_ticket_rush_help_threads_customer_id", table_name="help_threads", schema="ticket_rush")
     op.drop_table("help_messages", schema="ticket_rush")
     op.drop_table("help_threads", schema="ticket_rush")
-

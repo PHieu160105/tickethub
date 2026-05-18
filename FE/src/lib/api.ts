@@ -94,6 +94,46 @@ async function withRetry<T>(request: RetryableRequest<T>, attempts = API_RETRY_A
 
 export { withRetry }
 
+export function postAuthorizedJsonKeepalive(path: string, payload: unknown): boolean {
+  /**
+   * Gửi một POST nền có `keepalive` để trình duyệt cố hoàn tất yêu cầu ngay cả khi
+   * người dùng đang rời trang hoặc đóng tab.
+   *
+   * Đầu vào:
+   * - `path`: đường dẫn API tương đối, ví dụ `/bookings/release`.
+   * - `payload`: dữ liệu JSON gửi lên máy chủ ứng dụng.
+   *
+   * Đầu ra:
+   * - `true` nếu giao diện người dùng đã bắt đầu yêu cầu nền.
+   * - `false` nếu thiếu `fetch`, thiếu token hoặc không thể khởi tạo yêu cầu.
+   *
+   * Cách hoạt động:
+   * - Lấy JWT đang đăng nhập từ local storage.
+   * - Dùng `fetch(..., { keepalive: true })` để giảm nguy cơ yêu cầu bị hủy khi trang bị tháo khỏi giao diện.
+   * - Không chờ phản hồi vì đây là nhánh dọn dẹp tài nguyên ở nền.
+   */
+
+  const token = authStorage.getToken()
+  if (!token || typeof window === 'undefined' || typeof window.fetch !== 'function') {
+    return false
+  }
+
+  try {
+    void window.fetch(`${apiBaseURL}${path}`, {
+      method: 'POST',
+      keepalive: true,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function extractApiErrorMessage(error: unknown, fallback: string): string {
   if (!axios.isAxiosError(error)) return fallback
 
@@ -593,6 +633,10 @@ export const siteSettingsApi = {
 }
 
 export const helpApi = {
+  async getMyThread() {
+    const response = await api.get<HelpThread | null>('/help/threads/me', { timeout: 6000 })
+    return response.data
+  },
   async createOrGetMyThread() {
     return withRetry(() => api.post<HelpThread>('/help/threads/me'))
   },

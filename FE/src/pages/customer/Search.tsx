@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/Button'
 import { EventCard } from '@/components/ui/EventCard'
-//import { GlobalLoader } from '@/components/ui/GlobalLoader'
+// import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { Input } from '@/components/ui/Input'
 import { useEvents } from '@/features/events/hooks/useEvents'
 import { formatCurrencyVnd } from '@/lib/utils'
@@ -66,12 +66,16 @@ export default function Search() {
   }, [events])
 
   useEffect(() => {
-    if (!hasTouchedPriceRange) {
-      setPriceRange([0, priceRangeLimit])
-      return
-    }
+    const frameId = window.requestAnimationFrame(() => {
+      if (!hasTouchedPriceRange) {
+        setPriceRange([0, priceRangeLimit])
+        return
+      }
 
-    setPriceRange((prev) => (prev[1] > priceRangeLimit ? [0, priceRangeLimit] : prev))
+      setPriceRange((prev) => (prev[1] > priceRangeLimit ? [0, priceRangeLimit] : prev))
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
   }, [hasTouchedPriceRange, priceRangeLimit])
 
   const filteredResults = useMemo(() => {
@@ -122,9 +126,7 @@ export default function Search() {
     setUrlParams({}, { replace: true })
   }
 
-  // if (isLoading) {
-  //   return <GlobalLoader />
-  // }
+  // Nếu muốn khóa toàn trang trong lúc tải danh sách sự kiện, có thể bật lại GlobalLoader tại đây.
 
   return (
     <div className="min-h-screen text-white">
@@ -287,7 +289,7 @@ export default function Search() {
                     venue={event.venue}
                     price="Xem giá ghế"
                     badge={event.category}
-                    href={`/event/${event.slug || event.id}`}
+                    href={`/event/${event.id}`}
                   />
                 ))}
               </div>

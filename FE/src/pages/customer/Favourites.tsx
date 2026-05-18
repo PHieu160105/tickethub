@@ -99,7 +99,7 @@ export default function Favourites() {
                     </div>
                     <p className="text-on-surface-variant text-sm">{event.venue}</p>
                     <button
-                      onClick={() => navigate(`/event/${event.slug}`)}
+                      onClick={() => navigate(`/event/${event.id}`)}
                       className="w-full mt-4 bg-primary-container text-on-primary-container py-3 rounded-xl font-bold text-sm uppercase tracking-widest hover:shadow-[0_0_15px_rgba(252,83,109,0.4)] hover:bg-primary/50 transition-all active:scale-95"
                     >
                       Xem sự kiện

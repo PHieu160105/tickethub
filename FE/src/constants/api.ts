@@ -51,33 +51,33 @@ export const AUTH = {
  * Danh sách endpoint backend theo từng nhóm nghiệp vụ.
  */
 export const ENDPOINTS = {
-  // Endpoint xác thực.
+  // Đường dẫn xác thực.
   AUTH: {
     LOGIN: '/auth/login',
     REGISTER: '/auth/register',
     ME: '/auth/me',
     UPDATE_ME: '/auth/me',
   },
-  // Endpoint sự kiện.
+  // Đường dẫn sự kiện.
   EVENTS: {
     LIST: '/events',
     DETAIL: (eventKey: string) => `/events/${eventKey}`,
     SEATS: (showId: string | number) => `/shows/${showId}/seats`,
   },
-  // Endpoint hàng đợi.
+  // Đường dẫn hàng đợi.
   QUEUE: {
     JOIN: (showId: string | number) => `/shows/${showId}/queue/join`,
     STATUS: (showId: string | number, token: string) => `/shows/${showId}/queue/status/${token}`,
     HEARTBEAT: (showId: string | number, token: string) => `/shows/${showId}/queue/heartbeat/${token}`,
   },
-  // Endpoint đặt vé.
+  // Đường dẫn đặt vé.
   BOOKINGS: {
     LOCK: '/bookings/lock',
     RELEASE: '/bookings/release',
     CHECKOUT: '/bookings/checkout',
     MY_TICKETS: '/bookings/my-tickets',
   },
-  // Endpoint quản trị.
+  // Đường dẫn quản trị.
   ADMIN: {
     EVENTS: '/admin/events',
     EVENT_DETAIL: (eventKey: string | number) => `/admin/events/${eventKey}`,

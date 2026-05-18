@@ -141,7 +141,7 @@ export function AdminLayout({ title, actions }: AdminLayoutProps) {
       <main className="flex-1 flex min-h-0 flex-col overflow-visible">
         <header className="relative z-[70] flex items-center justify-between gap-3 border-b admin-border p-4 backdrop-blur-sm md:px-6">
           <div className="flex items-center gap-3">
-            <button className="rounded p-2 hover:bg-white/10 md:hidden" onClick={() => setDrawerOpen((value) => !value)} aria-label="Toggle admin menu">
+            <button className="rounded p-2 hover:bg-white/10 md:hidden" onClick={() => setDrawerOpen((value) => !value)} aria-label="Mở hoặc đóng menu quản trị">
               {drawerOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
             {title && <h1 className="text-lg font-semibold">{title}</h1>}

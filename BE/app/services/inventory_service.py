@@ -25,16 +25,16 @@ def _as_utc(value: datetime | None) -> datetime | None:
 async def _get_show_or_404(session: AsyncSession, show_id: int) -> Show:
     """Lấy show còn hiệu lực hoặc trả lỗi 404.
 
-    Input:
+    Đầu vào:
     - `session`: phiên DB async.
     - `show_id`: ID buổi diễn cần lấy sơ đồ ghế.
 
-    Output:
-    - Model `Show` nếu tồn tại và chưa bị soft-delete.
+    Đầu ra:
+    - Bản ghi `Show` nếu tồn tại và chưa bị xóa mềm.
 
     Cách hoạt động:
-    - Query theo `show_id` và `is_deleted = false`.
-    - Nếu không có dữ liệu thì ném `HTTPException 404` để route trả lỗi rõ ràng cho frontend.
+    - Truy vấn theo `show_id` và `is_deleted = false`.
+    - Nếu không có dữ liệu thì ném `HTTPException 404` để endpoint trả lỗi rõ ràng cho giao diện người dùng.
     """
 
     show = await session.scalar(select(Show).where(Show.id == show_id, Show.is_deleted.is_(False)))
@@ -46,15 +46,15 @@ async def _get_show_or_404(session: AsyncSession, show_id: int) -> Show:
 def _zone_block_map(zones: list[SeatZone]) -> dict[int, dict[str, float]]:
     """Chia canvas phần trăm thành các khối mặc định khi ghế chưa có tọa độ.
 
-    Input:
+    Đầu vào:
     - `zones`: danh sách khu vực vé của một buổi diễn.
 
-    Output:
-    - Map `zone_id -> {left, top, width, height}` theo hệ tọa độ phần trăm 0-100.
+    Đầu ra:
+    - Bảng ánh xạ `zone_id -> {left, top, width, height}` theo hệ tọa độ phần trăm 0-100.
 
     Cách hoạt động:
     - Một khu vực thì chiếm một khối lớn.
-    - Nhiều khu vực thì xếp thành lưới 2 cột, có margin/gap cố định để frontend vẫn vẽ được sơ đồ.
+    - Nhiều khu vực thì xếp thành lưới 2 cột, có lề và khoảng cách cố định để giao diện người dùng vẫn vẽ được sơ đồ.
     """
 
     if not zones:
@@ -85,17 +85,17 @@ def _zone_block_map(zones: list[SeatZone]) -> dict[int, dict[str, float]]:
 def _generated_xy(seat: Seat, zone: SeatZone | None, block: dict[str, float] | None) -> tuple[float | None, float | None]:
     """Tạo tọa độ tạm cho ghế chưa có `x_coord/y_coord`.
 
-    Input:
+    Đầu vào:
     - `seat`: ghế cần hiển thị.
     - `zone`: khu vực chứa ghế nếu có.
     - `block`: khối phần trăm của khu vực trên canvas.
 
-    Output:
+    Đầu ra:
     - Cặp tọa độ `(x, y)` theo phần trăm hoặc `(None, None)` nếu không đủ dữ liệu.
 
     Cách hoạt động:
     - Ưu tiên tọa độ thật do admin tạo.
-    - Nếu thiếu tọa độ, nội suy vị trí theo hàng/cột trong khối khu vực.
+    - Nếu thiếu tọa độ, nội suy vị trí theo hàng và cột trong khối khu vực.
     """
 
     if seat.x_coord is not None and seat.y_coord is not None:
@@ -121,25 +121,25 @@ async def get_seatmap(
     show_id: int,
     current_user_id: int | None = None,
 ) -> dict[str, Any]:
-    """Trả toàn bộ sơ đồ ghế có tọa độ để frontend render.
+    """Trả toàn bộ sơ đồ ghế có tọa độ để giao diện người dùng hiển thị.
 
-    Input:
+    Đầu vào:
     - `show_id`: buổi diễn cần xem sơ đồ.
-    - `current_user_id`: có thể rỗng khi khách chưa đăng nhập xem preview.
+    - `current_user_id`: có thể rỗng khi khách chưa đăng nhập xem trước.
 
-    Output:
-    - Dict gồm thông tin show/event, nền venue, khu vực, polygon và danh sách ghế có giá/trạng thái.
+    Đầu ra:
+    - Từ điển gồm thông tin show/event, nền venue, khu vực, polygon và danh sách ghế có giá cùng trạng thái.
 
     Cách hoạt động:
     - Lấy show, event, venue, zones, sections và polygon overlay.
-    - Chuẩn hóa trạng thái ghế lock đã hết hạn về `available` trên payload public.
-    - Không đánh dấu `is_locked_by_me` cho guest để tránh lỗi so sánh `NULL = NULL`.
+    - Chuẩn hóa trạng thái ghế đang giữ nhưng đã hết hạn về `available` trên dữ liệu công khai.
+    - Không đánh dấu `is_locked_by_me` cho khách để tránh lỗi so sánh `NULL = NULL`.
     """
 
     show = await _get_show_or_404(session, show_id)
     event = await session.get(Event, show.event_id)
     venue: Venue | None = await session.get(Venue, show.venue_id) if show.venue_id else None
-    # Lấy toàn bộ khu giá vé trước để dựng map tra cứu nhanh theo `zone_id`.
+    # Lấy toàn bộ khu giá vé trước để dựng bảng tra cứu nhanh theo `zone_id`.
     zones = list(await session.scalars(select(SeatZone).where(SeatZone.show_id == show.id).order_by(SeatZone.id.asc())))
     zone_map = {
         zone.id: {
@@ -154,7 +154,7 @@ async def get_seatmap(
     zone_lookup = {zone.id: zone for zone in zones}
     zone_blocks = _zone_block_map(zones)
 
-    # Section chỉ tồn tại khi show được clone từ venue layout.
+    # Khu vực mẫu chỉ tồn tại khi show được nhân bản từ bố cục venue.
     sections: list[Section] = []
     if show.venue_layout_id:
         sections = list(
@@ -181,7 +181,7 @@ async def get_seatmap(
         )
     )
 
-    # Danh sách ghế là dữ liệu chính để frontend render từng nút ghế trên canvas.
+    # Danh sách ghế là dữ liệu chính để giao diện người dùng hiển thị từng nút ghế trên canvas.
     seats = list(await session.scalars(select(Seat).where(Seat.show_id == show_id).order_by(Seat.section_id, Seat.seat_label)))
     now = datetime.now(UTC)
 

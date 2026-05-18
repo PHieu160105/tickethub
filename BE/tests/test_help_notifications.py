@@ -1,4 +1,4 @@
-"""Backend tests for support notification unread and mark-seen behavior."""
+"""Kiểm thử trạng thái chưa đọc và đánh dấu đã xem của trung tâm hỗ trợ."""
 
 import pytest
 from sqlalchemy import select
@@ -21,7 +21,7 @@ async def test_customer_message_increments_admin_unread_and_bulk_mark_seen(
     admin_user,
     customer_users,
 ):
-    """Customer messages should raise admin unread and be cleared by bulk mark-seen."""
+    """Tin nhắn của khách phải tăng số chưa đọc phía admin và được xóa khi admin đánh dấu đã xem hàng loạt."""
 
     customer, _ = customer_users
 
@@ -56,7 +56,7 @@ async def test_admin_reply_increments_customer_unread_and_customer_mark_seen(
     admin_user,
     customer_users,
 ):
-    """Admin replies should raise customer unread and be cleared when customer sees them."""
+    """Phản hồi của admin phải tăng số chưa đọc phía khách và được xóa khi khách đánh dấu đã xem."""
 
     customer, _ = customer_users
 
@@ -100,7 +100,7 @@ async def test_admin_thread_list_keeps_latest_thread_per_customer_with_latest_pr
     admin_user,
     customer_users,
 ):
-    """Admin thread list should stay deduplicated per customer and keep the latest preview."""
+    """Danh sách hội thoại admin phải gộp theo từng khách và giữ đoạn xem trước mới nhất."""
 
     customer_one, customer_two = customer_users
 

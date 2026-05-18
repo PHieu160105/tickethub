@@ -36,6 +36,7 @@ const CustomerTicket: React.FC = () => {
   const { user, isAuthenticated, logout } = useAuth()
   const [activeTab, setActiveTab] = useState<TicketTab>('upcoming')
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [referenceTime] = useState(() => Date.now())
 
   const { tickets, isLoading, error, refetch } = useMyTickets()
 
@@ -52,16 +53,14 @@ const CustomerTicket: React.FC = () => {
   }, [drawerOpen])
 
   const filteredTickets = useMemo(() => {
-    const now = Date.now()
-
     return tickets.filter((ticket) => {
       const eventTime = new Date(ticket.show_start_at).getTime()
-      const isPast = eventTime < now
+      const isPast = eventTime < referenceTime
 
       if (activeTab === 'upcoming') return !isPast && ticket.seat_status === 'sold'
       return isPast && ticket.seat_status === 'sold'
     })
-  }, [tickets, activeTab])
+  }, [activeTab, referenceTime, tickets])
 
   const onSidebarNavigate = (tab: string) => {
     setDrawerOpen(false)
@@ -77,7 +76,7 @@ const CustomerTicket: React.FC = () => {
   }
 
   const onViewDetails = (ticket: TicketItem) => {
-    navigate(`/event/${ticket.event_slug}`)
+    navigate(`/event/${ticket.event_id}`)
   }
 
   const onDownload = (ticket: TicketItem) => {

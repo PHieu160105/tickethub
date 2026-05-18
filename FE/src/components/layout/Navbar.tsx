@@ -43,6 +43,8 @@ export function Navbar() {
   const { user, isAuthenticated, logout } = useAuth()
   const navigate = useNavigate()
   const notifRef = useRef<HTMLDivElement | null>(null)
+  const supportThreadFailureCountRef = useRef(0)
+  const nextSupportThreadRetryAtRef = useRef(0)
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20)
@@ -72,13 +74,42 @@ export function Navbar() {
     let isMounted = true
 
     const loadSupportThread = async () => {
+      /**
+       * Tải trạng thái thông báo hỗ trợ cho Navbar mà không tự tạo hội thoại rỗng.
+       *
+       * Đầu vào:
+       * - Không nhận tham số trực tiếp. Hàm đọc trạng thái đăng nhập và JWT từ context/API chung.
+       *
+       * Đầu ra:
+       * - Cập nhật `supportThread` và cờ `hasUnread` trong Navbar.
+       *
+       * Cách hoạt động:
+       * - Chỉ gọi API khi tab đang online và đã qua thời điểm backoff sau lỗi mạng.
+       * - Dùng API GET chỉ đọc để tránh spam POST tạo thread khi backend tạm restart.
+       * - Nếu backend mất kết nối, tăng thời gian chờ trước lần thử tiếp theo để console không ngập lỗi.
+       */
+
+      if (!window.navigator.onLine || document.visibilityState === 'hidden') {
+        return
+      }
+
+      const now = Date.now()
+      if (now < nextSupportThreadRetryAtRef.current) {
+        return
+      }
+
       try {
-        const thread = await helpApi.createOrGetMyThread()
+        const thread = await helpApi.getMyThread()
         if (!isMounted) return
+        supportThreadFailureCountRef.current = 0
+        nextSupportThreadRetryAtRef.current = 0
         setSupportThread(thread)
-        setHasUnread(thread.unread_customer > 0)
+        setHasUnread((thread?.unread_customer ?? 0) > 0)
       } catch {
         if (!isMounted) return
+        supportThreadFailureCountRef.current += 1
+        const retryDelayMs = Math.min(120000, 15000 * supportThreadFailureCountRef.current)
+        nextSupportThreadRetryAtRef.current = Date.now() + retryDelayMs
         setSupportThread(null)
         setHasUnread(false)
       }
@@ -252,7 +283,7 @@ export function Navbar() {
           <button
             className="md:hidden p-2 rounded-lg hover:customer-bg-soft transition-colors"
             onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label="Toggle menu"
+            aria-label="Mở hoặc đóng menu"
           >
             {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>

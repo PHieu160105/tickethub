@@ -1,4 +1,4 @@
-"""add_show_polygons
+"""Thêm vùng đa giác riêng cho từng buổi diễn.
 
 Revision ID: e4f1c2d3a456
 Revises: xxxxx

@@ -1481,7 +1481,7 @@ export default function AdminSeatPlanner() {
                                     plannerBackground.includes('<svg') ? (
                                         <div className="absolute inset-0 opacity-70 [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: plannerBackground }} />
                                     ) : (
-                                        <img src={plannerBackground} alt="Seat planner background" className="absolute inset-0 h-full w-full object-contain opacity-80 pointer-events-none" />
+                                        <img src={plannerBackground} alt="Nền sơ đồ ghế" className="absolute inset-0 h-full w-full object-contain opacity-80 pointer-events-none" />
                                     )
                                 )}
                             {seatMap.polygons.map((polygon) => {
@@ -2111,4 +2111,3 @@ export default function AdminSeatPlanner() {
         </div>
     )
 }
-

@@ -19,8 +19,8 @@ interface InteractiveSeatCanvasProps {
     onMouseMove?: MouseEventHandler<HTMLDivElement>
     onWheel?: WheelEventHandler<HTMLDivElement>
     onClick?: MouseEventHandler<HTMLDivElement>
-    /** When provided, canvas height is driven by CSS aspect-ratio (preferred).
-     *  Falls back to heightClassName if omitted. */
+    /** Khi có giá trị, chiều cao canvas được tính theo tỷ lệ CSS `aspect-ratio`.
+     *  Nếu bỏ trống, component dùng `heightClassName` làm chiều cao dự phòng. */
     aspectRatio?: number
     heightClassName?: string
     gridSize?: string

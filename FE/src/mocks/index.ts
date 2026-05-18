@@ -11,7 +11,6 @@ export {
   TIMEFRAMES 
 } from './search'
 
-
-// Export types
+// Xuất kiểu dữ liệu mô phỏng để nơi khác dùng lại.
 export type { EventDetail, UpcomingEvent, Review, RelatedArtist } from './events'
 export type { SearchResult } from './search'

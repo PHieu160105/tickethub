@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import axios from 'axios'
 
 import { CustomerSeatMap } from '@/components/customer/CustomerSeatMap'
@@ -13,7 +13,7 @@ import { useLockSeats, useReleaseSeats } from '@/features/booking/hooks/useBooki
 import { useShowSeats } from '@/features/events/hooks/useEvents'
 import { useWebSocketHeartbeat } from '@/hooks/useWebSocketHeartbeat'
 import { eventApi, extractApiErrorMessage, seatmapApi } from '@/lib/api'
-import { authStorage, queueStorage } from '@/lib/storage'
+import { authStorage, checkoutReturnSeatStorage, queueStorage } from '@/lib/storage'
 import { formatCurrencyVnd } from '@/lib/utils'
 import type { Seat, SeatMapResponse, SeatMapSeat, SeatZone } from '@/types'
 import { AlertCircle, MapPin, Ticket } from 'lucide-react'
@@ -37,6 +37,10 @@ function groupSeatsByZone(seats: Seat[]) {
 const DEFAULT_VIEWPORT = { scale: 1, offsetX: 0, offsetY: 0 }
 const MATRIX_REFRESH_INTERVAL_MS = 3000
 
+interface SeatSelectionLocationState {
+  preselectedSeatIds?: number[]
+}
+
 function isRecoverableQueueTokenError(error: unknown): boolean {
   if (!axios.isAxiosError(error)) {
     return false
@@ -48,9 +52,22 @@ function isRecoverableQueueTokenError(error: unknown): boolean {
 
 export default function SeatSelection() {
   const { showId: showIdParam } = useParams<{ showId: string }>()
+  const location = useLocation()
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
   const showId = Number(showIdParam ?? '')
+  const locationState = (location.state ?? {}) as SeatSelectionLocationState
+  const storedPreselectedSeatIds = useMemo(() => {
+    if (!showId || Number.isNaN(showId)) return []
+    return checkoutReturnSeatStorage.get(showId)
+  }, [showId])
+  const preselectedSeatIds = useMemo(
+    () => {
+      const routeSeatIds = locationState.preselectedSeatIds ?? []
+      return routeSeatIds.length > 0 ? routeSeatIds : storedPreselectedSeatIds
+    },
+    [locationState.preselectedSeatIds, storedPreselectedSeatIds],
+  )
 
   const { seats: matrix, isLoading, error, refetch } = useShowSeats(showId, { pollIntervalMs: MATRIX_REFRESH_INTERVAL_MS })
   const { isLoading: isLocking, lockSeats } = useLockSeats()
@@ -66,12 +83,17 @@ export default function SeatSelection() {
   const [queueAccessStatus, setQueueAccessStatus] = useState<'checking' | 'admitted' | 'blocked'>('checking')
   const [queueAccessMessage, setQueueAccessMessage] = useState('')
   const canvasRef = useRef<HTMLDivElement>(null)
+  const hasAppliedPreselectedSeatsRef = useRef(false)
 
   const queueToken = showId ? queueStorage.getToken(showId) : null
   const authToken = authStorage.getToken()
   const wsUrl = showId && authToken ? `${WS_BASE_URL}/shows/${showId}/seats?token=${encodeURIComponent(authToken)}` : null
   const matrixShowId = matrix?.show_id
   const matrixQueueEnabled = Boolean(matrix?.queue_enabled)
+
+  useEffect(() => {
+    hasAppliedPreselectedSeatsRef.current = false
+  }, [location.key, showId])
 
   const refreshSeatMap = useCallback(async () => {
     if (!showId || Number.isNaN(showId)) return
@@ -199,16 +221,30 @@ export default function SeatSelection() {
     if (!matrix) return
 
     const frameId = window.requestAnimationFrame(() => {
-      setSelectedSeatIds((previous) =>
-        previous.filter((seatId) => {
-          const seat = matrix.seats.find((item) => item.id === seatId)
-          return Boolean(seat && seat.status === 'available')
-        }),
+      const shouldRestoreFromCheckout = (
+        !hasAppliedPreselectedSeatsRef.current &&
+        selectedSeatIds.length === 0 &&
+        preselectedSeatIds.length > 0
       )
+      const sourceSeatIds = shouldRestoreFromCheckout ? preselectedSeatIds : selectedSeatIds
+      const nextSeatIds = sourceSeatIds.filter((seatId) => {
+        const seat = matrix.seats.find((item) => item.id === seatId)
+        return Boolean(seat && (seat.status === 'available' || seat.is_locked_by_me))
+      })
+
+      if (shouldRestoreFromCheckout) {
+        hasAppliedPreselectedSeatsRef.current = true
+        checkoutReturnSeatStorage.clear(showId)
+      }
+
+      const changed = nextSeatIds.length !== selectedSeatIds.length || nextSeatIds.some((seatId, index) => seatId !== selectedSeatIds[index])
+      if (changed) {
+        setSelectedSeatIds(nextSeatIds)
+      }
     })
 
     return () => window.cancelAnimationFrame(frameId)
-  }, [matrix])
+  }, [matrix, preselectedSeatIds, selectedSeatIds, showId])
 
   const seatsByZone = useMemo(() => groupSeatsByZone(matrix?.seats ?? []), [matrix?.seats])
 
@@ -427,7 +463,7 @@ export default function SeatSelection() {
               <h1 className="mt-2 text-3xl font-black customer-text-header">{seatMap?.show_title ?? 'Chọn ghế trên sơ đồ'}</h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-400">
                 {useCanvas
-                  ? 'Click vào ghế trống để xem giá và chọn thử. Ghế chỉ được giữ khi bạn đăng nhập, qua hàng đợi hợp lệ và bấm tiếp tục thanh toán.'
+                  ? 'Bấm vào ghế trống để xem giá và chọn thử. Ghế chỉ được giữ khi bạn đăng nhập, qua hàng đợi hợp lệ và bấm tiếp tục thanh toán.'
                   : 'Hiện chưa có sơ đồ chỗ ngồi cho show này.'}
               </p>
               {matrix.queue_enabled && !isAuthenticated && (
@@ -436,7 +472,7 @@ export default function SeatSelection() {
                 </p>
               )}
             </div>
-            <Link to={`/event/${matrix.event_slug}`}>
+            <Link to={`/event/${matrix.event_id}`}>
               <Button variant="outline" size="sm">Quay lại sự kiện</Button>
             </Link>
           </div>

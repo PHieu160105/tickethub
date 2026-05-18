@@ -88,10 +88,10 @@ export function ErrorPage() {
         </div>
       </main>
 
-      {/* Footer */}
+      {/* Chân trang */}
       <Footer />
 
-      {/* Custom Styles */}
+      {/* Kiểu dáng riêng cho hiệu ứng nền của trang lỗi. */}
       <style>{`
         @keyframes float {
           0% { transform: translateY(0px) rotate(0deg); }

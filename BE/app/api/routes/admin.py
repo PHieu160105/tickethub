@@ -1194,7 +1194,7 @@ async def list_admin_ticket_sales(
     if status_filter:
         normalized_status = status_filter.strip().lower()
         if normalized_status not in {OrderStatus.PAID.value, OrderStatus.PENDING.value}:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Trang thai loc khong hop le")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Trạng thái lọc không hợp lệ")
         stmt = stmt.where(Order.status == normalized_status)
 
     filtered_stmt = stmt.subquery()

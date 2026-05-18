@@ -120,7 +120,7 @@ export function useWebSocketHeartbeat({
       }
     }
 
-    // Trì hoãn kết nối ngắn để tránh vòng đóng trước khi mở khi StrictMode mount lại trong môi trường dev.
+    // Trì hoãn kết nối ngắn để tránh vòng đóng trước khi mở khi StrictMode mount lại trong môi trường phát triển.
     reconnectTimerRef.current = window.setTimeout(connect, 120)
 
     heartbeatTimerRef.current = window.setInterval(() => {

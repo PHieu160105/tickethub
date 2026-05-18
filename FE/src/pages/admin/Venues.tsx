@@ -110,7 +110,7 @@ function renderBackgroundPreview(source: string | null) {
 
     return (
         <div className="rounded-xl border border-white/10 customer-bg-page p-3">
-            <img src={source} alt="Venue background preview" className="max-h-[420px] w-full rounded-lg object-contain" />
+            <img src={source} alt="Nền địa điểm xem trước" className="max-h-[420px] w-full rounded-lg object-contain" />
         </div>
     )
 }
@@ -2110,7 +2110,7 @@ export default function AdminVenues() {
                                             ) : (
                                                 <img
                                                     src={selectedVenueBackground}
-                                                    alt="Venue background"
+                                                    alt="Nền địa điểm"
                                                     className="absolute inset-0 h-full w-full object-contain opacity-80 pointer-events-none"
                                                 />
                                             )

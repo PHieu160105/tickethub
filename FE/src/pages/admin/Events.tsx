@@ -597,7 +597,7 @@ export default function AdminEvents() {
               onChange={(event) => setEventForm((prev) => ({ ...prev, image_file: event.target.files?.[0] ?? null }))}
             />
             {eventForm.cover_image_url && (
-              <img src={eventForm.cover_image_url} alt="Event cover preview" className="max-h-48 w-full rounded-lg border border-white/10 object-cover" />
+              <img src={eventForm.cover_image_url} alt="Ảnh bìa sự kiện xem trước" className="max-h-48 w-full rounded-lg border border-white/10 object-cover" />
             )}
           </div>
 

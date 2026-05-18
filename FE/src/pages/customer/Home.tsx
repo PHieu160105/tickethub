@@ -11,7 +11,7 @@ const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80'
 
 function formatDate(date: string) {
-  return new Date(date).toLocaleDateString('en-US', {
+  return new Date(date).toLocaleDateString('vi-VN', {
     month: 'short',
     day: '2-digit',
     year: 'numeric',
@@ -75,7 +75,7 @@ export default function Home() {
 
         <div className="relative max-w-7xl mx-auto px-6 py-20">
           {isLoading ? (
-            <p className="text-slate-300">Loading events...</p>
+            <p className="text-slate-300">Đang tải sự kiện...</p>
           ) : error ? (
             <p className="text-amber-300">{error}</p>
           ) : heroEvent ? (
@@ -97,7 +97,7 @@ export default function Home() {
                 </span>
               </div>
               <div className="flex gap-3">
-                <Link to={`/event/${heroEvent.slug || heroEvent.id}`}>
+                <Link to={`/event/${heroEvent.id}`}>
                   <Button size="md" variant={"primary"}>Chi tiết</Button>
                 </Link>
                 <Link to="/search">
@@ -168,7 +168,7 @@ export default function Home() {
                 venue={event.venue}
                 price="Xem chi tiết"
                 badge={event.category}
-                href={`/event/${event.slug || event.id}`}
+                href={`/event/${event.id}`}
               />
             ))}
           </div>

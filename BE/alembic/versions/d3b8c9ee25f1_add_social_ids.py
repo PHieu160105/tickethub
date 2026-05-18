@@ -1,4 +1,4 @@
-"""add_social_ids
+"""Thêm định danh đăng nhập mạng xã hội cho người dùng.
 
 Revision ID: d3b8c9ee25f1
 Revises: c2a7b9dd14f0
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-# revision identifiers, used by Alembic.
+# Định danh revision do Alembic sử dụng.
 revision: str = "d3b8c9ee25f1"
 down_revision: Union[str, Sequence[str], None] = "c2a7b9dd14f0"
 branch_labels: Union[str, Sequence[str], None] = None
