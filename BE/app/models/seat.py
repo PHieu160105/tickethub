@@ -45,8 +45,8 @@ class Seat(TimestampMixin, Base):
     x_coord: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)  # Tọa độ phần trăm theo trục X trong khoảng 0-100.
     y_coord: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)  # Tọa độ phần trăm theo trục Y trong khoảng 0-100.
     rotation: Mapped[float] = mapped_column(Numeric(5, 2), default=0, nullable=False)  # Góc xoay trực quan của ghế trong khoảng 0-360 độ.
-    section_id: Mapped[int | None] = mapped_column(ForeignKey("sections.id"), nullable=True, index=True)
-    venue_layout_id: Mapped[int | None] = mapped_column(ForeignKey("venue_layouts.id"), nullable=True, index=True)
+    section_id: Mapped[int | None] = mapped_column(ForeignKey("sections.id", ondelete="SET NULL"), nullable=True, index=True)
+    venue_layout_id: Mapped[int | None] = mapped_column(ForeignKey("venue_layouts.id", ondelete="SET NULL"), nullable=True, index=True)
 
     sold_order_item = relationship("OrderItem", back_populates="seat", uselist=False)
     zone = relationship("SeatZone", back_populates="seats")

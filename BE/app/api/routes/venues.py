@@ -340,13 +340,13 @@ async def delete_venue(
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_active_admin),
 ) -> None:
-    """Xóa mềm một địa điểm."""
+    """Xóa hoàn toàn một địa điểm khỏi database."""
 
     venue = await session.scalar(select(Venue).where(Venue.id == venue_id))
     if not venue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy địa điểm")
 
-    venue.is_active = False
+    await session.delete(venue)
     await session.commit()
 
 
