@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ComponentProps } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/Badge'
@@ -27,14 +27,25 @@ function formatDate(date: string) {
 }
 
 function statusBadge(status: EventStatus) {
-  const variants: Record<EventStatus, { text: string; className: string }> = {
-    draft: { text: 'Draft', className: 'bg-gray-500/50 text-white' },
-    live: { text: 'Live', className: 'bg-green-500/50 text-white' },
-    closed: { text: 'Closed', className: 'bg-red-500/50 text-white' },
+  const variants: Record<EventStatus, { text: string; variant: ComponentProps<typeof Badge>['variant'] }> = {
+    draft: { text: 'Draft', variant: 'default' },
+    live: { text: 'Live', variant: 'success' },
+    closed: { text: 'Closed', variant: 'danger' },
   }
 
   const variant = variants[status]
-  return <Badge className={variant.className}>{variant.text}</Badge>
+  return <Badge variant={variant.variant}>{variant.text}</Badge>
+}
+
+function showStatusBadge(show: { status: EventStatus; end_at: string }) {
+  if (new Date(show.end_at).getTime() <= Date.now()) {
+    return <Badge variant="danger">End</Badge>
+  }
+  return statusBadge(show.status)
+}
+
+function canBookShow(show: { status: EventStatus; end_at: string }) {
+  return show.status === 'live' && new Date(show.end_at).getTime() > Date.now()
 }
 
 export default function EventDetail() {
@@ -220,24 +231,30 @@ export default function EventDetail() {
                   <p className="text-sm text-gray-500">Sự kiện này chưa có show mở bán.</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {event.shows.map((show) => (
-                      <div key={show.id} className="rounded-lg customer-bg-page border border-white/10 p-4">
-                        <div className="flex items-start justify-between gap-3 mb-2">
-                          <div>
-                            <p className="font-semibold customer-text-body">{show.title}</p>
-                            <p className="text-xs text-gray-500 mt-1">{show.description}</p>
+                    {event.shows.map((show) => {
+                      const isBookable = canBookShow(show)
+
+                      return (
+                        <div key={show.id} className="rounded-lg customer-bg-page border border-white/10 p-4">
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div>
+                              <p className="font-semibold customer-text-body">{show.title}</p>
+                              <p className="text-xs text-gray-500 mt-1">{show.description}</p>
+                            </div>
+                            {showStatusBadge(show)}
                           </div>
-                          {statusBadge(show.status)}
+                          <div className="text-sm text-gray-600 space-y-1">
+                            <p>{new Date(show.start_at).toLocaleString('vi-VN')}</p>
+                            <p>{show.venue}</p>
+                          </div>
+                          {isBookable && (
+                            <Link to={`/shows/${show.id}/seats`} className="mt-4 inline-block ">
+                              <Button className='bg-[var(--customer-bg-opt)] hover:bg-[var(--customer-bg-opt)]/50'>Đặt vé</Button>
+                            </Link>
+                          )}
                         </div>
-                        <div className="text-sm text-gray-600 space-y-1">
-                          <p>{new Date(show.start_at).toLocaleString('vi-VN')}</p>
-                          <p>{show.venue}</p>
-                        </div>
-                        <Link to={`/shows/${show.id}/seats`} className="mt-4 inline-block ">
-                          <Button className='bg-[var(--customer-bg-opt)] hover:bg-[var(--customer-bg-opt)]/50'>Đặt vé</Button>
-                        </Link>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>

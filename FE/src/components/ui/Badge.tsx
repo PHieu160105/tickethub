@@ -12,6 +12,7 @@ const badgeVariants = cva(
         warning: 'bg-yellow-500/50 text-white font-bold border-yellow-500/30',
         success: 'bg-green-500/50 text-white font-bold border-green-500/30',
         info: 'bg-cyan-500/50 text-white font-bold border-cyan-500/30',
+        danger: 'bg-red-500/80 text-white font-bold border-red-500/30',
         outline: 'bg-transparent text-gray-300 border-white/20',
       },
       size: {
