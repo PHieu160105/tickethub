@@ -64,7 +64,7 @@ export function Navbar() {
   }, [])
 
   useEffect(() => {
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !user || user.role !== 'customer') {
       setSupportThread(null)
       setOpenThread(null)
       setHasUnread(false)
@@ -222,33 +222,35 @@ export function Navbar() {
         <div className="flex items-center gap-3">
           {isAuthenticated && user ? (
             <div className="hidden sm:flex items-center gap-3" ref={notifRef}>
-              <div className="relative">
-                <Button variant="ghost" size="icon" onClick={() => void toggleNotifications()} className="relative">
-                  <Bell className="h-5 w-5" />
-                  {hasUnread && <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-red-500" />}
-                </Button>
+              {user.role === 'customer' && (
+                <div className="relative">
+                  <Button variant="ghost" size="icon" onClick={() => void toggleNotifications()} className="relative">
+                    <Bell className="h-5 w-5" />
+                    {hasUnread && <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-red-500" />}
+                  </Button>
 
-                {notificationOpen && (
-                  <div className="absolute left-0 mt-2 w-[340px] max-h-[420px] overflow-auto rounded-xl border border border-[var(--customer-bg-opp)] customer-bg-surface shadow-xl p-3 z-50">
-                    <p className="text-sm font-semibold customer-text-header mb-2">Thông báo</p>
-                    {!hasNotificationItem ? (
-                      <p className="text-sm customer-text-muted">Chưa có thông báo mới.</p>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleNotificationClick}
-                        className="w-full rounded-lg border customer-border p-2.5 text-left transition hover:bg-white/5"
-                      >
-                        <p className="text-sm font-medium customer-text-header">Bạn có phản hồi mới từ hỗ trợ</p>
-                        <p className="text-xs customer-text-muted mt-0.5">{openThread?.last_message_preview}</p>
-                        <p className="text-[11px] customer-text-muted mt-1">
-                          {openThread ? formatNotificationTime(openThread.last_message_at) : ''}
-                        </p>
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+                  {notificationOpen && (
+                    <div className="absolute left-0 mt-2 w-[340px] max-h-[420px] overflow-auto rounded-xl border border border-[var(--customer-bg-opp)] customer-bg-surface shadow-xl p-3 z-50">
+                      <p className="text-sm font-semibold customer-text-header mb-2">Thông báo</p>
+                      {!hasNotificationItem ? (
+                        <p className="text-sm customer-text-muted">Chưa có thông báo mới.</p>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleNotificationClick}
+                          className="w-full rounded-lg border customer-border p-2.5 text-left transition hover:bg-white/5"
+                        >
+                          <p className="text-sm font-medium customer-text-header">Bạn có phản hồi mới từ hỗ trợ</p>
+                          <p className="text-xs customer-text-muted mt-0.5">{openThread?.last_message_preview}</p>
+                          <p className="text-[11px] customer-text-muted mt-1">
+                            {openThread ? formatNotificationTime(openThread.last_message_at) : ''}
+                          </p>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                 <img

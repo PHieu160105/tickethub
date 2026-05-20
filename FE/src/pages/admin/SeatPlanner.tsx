@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Copy, FileUp, Hand, MapPin, MousePointer2, Plus, Redo2, RefreshCw, Save, Shapes, Ticket, Trash2, Undo2, Wand2 } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 
@@ -564,7 +564,7 @@ export default function AdminSeatPlanner() {
         setPanStartOffset({ x: viewport.offsetX, y: viewport.offsetY })
     }
 
-    function handleCanvasWheel(event: WheelEvent<HTMLDivElement>) {
+    function handleCanvasWheel(event: WheelEvent) {
         event.preventDefault()
         const element = canvasRef.current
         if (!element) return

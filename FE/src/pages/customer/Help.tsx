@@ -52,9 +52,10 @@ export default function Help() {
 
   useEffect(() => {
     if (!isAuthenticated || !thread) return
+    const threadId = thread.id
     const token = authStorage.getToken()
     if (!token) return
-    const ws = new WebSocket(`${WS_BASE}/ws/help/${thread.id}?token=${encodeURIComponent(token)}`)
+    const ws = new WebSocket(`${WS_BASE}/ws/help/${threadId}?token=${encodeURIComponent(token)}`)
     ws.onmessage = (event) => {
       const parsed = JSON.parse(event.data) as { type: string; payload: HelpMessage }
       if (parsed.type === 'help_message') {
@@ -67,7 +68,16 @@ export default function Help() {
         }
       }
     }
-    return () => ws.close()
+    return () => {
+      ws.onmessage = null
+      if (ws.readyState === WebSocket.CONNECTING) {
+        ws.addEventListener('open', () => ws.close(), { once: true })
+        return
+      }
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close()
+      }
+    }
   }, [isAuthenticated, thread?.id, user?.id])
 
   useEffect(() => {

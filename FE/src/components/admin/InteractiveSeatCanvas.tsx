@@ -1,4 +1,4 @@
-import type { MouseEventHandler, ReactNode, RefObject, WheelEventHandler } from 'react'
+import { useEffect, type MouseEventHandler, type ReactNode, type RefObject } from 'react'
 import { ZoomIn, ZoomOut } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
@@ -17,7 +17,7 @@ interface InteractiveSeatCanvasProps {
     onZoomOut: () => void
     onMouseDown?: MouseEventHandler<HTMLDivElement>
     onMouseMove?: MouseEventHandler<HTMLDivElement>
-    onWheel?: WheelEventHandler<HTMLDivElement>
+    onWheel?: (event: WheelEvent) => void
     onClick?: MouseEventHandler<HTMLDivElement>
     /** Khi có giá trị, chiều cao canvas được tính theo tỷ lệ CSS `aspect-ratio`.
      *  Nếu bỏ trống, component dùng `heightClassName` làm chiều cao dự phòng. */
@@ -45,6 +45,14 @@ export function InteractiveSeatCanvas({
     heightClassName = 'h-[680px]',
     gridSize = '10% 10%',
 }: InteractiveSeatCanvasProps) {
+    useEffect(() => {
+        const element = canvasRef.current
+        if (!element || !onWheel) return
+
+        element.addEventListener('wheel', onWheel, { passive: false })
+        return () => element.removeEventListener('wheel', onWheel)
+    }, [canvasRef, onWheel])
+
     return (
         <div className="space-y-3">
             {toolbar && (
@@ -57,7 +65,6 @@ export function InteractiveSeatCanvas({
                 ref={canvasRef}
                 onMouseDown={onMouseDown}
                 onMouseMove={onMouseMove}
-                onWheel={onWheel}
                 onClick={onClick}
                 className={cn(
                     'relative overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-inner',

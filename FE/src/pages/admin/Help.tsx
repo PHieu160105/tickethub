@@ -61,16 +61,17 @@ export default function AdminHelp() {
 
   useEffect(() => {
     if (!activeThread) return
+    const activeThreadId = activeThread.id
     const token = authStorage.getToken()
     if (!token) return
-    const ws = new WebSocket(`${WS_BASE}/ws/help/${activeThread.id}?token=${encodeURIComponent(token)}`)
+    const ws = new WebSocket(`${WS_BASE}/ws/help/${activeThreadId}?token=${encodeURIComponent(token)}`)
     ws.onmessage = (event) => {
       const parsed = JSON.parse(event.data) as { type: string; payload: HelpMessage }
       if (parsed.type === 'help_message') {
         setMessages((prev) => [...prev, parsed.payload])
         setThreads((prev) =>
           prev.map((thread) =>
-            thread.id === activeThread.id
+            thread.id === activeThreadId
               ? {
                   ...thread,
                   last_message_at: parsed.payload.created_at,
@@ -85,7 +86,16 @@ export default function AdminHelp() {
         }
       }
     }
-    return () => ws.close()
+    return () => {
+      ws.onmessage = null
+      if (ws.readyState === WebSocket.CONNECTING) {
+        ws.addEventListener('open', () => ws.close(), { once: true })
+        return
+      }
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close()
+      }
+    }
   }, [activeThread?.id, user?.id])
 
   const canSend = useMemo(() => input.trim().length > 0 && Boolean(activeThread), [input, activeThread])
