@@ -130,9 +130,9 @@ export function AdminLayout({ title, actions }: AdminLayoutProps) {
         <AdminSidebar />
       </div>
       {drawerOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-[100] md:hidden">
           <button className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} />
-          <div className="relative h-full w-72">
+          <div className="relative h-full w-64">
             <AdminSidebar onNavigate={() => setDrawerOpen(false)} />
           </div>
         </div>

@@ -36,8 +36,8 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <aside className="w-64 bg-space-800 border-r admin-border flex flex-col h-full">
-      <div className="p-4">
+    <aside className="w-64 admin-bg-card admin-text-body border-r admin-border flex flex-col h-full shadow-2xl">
+      <div className="border-b admin-border p-4">
         <span className="flex items-start text-lg font-display font-bold">
           <Logo />
           <span className="relative top-0.9 ml-1 px-1 py-0.5 rounded bg-brand-red/20 text-brand-red text-s">Admin</span>
@@ -54,7 +54,7 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
                 isActiveLink(href, exact ?? false)
                   ? 'bg-[var(--admin-bg-opt)] text-brand-red border border-secondary/20'
-                  : 'admin-text-body hover:bg-white/5 hover:text-on-background',
+                  : 'admin-text-body hover:bg-[var(--admin-btn-ghost-bg-hover)] hover:text-[var(--admin-text-header)]',
               )
             }
           >
@@ -64,10 +64,10 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-white/10">
+      <div className="p-4 border-t admin-border">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-white/5 hover:text-red-400 transition-colors"
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium admin-text-muted hover:bg-[var(--admin-btn-ghost-bg-hover)] hover:text-red-400 transition-colors"
         >
           <LogOut className="h-5 w-5" />
           Đăng xuất
