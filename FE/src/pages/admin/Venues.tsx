@@ -776,6 +776,32 @@ export default function AdminVenues() {
         }
     }
 
+    async function handleDeleteVenue(venueId: number) {
+        if (!window.confirm('Bạn có chắc muốn xóa địa điểm này? Hành động này không thể hoàn tác.')) return
+        setBusy(true)
+        setError(null)
+        setMessage(null)
+        try {
+            await adminApi.deleteVenue(venueId)
+            setMessage('Đã xóa địa điểm.')
+            const nextId = venues.find((v) => v.id !== venueId)?.id ?? null
+            await loadVenues(nextId)
+            if (selectedVenueId === venueId) {
+                setSelectedVenue(null)
+                setSelectedVenueId(null)
+                setLayouts([])
+                setSections([])
+                setVenueSeats([])
+                setVenuePolygons([])
+                setStudioStep('venue')
+            }
+        } catch (errorValue) {
+            setError(extractApiErrorMessage(errorValue, 'Không thể xóa địa điểm.'))
+        } finally {
+            setBusy(false)
+        }
+    }
+
     async function handleUploadBackground(fileOverride?: File) {
         const file = fileOverride ?? backgroundFile
         if (!selectedVenueId || !file) return
@@ -1750,6 +1776,17 @@ export default function AdminVenues() {
                                                     }}
                                                 >
                                                     <Edit className="h-4 w-4 text-sky-300" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="rounded p-1.5 hover:bg-red-500/20"
+                                                    title="Xóa địa điểm"
+                                                    onClick={(event) => {
+                                                        event.stopPropagation()
+                                                        void handleDeleteVenue(venue.id)
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-4 w-4 text-red-400" />
                                                 </button>
                                             </div>
                                         </div>

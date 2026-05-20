@@ -45,8 +45,8 @@ class Event(TimestampMixin, Base):
     queue_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     queue_release_batch: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
     max_active_queue_tokens: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
-    venue_id: Mapped[int | None] = mapped_column(ForeignKey("venues.id"), nullable=True, index=True)
-    venue_layout_id: Mapped[int | None] = mapped_column(ForeignKey("venue_layouts.id"), nullable=True, index=True)
+    venue_id: Mapped[int | None] = mapped_column(ForeignKey("venues.id", ondelete="SET NULL"), nullable=True, index=True)
+    venue_layout_id: Mapped[int | None] = mapped_column(ForeignKey("venue_layouts.id", ondelete="SET NULL"), nullable=True, index=True)
 
     created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
@@ -118,8 +118,8 @@ class Show(TimestampMixin, Base):
     max_active_queue_tokens: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    venue_id: Mapped[int | None] = mapped_column(ForeignKey("venues.id"), nullable=True, index=True)
-    venue_layout_id: Mapped[int | None] = mapped_column(ForeignKey("venue_layouts.id"), nullable=True, index=True)
+    venue_id: Mapped[int | None] = mapped_column(ForeignKey("venues.id", ondelete="SET NULL"), nullable=True, index=True)
+    venue_layout_id: Mapped[int | None] = mapped_column(ForeignKey("venue_layouts.id", ondelete="SET NULL"), nullable=True, index=True)
 
     event = relationship("Event", back_populates="shows")
     created_by = relationship("User", back_populates="shows_created")
