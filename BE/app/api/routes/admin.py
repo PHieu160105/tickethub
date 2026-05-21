@@ -376,6 +376,8 @@ async def update_event(
 
     event = await get_event_by_slug_or_id(session, event_key)
     updates = payload.model_dump(exclude_unset=True)
+    for queue_field in ("queue_enabled", "queue_release_batch", "max_active_queue_tokens"):
+        updates.pop(queue_field, None)
     next_start = updates.get("start_date", event.start_date)
     next_end = updates.get("end_date", event.end_date)
     if next_end < next_start:
@@ -491,6 +493,10 @@ async def update_admin_show(
 
     event, show = await _build_event_or_404_show(session, event_key, show_id)
     updates = payload.model_dump(exclude_unset=True)
+    for queue_field in ("queue_enabled", "queue_release_batch", "max_active_queue_tokens"):
+        updates.pop(queue_field, None)
+    if not updates:
+        return ShowDetailResponse(**(await build_show_detail_response(session, show)))
     is_status_only_update = set(updates) == {"status"}
     previous_status = show.status
     is_unpublishing_show = previous_status == EventStatus.LIVE and updates.get("status") == EventStatus.DRAFT

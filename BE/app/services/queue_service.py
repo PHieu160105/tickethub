@@ -35,7 +35,7 @@ from fastapi import HTTPException, status
 #                   vd: status.HTTP_404_NOT_FOUND = 404
 #                       status.HTTP_429_TOO_MANY_REQUESTS = 429
 
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, text, update
 #   and_   : hàm tạo điều kiện AND trong SQL
 #            vd: and_(A == 1, B == 2) → WHERE A=1 AND B=2
 #   delete : hàm tạo câu lệnh DELETE trong SQL
@@ -101,6 +101,7 @@ from app.services.dashboard_service import broadcast_dashboard_update
 # KHỞI TẠO SINGLETON SETTINGS
 # ============================================================
 settings = get_settings()
+QUEUE_LOCK_NAMESPACE = 7042
 #   Gọi get_settings() MỘT LẦN ở module level để lấy object Settings
 #   Object này được cache bởi @lru_cache trong config.py
 #   Dùng để đọc các cấu hình như: queue_admit_ttl_minutes, queue_batch_size_default...
@@ -231,6 +232,18 @@ async def _queue_position(session: AsyncSession, entry: QueueEntry) -> int:
     return int(position or 0)
 
 
+async def _acquire_show_queue_lock(session: AsyncSession, show_id: int) -> None:
+    """Khóa giao dịch theo show để chống admit vượt slot khi nhiều request/worker song song."""
+
+    bind = session.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(:namespace, :show_id)"),
+        {"namespace": QUEUE_LOCK_NAMESPACE, "show_id": show_id},
+    )
+
+
 # ============================================================
 # HÀM PUBLIC (được gọi từ API routes)
 # ============================================================
@@ -259,17 +272,7 @@ async def join_show_queue(session: AsyncSession, show: Show, user_id: int) -> Qu
     - Nếu đang quá tải thì tạo bản ghi `WAITING`; worker nền sẽ cấp lượt theo batch.
     """
 
-    # ============================================================
-    # BƯỚC 1: KIỂM TRA SHOW CÓ BẬT QUEUE KHÔNG
-    # ============================================================
-    # show.queue_enabled: cột BOOLEAN trong bảng shows (tự viết trong model Show)
-    #   True: show này có bật phòng chờ ảo
-    #   False: show này không giới hạn, ai vào cũng được
-    if not show.queue_enabled:
-        # HTTPException: FastAPI class - tạo HTTP error response
-        # status.HTTP_400_BAD_REQUEST: hằng số 400 của FastAPI
-        #   Các hằng số khác: HTTP_200_OK, HTTP_404_NOT_FOUND, HTTP_429_TOO_MANY_REQUESTS...
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Buổi diễn này chưa bật hàng đợi")
+    await _acquire_show_queue_lock(session, show.id)
 
     # ============================================================
     # BƯỚC 2: LẤY THỜI GIAN HIỆN TẠI THEO UTC
@@ -407,7 +410,8 @@ async def join_show_queue(session: AsyncSession, show: Show, user_id: int) -> Qu
     #   Số người TỐI ĐA được vào khu vực chọn ghế cùng lúc (default=200)
     # Điều kiện 1: active_admitted_count < max → còn slot
     # Điều kiện 2: waiting_count == 0 → không ai đang xếp hàng (công bằng FIFO)
-    if active_admitted_count < show.max_active_queue_tokens and waiting_count == 0:
+    max_active_tokens = min(show.max_active_queue_tokens, settings.queue_max_active_tokens_default)
+    if active_admitted_count < max_active_tokens and waiting_count == 0:
         # Được vào ngay → đổi trạng thái từ WAITING thành ADMITTED
         entry.status = QueueStatus.ADMITTED         # Enum tự viết
         entry.admitted_at = now                      # Ghi nhận thời điểm được cấp lượt
@@ -591,16 +595,9 @@ async def ensure_queue_access(session: AsyncSession, show: Show, user_id: int, q
     5. Còn hạn không? → Hết hạn → 410 Gone + cập nhật EXPIRED
     """
 
-    # Nếu show KHÔNG bật queue → không cần kiểm tra gì, cho qua luôn
-    # show.queue_enabled: cột BOOLEAN trong bảng shows (tự viết)
-    if not show.queue_enabled:
-        return  # Python built-in: thoát hàm, không trả về gì
-
-    # Show bật queue mà user không gửi token lên → từ chối
-    # HTTP_429_TOO_MANY_REQUESTS: mã lỗi "quá nhiều request"
-    #   Phù hợp vì user đang cố vượt qua cơ chế queue
+    # Waiting Room là cơ chế platform. Khi không có token, caller ở trạng thái normal được đi tiếp.
     if not queue_token:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Buổi diễn này yêu cầu token hàng đợi")
+        return
 
     # Tìm phiếu queue trong database
     # Cần khớp CẢ 3: show_id, token, user_id
@@ -694,7 +691,6 @@ async def process_virtual_queue(session: AsyncSession) -> int:
     shows = list(
         await session.scalars(
             select(Show).where(
-                Show.queue_enabled.is_(True),       # Có bật queue
                 Show.is_deleted.is_(False),          # Chưa bị xóa mềm
                 Show.status.in_([                    # Đang ở trạng thái hoạt động
                     EventStatus.LIVE,                # Đang diễn ra
@@ -708,6 +704,7 @@ async def process_virtual_queue(session: AsyncSession) -> int:
     # XỬ LÝ TỪNG SHOW MỘT
     # ============================================================
     for show in shows:
+        await _acquire_show_queue_lock(session, show.id)
         # ----------------------------------------------------------
         # BƯỚC 1: ĐUỔI NGƯỜI ADMITTED ĐÃ HẾT HẠN
         # SQL: UPDATE queue_entries
@@ -755,12 +752,13 @@ async def process_virtual_queue(session: AsyncSession) -> int:
         # show.max_active_queue_tokens: cột INTEGER (default=200)
         #   Số người tối đa được vào khu vực chọn ghế
         # max(a, 0): Python built-in - đảm bảo không âm
-        available_slots = max(show.max_active_queue_tokens - active_admitted_count, 0)
+        max_active_tokens = min(show.max_active_queue_tokens, settings.queue_max_active_tokens_default)
+        available_slots = max(max_active_tokens - active_admitted_count, 0)
         
         # show.queue_release_batch: cột INTEGER (default=50)
         #   Số người tối đa được cho vào mỗi đợt
         # min(a, b): Python built-in - lấy số nhỏ hơn
-        batch_size = min(show.queue_release_batch, available_slots)
+        batch_size = min(show.queue_release_batch, settings.queue_release_batch_default, available_slots)
         
         # Không còn slot → bỏ qua show này, xử lý show tiếp theo
         if batch_size <= 0:

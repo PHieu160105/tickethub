@@ -158,6 +158,21 @@ export function extractApiErrorMessage(error: unknown, fallback: string): string
   return fallback
 }
 
+export function isWaitingRoomRequiredError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false
+  const detail = (error as AxiosError<ApiErrorBody>).response?.data?.detail
+  return error.response?.status === 429 && typeof detail === 'object' && detail !== null && !Array.isArray(detail) && detail['code'] === 'WAITING_ROOM_REQUIRED'
+}
+
+export function getWaitingRoomQueueUrl(error: unknown, fallback: string): string {
+  if (!axios.isAxiosError(error)) return fallback
+  const detail = (error as AxiosError<ApiErrorBody>).response?.data?.detail
+  if (typeof detail === 'object' && detail !== null && !Array.isArray(detail) && typeof detail['queue_url'] === 'string') {
+    return detail['queue_url']
+  }
+  return fallback
+}
+
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = authStorage.getToken()
   if (token) {
@@ -203,14 +218,18 @@ export const eventApi = {
   async show(showId: number) {
     return withRetry(() => api.get<ShowDetail>(`/shows/${showId}`))
   },
-  async seats(showId: number) {
-    return withRetry(() => api.get<SeatMatrixResponse>(`/shows/${showId}/seats`))
+  async seats(showId: number, queueToken?: string) {
+    return withRetry(() => api.get<SeatMatrixResponse>(`/shows/${showId}/seats`, {
+      headers: queueToken ? { 'X-Queue-Token': queueToken } : undefined,
+    }))
   },
 }
 
 export const seatmapApi = {
-  async get(showId: number) {
-    return withRetry(() => api.get<SeatMapResponse>(`/shows/${showId}/seatmap`))
+  async get(showId: number, queueToken?: string) {
+    return withRetry(() => api.get<SeatMapResponse>(`/shows/${showId}/seatmap`, {
+      headers: queueToken ? { 'X-Queue-Token': queueToken } : undefined,
+    }))
   },
 }
 

@@ -55,6 +55,27 @@ async def _ensure_seats_admin_lock_column() -> None:
         await conn.execute(
             text(
                 """
+                WITH ranked AS (
+                    SELECT id,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY show_id, user_id
+                               ORDER BY created_at DESC, id DESC
+                           ) AS rn
+                    FROM ticket_rush.queue_entries
+                    WHERE status IN ('waiting', 'admitted', 'WAITING', 'ADMITTED')
+                      AND show_id IS NOT NULL
+                )
+                UPDATE ticket_rush.queue_entries q
+                SET status = 'expired'
+                FROM ranked r
+                WHERE q.id = r.id
+                  AND r.rn > 1
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
                 ALTER TABLE IF EXISTS ticket_rush.seats
                 ADD COLUMN IF NOT EXISTS is_admin_locked BOOLEAN NOT NULL DEFAULT FALSE
                 """
@@ -132,6 +153,38 @@ async def _ensure_user_auth_columns() -> None:
                 CREATE UNIQUE INDEX IF NOT EXISTS ix_users_facebook_id
                 ON ticket_rush.users (facebook_id)
                 WHERE facebook_id IS NOT NULL
+                """
+            )
+        )
+
+
+async def _ensure_queue_admission_indexes() -> None:
+    """Bổ sung index phục vụ Waiting Room cho các DB cũ."""
+
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_queue_entries_active_user_show
+                ON ticket_rush.queue_entries (show_id, user_id)
+                WHERE status IN ('waiting', 'admitted', 'WAITING', 'ADMITTED')
+                  AND show_id IS NOT NULL
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_queue_entries_show_status_created
+                ON ticket_rush.queue_entries (show_id, status, created_at)
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_queue_entries_show_user_token
+                ON ticket_rush.queue_entries (show_id, user_id, token)
                 """
             )
         )
@@ -391,6 +444,7 @@ async def lifespan(_: FastAPI):
     await _ensure_template_seat_columns_are_nullable()
     await _ensure_user_auth_columns()
     await _ensure_show_refactor_schema()
+    await _ensure_queue_admission_indexes()
 
     from app.core.db import AsyncSessionLocal
 

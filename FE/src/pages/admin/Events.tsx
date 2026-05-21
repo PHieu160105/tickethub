@@ -30,10 +30,7 @@ interface ShowFormState {
   start_time: string
   end_time: string
   status: EventStatus
-  queue_enabled: boolean
   hold_minutes: string
-  queue_release_batch: string
-  max_active_queue_tokens: string
   seat_map_mode: 'free' | 'venue'
   create_seed_zone: boolean
   venue_id: string
@@ -65,10 +62,7 @@ const INITIAL_SHOW_FORM: ShowFormState = {
   start_time: '19:00',
   end_time: '21:00',
   status: 'draft',
-  queue_enabled: true,
   hold_minutes: '10',
-  queue_release_batch: '50',
-  max_active_queue_tokens: '200',
   seat_map_mode: 'free',
   create_seed_zone: false,
   venue_id: '',
@@ -390,14 +384,11 @@ export default function AdminEvents() {
       start_time: formatVietnamTimeInput(detail.start_at),
       end_time: formatVietnamTimeInput(detail.end_at),
       status: detail.status,
-      queue_enabled: detail.queue_enabled,
       seat_map_mode: detail.venue_layout_id ? 'venue' : 'free',
       create_seed_zone: false,
       venue_id: detail.venue_id ? String(detail.venue_id) : '',
       venue_layout_id: detail.venue_layout_id ? String(detail.venue_layout_id) : '',
       hold_minutes: String(detail.hold_minutes),
-      queue_release_batch: String(detail.queue_release_batch),
-      max_active_queue_tokens: String(detail.max_active_queue_tokens),
       zone_code: 'A',
       zone_name: 'Standard',
       row_count: '10',
@@ -488,10 +479,7 @@ export default function AdminEvents() {
         start_time: utcStart.time,
         end_time: utcEnd.time,
         status: showForm.status,
-        queue_enabled: showForm.queue_enabled,
         hold_minutes: Number(showForm.hold_minutes),
-        queue_release_batch: Number(showForm.queue_release_batch),
-        max_active_queue_tokens: Number(showForm.max_active_queue_tokens),
         ...(editingShow
           ? {}
           : showForm.seat_map_mode === 'venue'
@@ -543,7 +531,7 @@ export default function AdminEvents() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold admin-text-header">Quản lý Event / Show</h1>
-          <p className="mt-1 text-sm text-gray-400">Event chỉ giữ metadata. Show giữ venue, queue, seat planner và ticket logic.</p>
+          <p className="mt-1 text-sm text-gray-400">Event chỉ giữ metadata. Show giữ venue, seat planner và ticket logic.</p>
         </div>
         <Button variant="primary" onClick={openCreateEventModal}>
           <Plus className="mr-2 h-4 w-4" /> Tạo event
@@ -759,7 +747,6 @@ export default function AdminEvents() {
                           <div className="space-y-1 text-sm text-gray-400">
                             <p>{formatDateTime(show.start_at)} - {formatDateTime(show.end_at)}</p>
                             <p>{show.venue}</p>
-                            <p>Queue: {show.queue_enabled ? 'enabled' : 'disabled'}</p>
                           </div>
                         </div>
 
@@ -853,25 +840,10 @@ export default function AdminEvents() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-300">Queue</label>
-              <select className="w-full rounded-lg border border-white/10 admin-bg-listbox px-3 py-2 text-gray-500" value={showForm.queue_enabled ? 'true' : 'false'} onChange={(event) => setShowForm((prev) => ({ ...prev, queue_enabled: event.target.value === 'true' }))}>
-                <option value="true">Enabled</option>
-                <option value="false">Disabled</option>
-              </select>
-            </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-300">Hold</label>
               <Input className="text-white" type="number" min={1} value={showForm.hold_minutes} onChange={(event) => setShowForm((prev) => ({ ...prev, hold_minutes: event.target.value }))} />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-300">Release batch</label>
-              <Input className="text-white" type="number" min={1} value={showForm.queue_release_batch} onChange={(event) => setShowForm((prev) => ({ ...prev, queue_release_batch: event.target.value }))} />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-300">Max queue</label>
-              <Input className="text-white" type="number" min={1} value={showForm.max_active_queue_tokens} onChange={(event) => setShowForm((prev) => ({ ...prev, max_active_queue_tokens: event.target.value }))} />
             </div>
           </div>
 

@@ -12,9 +12,9 @@ import { AlertTriangle, CheckCircle2, Clock3, Loader2, LogIn, Timer } from 'luci
 
 function statusDescription(status: QueueJoinResponse['status']) {
   if (status === 'admitted') return 'Bạn đã được vào lượt đặt chỗ.'
-  if (status === 'waiting') return 'Hệ thống đang xếp hàng, vui lòng chờ.'
-  if (status === 'completed') return 'Phiên hàng đợi đã hoàn tất.'
-  return 'Token hàng đợi đã hết hạn, vui lòng vào lại hàng đợi.'
+  if (status === 'waiting') return 'Hệ thống đang điều tiết truy cập, vui lòng chờ.'
+  if (status === 'completed') return 'Phiên phòng chờ đã hoàn tất.'
+  return 'Phiên phòng chờ đã hết hạn, vui lòng vào lại phòng chờ.'
 }
 
 function isRecoverableQueueTokenError(error: unknown): boolean {
@@ -30,6 +30,10 @@ function isShowUnavailableError(error: unknown): boolean {
   return axios.isAxiosError(error) && error.response?.status === 404
 }
 
+function isRequestTimeout(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.code === 'ECONNABORTED'
+}
+
 export default function VirtualQueue() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -42,22 +46,33 @@ export default function VirtualQueue() {
   const [status, setStatus] = useState<QueueJoinResponse['status']>('waiting')
   const [position, setPosition] = useState<number | null>(null)
   const [admittedUntil, setAdmittedUntil] = useState<string | null>(null)
-  const [message, setMessage] = useState('Đang kết nối hàng đợi...')
+  const [message, setMessage] = useState('Đang kết nối phòng chờ...')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retryNonce, setRetryNonce] = useState(0)
   const interruptionRedirectTimerRef = useRef<number | null>(null)
+  const positionRef = useRef<number | null>(null)
 
   const etaMinutes = useMemo(() => {
     if (!position || position <= 0) return 0
     return Math.max(1, Math.ceil(position / 25))
   }, [position])
 
+  const etaLabel = useMemo(() => {
+    if (etaMinutes > 0) return `~${etaMinutes} phút`
+    if (status === 'waiting') return 'Đang tính'
+    return '-'
+  }, [etaMinutes, status])
+
   const waitingRoomMessage = useMemo(() => {
     if (status !== 'waiting') return message || statusDescription(status)
-    if (!position || position <= 0) return message || 'Bạn đang ở trong hàng đợi. Vui lòng không tải lại trang.'
+    if (!position || position <= 0) return message || 'Bạn đang ở trong phòng chờ. Vui lòng không tải lại trang.'
     return `Bạn đang ở vị trí thứ ${position} trong hàng đợi. Vui lòng không tải lại trang.`
   }, [message, position, status])
+
+  useEffect(() => {
+    positionRef.current = position
+  }, [position])
 
   useEffect(() => {
     return () => {
@@ -133,7 +148,11 @@ export default function VirtualQueue() {
           handleShowUnavailable()
           return
         }
-        setError(extractApiErrorMessage(joinError, 'Không thể tham gia hàng đợi.'))
+        setError(
+          isRequestTimeout(joinError)
+            ? 'Phòng chờ đang tải cao. Hệ thống sẽ tự thử lại, vui lòng không tải lại trang.'
+            : extractApiErrorMessage(joinError, 'Không thể tham gia hàng đợi.'),
+        )
       } finally {
         if (!disposed) setIsLoading(false)
       }
@@ -180,6 +199,11 @@ export default function VirtualQueue() {
           setAdmittedUntil(null)
           setMessage('Token hàng đợi cũ không còn hợp lệ. Hệ thống sẽ tạo lại phiên hàng đợi mới cho bạn.')
           await joinQueue()
+          return
+        }
+
+        if (isRequestTimeout(pollError) && positionRef.current !== null) {
+          setMessage('Đang cập nhật lại vị trí của bạn. Vui lòng không tải lại trang.')
           return
         }
 
@@ -243,14 +267,14 @@ export default function VirtualQueue() {
       <main className="max-w-3xl mx-auto px-6 py-20">
         <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-8 space-y-6">
           <div>
-            <h1 className="text-3xl font-black">Hàng đợi ảo</h1>
+          <h1 className="text-3xl font-black">Phòng chờ</h1>
             <p className="text-slate-400 mt-2">Buổi diễn: {showId || 'Không xác định'}</p>
           </div>
 
           {isLoading ? (
             <div className="flex items-center gap-2 text-slate-300">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Đang kết nối hàng đợi...
+              Đang kết nối phòng chờ...
             </div>
           ) : null}
 
@@ -272,7 +296,7 @@ export default function VirtualQueue() {
             </div>
             <div className="rounded-lg border border-white/10 bg-slate-800/60 p-4">
               <p className="text-xs text-slate-400 uppercase">ETA</p>
-              <p className="text-lg font-semibold mt-2">{etaMinutes > 0 ? `~${etaMinutes} phút` : '-'}</p>
+              <p className="text-lg font-semibold mt-2">{etaLabel}</p>
             </div>
           </div>
 
@@ -280,10 +304,6 @@ export default function VirtualQueue() {
             <Timer className="h-4 w-4 mt-0.5" />
             <span>{waitingRoomMessage}</span>
           </div>
-
-          {queueToken ? (
-            <p className="text-xs text-slate-500 break-all">Token hàng đợi: {queueToken}</p>
-          ) : null}
 
           {admittedUntil ? (
             <p className="text-xs text-slate-400 flex items-center gap-2">

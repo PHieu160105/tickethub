@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from app.core.cache import public_api_cache, show_seat_cache_namespace
 from app.core.db import AsyncSessionLocal
 from app.services.booking_service import release_expired_locks
+from app.services.admission_service import evaluate_waiting_room_health, expire_inactive_admitted_tokens, record_db_error
 from app.services.dashboard_service import broadcast_dashboard_update
 from app.services.queue_service import cleanup_expired_queue_entries, process_virtual_queue
 from app.ws.connection_manager import seat_ws_manager
@@ -69,17 +70,28 @@ class WorkerOrchestrator:
                         await broadcast_dashboard_update()
 
                 async with AsyncSessionLocal() as session:
-                    # Job 2: xét hàng đợi ảo và admit thêm user khi còn slot.
+                    # Job 2: đo DB health để tự bật/tắt Waiting Room.
+                    await evaluate_waiting_room_health(session)
+
+                async with AsyncSessionLocal() as session:
+                    # Job 3: thu hồi token admitted không còn heartbeat.
+                    expired_queue_count = await expire_inactive_admitted_tokens(session)
+                    if expired_queue_count:
+                        await broadcast_dashboard_update()
+
+                async with AsyncSessionLocal() as session:
+                    # Job 4: xét hàng đợi ảo và admit thêm user khi còn slot.
                     admitted_count = await process_virtual_queue(session)
                     if admitted_count:
                         await broadcast_dashboard_update()
 
                 async with AsyncSessionLocal() as session:
-                    # Job 3: dọn queue token hết hạn để bảng queue không phình mãi.
+                    # Job 5: dọn queue token hết hạn để bảng queue không phình mãi.
                     deleted_count = await cleanup_expired_queue_entries(session)
                     if deleted_count:
                         await broadcast_dashboard_update()
             except Exception:  # pragma: no cover - ghi log phòng vệ khi worker chạy thật
+                await record_db_error()
                 logger.exception("Vòng lặp worker nền gặp lỗi")
 
             # Nghỉ ngắn giữa các vòng để giảm tải CPU/database nhưng vẫn đủ realtime cho demo.

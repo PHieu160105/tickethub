@@ -38,8 +38,10 @@ export const eventsApi = {
     const response = await withRetry(() => api.get<ShowDetail>(`/shows/${showId}`))
     return response as ShowDetail
   },
-  async seats(showId: number): Promise<SeatMatrixResponse> {
-    const response = await withRetry(() => api.get<SeatMatrixResponse>(`/shows/${showId}/seats`))
+  async seats(showId: number, queueToken?: string): Promise<SeatMatrixResponse> {
+    const response = await withRetry(() => api.get<SeatMatrixResponse>(`/shows/${showId}/seats`, {
+      headers: queueToken ? { 'X-Queue-Token': queueToken } : undefined,
+    }))
     return response as SeatMatrixResponse
   },
   async reviews(eventKey: string, params?: { limit?: number; offset?: number }): Promise<EventReview[]> {

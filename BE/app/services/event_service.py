@@ -47,6 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # ============================================================
 # IMPORTS TỪ NỘI BỘ DỰ ÁN (mã tự viết)
 # ============================================================
+from app.core.config import get_settings
 from app.core.search import build_ilike_pattern, sanitize_search_query
 #   build_ilike_pattern(): tự viết - tạo mẫu LIKE không phân biệt hoa thường
 #   sanitize_search_query(): tự viết - làm sạch truy vấn tìm kiếm, giới hạn độ dài
@@ -90,6 +91,8 @@ from app.schemas.event import (
     ShowCreateRequest,          # lược đồ Pydantic: yêu cầu tạo buổi diễn
     ShowSummaryResponse,        # lược đồ Pydantic: phản hồi tóm tắt buổi diễn
 )
+
+settings = get_settings()
 
 
 # ============================================================
@@ -828,9 +831,9 @@ async def create_show_with_inventory(
         end_at=end_at,                                   # Datetime UTC
         status=payload.status,                           # Enum EventStatus
         hold_minutes=payload.hold_minutes,               # Số phút giữ ghế
-        queue_enabled=payload.queue_enabled,             # Bật queue?
-        queue_release_batch=payload.queue_release_batch, # Batch size
-        max_active_queue_tokens=payload.max_active_queue_tokens,  # Max người vào
+        queue_enabled=False,
+        queue_release_batch=settings.queue_release_batch_default,
+        max_active_queue_tokens=settings.queue_max_active_tokens_default,
         created_by_user_id=admin_id,
         venue_id=venue.id if venue else None,            # FK đến venues
         venue_layout_id=layout.id if layout else None,   # FK đến venue_layouts

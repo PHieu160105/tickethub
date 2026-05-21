@@ -9,7 +9,7 @@ import { WS_BASE_URL } from '@/constants'
 import { useCheckout, useReleaseSeats } from '@/features/booking/hooks/useBooking'
 import { useShowSeats } from '@/features/events/hooks/useEvents'
 import { useWebSocketHeartbeat } from '@/hooks/useWebSocketHeartbeat'
-import { bookingApi, eventApi, extractApiErrorMessage, postAuthorizedJsonKeepalive } from '@/lib/api'
+import { bookingApi, eventApi, extractApiErrorMessage, isWaitingRoomRequiredError, postAuthorizedJsonKeepalive } from '@/lib/api'
 import { authStorage, checkoutReturnSeatStorage, flashNoticeStorage, queueStorage } from '@/lib/storage'
 import { formatCurrencyVnd } from '@/lib/utils'
 import type { Seat } from '@/types'
@@ -44,6 +44,7 @@ export default function Checkout() {
   const showId = Number(searchParams.get('showId'))
   const eventKey = searchParams.get('eventKey') ?? undefined
   const state = (location.state ?? {}) as CheckoutLocationState
+  const queueToken = showId ? queueStorage.getToken(showId) ?? undefined : undefined
 
   const [formData, setFormData] = useState({
     fullName: user?.full_name ?? '',
@@ -56,7 +57,7 @@ export default function Checkout() {
 
   const stateLockedSeats = useMemo(() => state.lockedSeats ?? [], [state.lockedSeats])
   const shouldFetchMatrix = !stateLockedSeats.length
-  const { seats: matrix, error: matrixError } = useShowSeats(shouldFetchMatrix ? showId : undefined)
+  const { seats: matrix, error: matrixError, rawError: matrixRawError } = useShowSeats(shouldFetchMatrix ? showId : undefined, { queueToken })
   const checkoutCompletedRef = useRef(false)
   const locksReleasedRef = useRef(false)
   const latestShowIdRef = useRef<number | null>(null)
@@ -149,10 +150,15 @@ export default function Checkout() {
   }, [navigate, showId])
 
   useEffect(() => {
+    if (matrixRawError && isWaitingRoomRequiredError(matrixRawError)) {
+      queueStorage.clearToken(showId)
+      navigate(`/queue?showId=${showId}${eventKey ? `&eventKey=${encodeURIComponent(eventKey)}` : ''}`, { replace: true })
+      return
+    }
     if (matrixError) {
       handleShowInterrupted(eventKey ?? matrix?.event_slug)
     }
-  }, [eventKey, handleShowInterrupted, matrix?.event_slug, matrixError])
+  }, [eventKey, handleShowInterrupted, matrix?.event_slug, matrixError, matrixRawError, navigate, showId])
 
   const handleShowSocketMessage = useCallback((event: MessageEvent) => {
     try {
@@ -332,8 +338,7 @@ export default function Checkout() {
 
     try {
       setErrorMessage('')
-      const queueToken = showId ? queueStorage.getToken(showId) ?? undefined : undefined
-      const latestMatrix = await eventApi.seats(showId)
+      const latestMatrix = await eventApi.seats(showId, queueToken)
       const lockedSeatIdSet = new Set(lockedSeatIds)
       const validLockedSeatCount = latestMatrix.seats.filter((seat) => {
         return lockedSeatIdSet.has(seat.id) && seat.status === 'locked' && seat.is_locked_by_me
@@ -368,9 +373,9 @@ export default function Checkout() {
         return
       }
 
-      if (showId && !Number.isNaN(showId) && isRecoverableQueueTokenError(error)) {
+      if (showId && !Number.isNaN(showId) && (isWaitingRoomRequiredError(error) || isRecoverableQueueTokenError(error))) {
         queueStorage.clearToken(showId)
-        setErrorMessage('Phiên hàng đợi không còn hợp lệ. Vui lòng quay lại hàng đợi để nhận lượt mới.')
+        setErrorMessage('Phiên phòng chờ không còn hợp lệ. Vui lòng quay lại phòng chờ để nhận lượt mới.')
         navigate(`/queue?showId=${showId}${eventKey ? `&eventKey=${encodeURIComponent(eventKey)}` : ''}`)
         return
       }

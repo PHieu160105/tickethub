@@ -8,11 +8,10 @@ import { Button } from '@/components/ui/Button'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { WS_BASE_URL } from '@/constants'
 import { useAuth } from '@/context/AuthContext'
-import { queueApi } from '@/features/booking/api/queueApi'
 import { useLockSeats, useReleaseSeats } from '@/features/booking/hooks/useBooking'
 import { useShowSeats } from '@/features/events/hooks/useEvents'
 import { useWebSocketHeartbeat } from '@/hooks/useWebSocketHeartbeat'
-import { eventApi, extractApiErrorMessage, seatmapApi } from '@/lib/api'
+import { eventApi, extractApiErrorMessage, getWaitingRoomQueueUrl, isWaitingRoomRequiredError, seatmapApi } from '@/lib/api'
 import { authStorage, checkoutReturnSeatStorage, flashNoticeStorage, queueStorage } from '@/lib/storage'
 import { formatCurrencyVnd } from '@/lib/utils'
 import type { Seat, SeatMapResponse, SeatMapSeat, SeatZone } from '@/types'
@@ -69,7 +68,8 @@ export default function SeatSelection() {
     [locationState.preselectedSeatIds, storedPreselectedSeatIds],
   )
 
-  const { seats: matrix, isLoading, error, refetch } = useShowSeats(showId, { pollIntervalMs: MATRIX_REFRESH_INTERVAL_MS })
+  const queueToken = showId ? queueStorage.getToken(showId) : null
+  const { seats: matrix, isLoading, error, rawError, refetch } = useShowSeats(showId, { pollIntervalMs: MATRIX_REFRESH_INTERVAL_MS, queueToken })
   const { isLoading: isLocking, lockSeats } = useLockSeats()
   const { isLoading: isReleasing, releaseSeats } = useReleaseSeats()
 
@@ -80,17 +80,12 @@ export default function SeatSelection() {
   const [isPanning, setIsPanning] = useState(false)
   const [panStartCursor, setPanStartCursor] = useState<{ x: number; y: number } | null>(null)
   const [panStartOffset, setPanStartOffset] = useState<{ x: number; y: number } | null>(null)
-  const [queueAccessStatus, setQueueAccessStatus] = useState<'checking' | 'admitted' | 'blocked'>('checking')
-  const [queueAccessMessage, setQueueAccessMessage] = useState('')
   const canvasRef = useRef<HTMLDivElement>(null)
   const hasAppliedPreselectedSeatsRef = useRef(false)
   const interruptionRedirectTimerRef = useRef<number | null>(null)
 
-  const queueToken = showId ? queueStorage.getToken(showId) : null
   const authToken = authStorage.getToken()
   const wsUrl = showId && authToken ? `${WS_BASE_URL}/shows/${showId}/seats?token=${encodeURIComponent(authToken)}` : null
-  const matrixShowId = matrix?.show_id
-  const matrixQueueEnabled = Boolean(matrix?.queue_enabled)
 
   useEffect(() => {
     hasAppliedPreselectedSeatsRef.current = false
@@ -115,8 +110,6 @@ export default function SeatSelection() {
       description: 'Phiên đặt vé hiện tại đã kết thúc vì admin đang chỉnh sửa show. Vui lòng chọn show khác hoặc quay lại sau.',
     })
     setSelectedSeatIds([])
-    setQueueAccessStatus('blocked')
-    setQueueAccessMessage('Show đang được cập nhật. Phiên đặt vé hiện tại đã kết thúc.')
     setStatusMessage('Show đang được cập nhật. Hệ thống sẽ đưa bạn về trang sự kiện.')
 
     if (interruptionRedirectTimerRef.current !== null) {
@@ -132,21 +125,21 @@ export default function SeatSelection() {
     if (!showId || Number.isNaN(showId)) return
 
     try {
-      const nextSeatMap = await seatmapApi.get(showId)
+      const nextSeatMap = await seatmapApi.get(showId, queueToken ?? undefined)
       setSeatMap(nextSeatMap)
     } catch {
       setSeatMap(null)
     }
-  }, [showId])
+  }, [queueToken, showId])
 
   useEffect(() => {
     let disposed = false
 
     const loadSeatMap = async () => {
-      if (!showId || Number.isNaN(showId)) return
+      if (!showId || Number.isNaN(showId) || !matrix) return
 
       try {
-        const nextSeatMap = await seatmapApi.get(showId)
+        const nextSeatMap = await seatmapApi.get(showId, queueToken ?? undefined)
         if (!disposed) setSeatMap(nextSeatMap)
       } catch {
         if (!disposed) setSeatMap(null)
@@ -162,68 +155,14 @@ export default function SeatSelection() {
       disposed = true
       window.clearInterval(intervalId)
     }
-  }, [showId])
+  }, [matrix, queueToken, showId])
 
   useEffect(() => {
-    let disposed = false
+    if (!showId || Number.isNaN(showId) || !rawError || !isWaitingRoomRequiredError(rawError)) return
 
-    async function verifyQueueAccess() {
-      if (!matrixShowId) return
-
-      if (!matrixQueueEnabled || !isAuthenticated) {
-        setQueueAccessStatus('admitted')
-        setQueueAccessMessage('')
-        return
-      }
-
-      if (!queueToken) {
-        setQueueAccessStatus('blocked')
-        setQueueAccessMessage('Sự kiện này yêu cầu vào hàng đợi trước khi chọn ghế.')
-        return
-      }
-
-      setQueueAccessStatus('checking')
-      setQueueAccessMessage('Đang kiểm tra quyền vào từ hàng đợi...')
-
-      try {
-        const queueStatus = await queueApi.status(matrixShowId, queueToken)
-        if (disposed) return
-
-        if (queueStatus.status === 'admitted') {
-          setQueueAccessStatus('admitted')
-          setQueueAccessMessage('')
-          return
-        }
-
-        if (queueStatus.status === 'waiting') {
-          setQueueAccessStatus('blocked')
-          setQueueAccessMessage(
-            `Bạn đang ở vị trí thứ ${queueStatus.position ?? '-'} trong hàng đợi. Vui lòng chờ đến lượt trước khi chọn ghế.`,
-          )
-          return
-        }
-
-        queueStorage.clearToken(matrixShowId)
-        setQueueAccessStatus('blocked')
-        setQueueAccessMessage('Token hàng đợi đã hết hạn. Vui lòng tham gia lại phòng chờ để nhận lượt mới.')
-      } catch (queueError) {
-        if (disposed) return
-
-        if (isRecoverableQueueTokenError(queueError)) {
-          queueStorage.clearToken(matrixShowId)
-        }
-
-        setQueueAccessStatus('blocked')
-        setQueueAccessMessage(extractApiErrorMessage(queueError, 'Không thể kiểm tra quyền vào từ hàng đợi.'))
-      }
-    }
-
-    void verifyQueueAccess()
-
-    return () => {
-      disposed = true
-    }
-  }, [isAuthenticated, matrixQueueEnabled, matrixShowId, queueToken])
+    queueStorage.clearToken(showId)
+    navigate(getWaitingRoomQueueUrl(rawError, `/queue?showId=${showId}${matrix?.event_slug ? `&eventKey=${encodeURIComponent(matrix.event_slug)}` : ''}`), { replace: true })
+  }, [matrix?.event_slug, navigate, rawError, showId])
 
   useEffect(() => {
     if (!isPanning || !panStartCursor || !panStartOffset) return
@@ -346,11 +285,6 @@ export default function SeatSelection() {
 
     setStatusMessage('')
 
-    if (matrix.queue_enabled && queueAccessStatus !== 'admitted') {
-      navigate(`/queue?showId=${matrix.show_id}&eventKey=${encodeURIComponent(matrix.event_slug)}`)
-      return
-    }
-
     try {
       const result = await lockSeats(matrix.show_id, selectedSeatIds, queueToken ?? undefined)
 
@@ -366,7 +300,7 @@ export default function SeatSelection() {
         return
       }
 
-      const latestMatrix = await eventApi.seats(matrix.show_id)
+      const latestMatrix = await eventApi.seats(matrix.show_id, queueToken ?? undefined)
       const lockedSeats = latestMatrix.seats
         .filter((seat) => result.locked_seat_ids.includes(seat.id) && seat.is_locked_by_me)
         .sort((a, b) => a.seat_label.localeCompare(b.seat_label))
@@ -386,10 +320,10 @@ export default function SeatSelection() {
         state: { lockedSeatIds: result.locked_seat_ids, lockedSeats },
       })
     } catch (checkoutError) {
-      if (matrix.queue_enabled && isRecoverableQueueTokenError(checkoutError)) {
+      if (isWaitingRoomRequiredError(checkoutError) || isRecoverableQueueTokenError(checkoutError)) {
         queueStorage.clearToken(matrix.show_id)
         setSelectedSeatIds([])
-        setStatusMessage('Phiên hàng đợi không còn hợp lệ. Hệ thống sẽ đưa bạn quay lại hàng đợi để cấp token mới.')
+        setStatusMessage('Phiên phòng chờ không còn hợp lệ. Hệ thống sẽ đưa bạn quay lại phòng chờ để cấp token mới.')
         await refetch(false)
         await refreshSeatMap()
         navigate(`/queue?showId=${matrix.show_id}&eventKey=${encodeURIComponent(matrix.event_slug)}`)
@@ -400,7 +334,7 @@ export default function SeatSelection() {
       await refetch(false)
       await refreshSeatMap()
     }
-  }, [isAuthenticated, lockSeats, matrix, navigate, queueAccessStatus, queueToken, refetch, refreshSeatMap, releaseSeats, selectedSeatIds])
+  }, [isAuthenticated, lockSeats, matrix, navigate, queueToken, refetch, refreshSeatMap, releaseSeats, selectedSeatIds])
 
   const handleCanvasMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0 && event.button !== 1) return
@@ -478,23 +412,6 @@ export default function SeatSelection() {
     )
   }
 
-  if (matrix.queue_enabled && isAuthenticated && queueAccessStatus === 'checking') {
-    return <GlobalLoader />
-  }
-
-  if (matrix.queue_enabled && isAuthenticated && queueAccessStatus !== 'admitted') {
-    return (
-      <div className="min-h-screen customer-text-body">
-        <main className="mx-auto max-w-3xl space-y-4 px-6 py-24 text-center">
-          <p className="text-amber-300">{queueAccessMessage || 'Sự kiện này yêu cầu vào hàng đợi trước khi chọn ghế.'}</p>
-          <Link to={`/queue?showId=${matrix.show_id}&eventKey=${matrix.event_slug}`}>
-            <Button>{queueToken ? 'Quay lại phòng chờ' : 'Tham gia hàng đợi'}</Button>
-          </Link>
-        </main>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen customer-text-body">
       <main className="mx-auto grid max-w-screen-2xl grid-cols-1 gap-8 px-6 py-10 xl:grid-cols-[1.65fr_0.85fr]">
@@ -508,11 +425,6 @@ export default function SeatSelection() {
                   ? 'Bấm vào ghế trống để xem giá và chọn thử. Ghế chỉ được giữ khi bạn đăng nhập, qua hàng đợi hợp lệ và bấm tiếp tục thanh toán.'
                   : 'Hiện chưa có sơ đồ chỗ ngồi cho show này.'}
               </p>
-              {matrix.queue_enabled && !isAuthenticated && (
-                <p className="mt-2 max-w-2xl text-xs text-amber-300">
-                  Bạn đang xem ở chế độ khách. Hệ thống chỉ yêu cầu đăng nhập và hàng đợi khi bạn bắt đầu giữ ghế để thanh toán.
-                </p>
-              )}
             </div>
             <Link to={`/event/${matrix.event_id}`}>
               <Button variant="outline" size="sm">Quay lại sự kiện</Button>
