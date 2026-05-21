@@ -378,6 +378,8 @@ export interface OccupancyItem {
   event_title: string
   show_id: number
   show_title: string
+  show_start_at: string
+  venue: string
   total_seats: number
   sold_seats: number
   locked_seats: number

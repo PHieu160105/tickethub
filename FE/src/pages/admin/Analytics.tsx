@@ -174,6 +174,7 @@ export default function AdminAnalytics() {
                 <thead>
                   <tr className="border-b admin-text-body text-left">
                     <th className="pb-3 font-medium">Sự kiện</th>
+                    <th className="pb-3 font-medium">Show</th>
                     <th className="pb-3 font-medium">Sold</th>
                     <th className="pb-3 font-medium">Locked</th>
                     <th className="pb-3 font-medium">Tổng ghế</th>
@@ -182,8 +183,13 @@ export default function AdminAnalytics() {
                 </thead>
                 <tbody>
                   {occupancy.map((item) => (
-                    <tr key={item.event_id} className="border-b border-white/5">
-                      <td className="py-3 admin-text-body">{item.event_title}</td>
+                    <tr key={item.show_id} className="border-b border-white/5">
+                      <td className="py-3 admin-text-body max-w-[220px] align-top">{item.event_title}</td>
+                      <td className="py-3 admin-text-body align-top">
+                        <div>{item.show_title}</div>
+                        <div className="text-xs text-gray-400">{new Date(item.show_start_at).toLocaleString('vi-VN')}</div>
+                        <div className="text-xs text-gray-500">{item.venue}</div>
+                      </td>
                       <td className="py-3 admin-text-body">{item.sold_seats}</td>
                       <td className="py-3 admin-text-body">{item.locked_seats}</td>
                       <td className="py-3 admin-text-body">{item.total_seats}</td>

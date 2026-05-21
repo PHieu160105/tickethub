@@ -150,10 +150,6 @@ export default function AdminTickets() {
             <RefreshCcw className="h-4 w-4" />
             Làm mới
           </Button>
-          <Button variant="outline" disabled>
-            <Download className="h-4 w-4" />
-            Xuất báo cáo (sắp có)
-          </Button>
         </div>
       </div>
 

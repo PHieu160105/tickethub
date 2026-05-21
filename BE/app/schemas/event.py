@@ -233,6 +233,8 @@ class EventOccupancyResponse(BaseModel):
     event_title: str
     show_id: int
     show_title: str
+    show_start_at: datetime
+    venue: str
     total_seats: int
     sold_seats: int
     locked_seats: int

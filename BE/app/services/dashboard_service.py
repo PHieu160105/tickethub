@@ -122,6 +122,8 @@ async def get_dashboard_occupancy(session: AsyncSession) -> list[EventOccupancyR
                 Event.title.label("event_title"),
                 Show.id.label("show_id"),
                 Show.title.label("show_title"),
+                Show.start_at.label("show_start_at"),
+                Show.venue.label("venue"),
                 func.count(Seat.id).label("total_seats"),
                 func.sum(case((Seat.status == SeatStatus.SOLD, 1), else_=0)).label("sold_seats"),
                 func.sum(case((Seat.status == SeatStatus.LOCKED, 1), else_=0)).label("locked_seats"),
@@ -129,7 +131,7 @@ async def get_dashboard_occupancy(session: AsyncSession) -> list[EventOccupancyR
             .join(Show, Show.event_id == Event.id)
             .outerjoin(Seat, Seat.show_id == Show.id)
             .where(Event.is_deleted.is_(False), Show.is_deleted.is_(False))
-            .group_by(Event.id, Event.title, Show.id, Show.title)
+            .group_by(Event.id, Event.title, Show.id, Show.title, Show.start_at, Show.venue)
             .order_by(Show.start_at.asc())
         )
     ).all()
@@ -145,6 +147,8 @@ async def get_dashboard_occupancy(session: AsyncSession) -> list[EventOccupancyR
                 event_title=row.event_title,
                 show_id=row.show_id,
                 show_title=row.show_title,
+                show_start_at=row.show_start_at,
+                venue=row.venue,
                 total_seats=total,
                 sold_seats=sold,
                 locked_seats=locked,
