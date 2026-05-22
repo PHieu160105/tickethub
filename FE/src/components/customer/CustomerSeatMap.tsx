@@ -112,7 +112,7 @@ export function CustomerSeatMap({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Sơ đồ ghế tương tác</p>
-          <h2 className="text-2xl font-black text-white">{seatMap.event_title}</h2>
+          <h2 className="text-2xl font-black customer-text-body">{seatMap.event_title}</h2>
           <p className="text-sm text-slate-400">{seatMap.venue_name}</p>
         </div>
         <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white/95 p-2 shadow-lg">

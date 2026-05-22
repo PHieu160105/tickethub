@@ -316,7 +316,7 @@ export default function VirtualQueue() {
             <Button variant="outline" onClick={() => navigate(eventKey ? `/event/${eventKey}` : '/search')}>
               Quay lại sự kiện
             </Button>
-            <Button
+            {/* <Button
               variant="outline"
               onClick={() => {
                 if (showId && !Number.isNaN(showId)) {
@@ -333,7 +333,7 @@ export default function VirtualQueue() {
               }}
             >
               Vào hàng đợi lại
-            </Button>
+            </Button> */}
             {status === 'admitted' ? (
               <Button variant="primary" onClick={() => navigate(`/shows/${showId}/seats`)}>
                 <CheckCircle2 className="h-4 w-4" />
