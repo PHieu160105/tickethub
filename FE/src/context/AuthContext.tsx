@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { signInWithGoogle } from '@/lib/firebase'
+import { signInWithGoogle } from '@/lib/google'
 import { authApi, extractApiErrorMessage } from '@/lib/api'
 import { authStorage } from '@/lib/storage'
 import { API_BASE_URL } from '@/constants'
@@ -92,8 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithGoogle = async () => {
     setIsLoading(true)
     try {
-      const idToken = await signInWithGoogle()
-      const response = await authApi.firebaseTokenLogin(idToken)
+      const accessToken = await signInWithGoogle()
+      const response = await authApi.googleTokenLogin(accessToken)
       authStorage.setToken(response.access_token)
       authStorage.setUser(response.user)
       const enrichedUser = enrichUser(response.user)

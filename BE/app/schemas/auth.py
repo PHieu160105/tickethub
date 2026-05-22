@@ -51,7 +51,7 @@ class UpdateProfileRequest(BaseModel):
     age: int = Field(ge=10, le=100)
 
 
-class FirebaseTokenRequest(BaseModel):
-    """Payload xác minh Firebase ID token."""
+class GoogleTokenRequest(BaseModel):
+    """Payload xác minh Google access token."""
 
-    id_token: str
+    access_token: str

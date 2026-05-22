@@ -14,11 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.db import get_db_session
-from app.core.firebase import FirebaseTokenError, verify_firebase_token
+from app.core.google_auth import GoogleTokenError, verify_google_access_token
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.auth import AuthTokenResponse, FirebaseTokenRequest, LoginRequest, RegisterRequest, UpdateProfileRequest, UserResponse
+from app.schemas.auth import AuthTokenResponse, GoogleTokenRequest, LoginRequest, RegisterRequest, UpdateProfileRequest, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -170,51 +170,54 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_db_se
     return AuthTokenResponse(access_token=token, user=UserResponse.model_validate(user))
 
 
-@router.post("/firebase-token", response_model=AuthTokenResponse)
-async def firebase_auth(payload: FirebaseTokenRequest, session: AsyncSession = Depends(get_db_session)) -> AuthTokenResponse:
-    """Xác thực Firebase ID token và đổi sang JWT nội bộ của TicketRush.
+@router.post("/google-token", response_model=AuthTokenResponse)
+async def google_auth(payload: GoogleTokenRequest, session: AsyncSession = Depends(get_db_session)) -> AuthTokenResponse:
+    """Xác thực Google access token và đổi sang JWT nội bộ của TicketRush.
 
     Input:
-    - `payload.id_token`: Firebase ID token do frontend nhận sau đăng nhập Google/Facebook.
+    - `payload.access_token`: Google access token do frontend nhận sau đăng nhập Google.
 
     Output:
     - JWT nội bộ TicketRush và hồ sơ user.
 
     Cách hoạt động:
-    - Nhờ Firebase Admin SDK xác minh token thật/giả.
-    - Tìm user theo `firebase_uid`, nếu chưa có thì fallback theo email.
+    - Gọi Google userinfo để xác minh token thật/giả.
+    - Tìm user theo `google_id`, nếu chưa có thì fallback theo email.
     - Tự tạo user customer khi đây là lần social login đầu tiên.
     """
     try:
-        claims = verify_firebase_token(payload.id_token)
-    except FirebaseTokenError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Firebase token không hợp lệ")
+        profile = await verify_google_access_token(payload.access_token)
+    except GoogleTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token không hợp lệ")
 
-    firebase_uid: str | None = claims.get("uid")
-    email: str | None = claims.get("email")
-    name: str | None = claims.get("name")
+    google_id = str(profile.get("sub") or "").strip()
+    email = str(profile.get("email") or "").strip().lower()
+    name = str(profile.get("name") or email or "Google User").strip()
+    email_verified = profile.get("email_verified")
 
-    if not firebase_uid:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Firebase token thiếu uid")
+    if not google_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token thiếu sub")
+    if email and email_verified is False:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email Google chưa được xác minh")
 
-    user = await session.scalar(select(User).where(User.firebase_uid == firebase_uid))
+    user = await session.scalar(select(User).where(User.google_id == google_id))
 
     if not user and email:
-        user = await session.scalar(select(User).where(User.email == email.lower()))
+        user = await session.scalar(select(User).where(User.email == email))
 
     if not user:
         user = User(
-            full_name=name or email or "User",
-            email=(email or f"{firebase_uid}@firebase").lower(),
+            full_name=name or email or "Google User",
+            email=email or f"google_{google_id}@google.local",
             password_hash="SOCIAL_LOGIN",
-            firebase_uid=firebase_uid,
+            google_id=google_id,
             role=UserRole.CUSTOMER,
         )
         session.add(user)
         await session.commit()
         await session.refresh(user)
-    elif not user.firebase_uid:
-        user.firebase_uid = firebase_uid
+    elif not user.google_id:
+        user.google_id = google_id
         await session.commit()
         await session.refresh(user)
 

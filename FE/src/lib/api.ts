@@ -195,8 +195,8 @@ export const authApi = {
     const response = await api.post<AuthResponse>('/auth/register', payload)
     return response.data
   },
-  async firebaseTokenLogin(idToken: string) {
-    const response = await api.post<AuthResponse>('/auth/firebase-token', { id_token: idToken })
+  async googleTokenLogin(accessToken: string) {
+    const response = await api.post<AuthResponse>('/auth/google-token', { access_token: accessToken })
     return response.data
   },
   async me() {

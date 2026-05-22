@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Listbox } from '@headlessui/react'
-import { Calendar, DollarSign, Download, RefreshCcw, Ticket, TrendingUp } from 'lucide-react'
+import { Calendar, DollarSign, RefreshCcw, Ticket, TrendingUp } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'

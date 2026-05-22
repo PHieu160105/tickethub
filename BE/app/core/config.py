@@ -67,9 +67,8 @@ class Settings(BaseSettings):
     redis_port: int = Field(default=6380, validation_alias="REDIS_PORT")
     redis_password: str = Field(default="", validation_alias="REDIS_PASSWORD")
 
-    firebase_project_id: str = ""
-    firebase_private_key: str = ""
-    firebase_client_email: str = ""
+    google_client_id: str = ""
+    google_client_secret: str = ""
     frontend_app_url: str = "http://localhost:5173"
     discord_client_id: str = ""
     discord_client_secret: str = ""
