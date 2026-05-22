@@ -2254,6 +2254,7 @@ export default function AdminVenues() {
                                                 type="button"
                                                 onMouseDown={(event) => handleSeatPointerDown(event, seat)}
                                                 onMouseEnter={(event) => setTooltip({ x: event.clientX, y: event.clientY, content: `${seat.label} · ${seat.section_name ?? 'Chưa gán'}${seat.is_admin_locked ? ' · 🔒' : ''}` })}
+                                                onMouseMove={(event) => setTooltip((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current)}
                                                 onMouseLeave={() => setTooltip(null)}
                                                 className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-lg transition-transform ${selectedSeatIds.includes(seat.id) || editingSeatId === seat.id ? 'ring-2 ring-brand-yellow/50' : ''} ${draggingSeatId === seat.id ? 'scale-110 cursor-grabbing' : 'cursor-grab'}`}
                                                 style={{
@@ -2276,7 +2277,7 @@ export default function AdminVenues() {
                                 </InteractiveSeatCanvas>
                                 {tooltip && (
                                     <div
-                                        className="pointer-events-none fixed z-[9999] max-w-xs rounded-lg border border-white/20 bg-slate-900 px-3 py-2 text-xs customer-text-body  shadow-2xl"
+                                        className="pointer-events-none fixed z-[9999] max-w-xs rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 shadow-2xl"
                                         style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}
                                     >
                                         {tooltip.content}

@@ -1558,6 +1558,7 @@ export default function AdminSeatPlanner() {
                                         type="button"
                                         onMouseDown={(event) => handleSeatPointerDown(event, seat)}
                                         onMouseEnter={(event) => setTooltip({ x: event.clientX, y: event.clientY, content: `${seat.label} · ${seat.zone_name ?? seat.section_name ?? 'Chưa gán khu'} · ${seat.is_admin_locked ? 'Admin khóa' : Number(seat.price).toLocaleString('vi-VN')}` })}
+                                        onMouseMove={(event) => setTooltip((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current)}
                                         onMouseLeave={() => setTooltip(null)}
                                         className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-lg ${seatColor(seat)}`}
                                         style={{ left: `${seatPositionMap.get(seat.id)?.x ?? seat.x}%`, top: `${seatPositionMap.get(seat.id)?.y ?? seat.y}%`, transform: `translate(-50%, -50%) rotate(${seat.rotation}deg)`, width: `${seatSize}%`, aspectRatio: '1', ...seatStyle(seat), boxShadow: selectedSeatIds.includes(seat.id) ? '0 0 0 3px rgba(59,130,246,0.35)' : undefined }}
@@ -1585,7 +1586,7 @@ export default function AdminSeatPlanner() {
                         </InteractiveSeatCanvas>
                         {tooltip && (
                             <div
-                                className="pointer-events-none fixed z-[9999] max-w-xs rounded-lg border border-white/20 bg-slate-900 px-3 py-2 text-xs customer-text-body shadow-2xl"
+                                className="pointer-events-none fixed z-[9999] max-w-xs rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 shadow-2xl"
                                 style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}
                             >
                                 {tooltip.content}
