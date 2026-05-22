@@ -504,6 +504,26 @@ async def heartbeat_queue_token(session: AsyncSession, show_id: int, token: str,
     return entry  # Trả về ORM object cho caller (route sẽ chuyển thành response)
 
 
+async def leave_queue_token(session: AsyncSession, show_id: int, token: str, user_id: int) -> bool:
+    """Hủy lượt hàng đợi đang hoạt động khi người dùng rời luồng mua vé."""
+
+    entry = await session.scalar(
+        select(QueueEntry).where(
+            QueueEntry.show_id == show_id,
+            QueueEntry.token == token,
+            QueueEntry.user_id == user_id,
+            QueueEntry.status.in_([QueueStatus.WAITING, QueueStatus.ADMITTED]),
+        )
+    )
+    if not entry:
+        return False
+
+    entry.status = QueueStatus.EXPIRED
+    entry.expires_at = datetime.now(UTC)
+    await session.commit()
+    return True
+
+
 async def ensure_queue_access(session: AsyncSession, show: Show, user_id: int, queue_token: str | None) -> None:
     """Chặn thao tác giữ/thanh toán ghế nếu thiếu token hàng đợi đã được cấp lượt.
     

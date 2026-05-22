@@ -30,4 +30,11 @@ export const queueApi = {
   async heartbeat(showId: number, token: string) {
     await api.post(`/shows/${showId}/queue/heartbeat/${token}`)
   },
+
+  /**
+   * Rời hàng đợi/lượt vào khi người dùng thoát khỏi luồng mua vé.
+   */
+  async leave(showId: number, token: string) {
+    await api.post(`/shows/${showId}/queue/leave/${token}`)
+  },
 }

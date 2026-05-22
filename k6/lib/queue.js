@@ -21,6 +21,12 @@ export function heartbeatQueue(showId, queueToken, accessToken) {
   return parseJson(response, {});
 }
 
+export function leaveQueue(showId, queueToken, accessToken) {
+  const response = post(`/shows/${showId}/queue/leave/${queueToken}`, {}, authHeaders(accessToken));
+  requireStatus(response, 200, 'leave queue');
+  return parseJson(response, {});
+}
+
 export function waitUntilAdmitted(showId, queueToken, accessToken) {
   const startedAt = Date.now();
 
@@ -37,4 +43,3 @@ export function waitUntilAdmitted(showId, queueToken, accessToken) {
 
   return { token: queueToken, status: 'timeout' };
 }
-

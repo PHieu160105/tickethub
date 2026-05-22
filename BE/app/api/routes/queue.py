@@ -18,9 +18,10 @@ from app.core.rate_limit import rate_limit
 from app.models.enums import EventStatus
 from app.models.event import Event
 from app.models.user import User
+from app.schemas.common import APIMessage
 from app.schemas.queue import QueueHeartbeatResponse, QueueJoinResponse, QueueStatusResponse
 from app.services.event_service import get_show_by_id
-from app.services.queue_service import get_queue_status, heartbeat_queue_token, join_show_queue
+from app.services.queue_service import get_queue_status, heartbeat_queue_token, join_show_queue, leave_queue_token
 
 # Mọi route trong file này đều nằm dưới `/api/shows/{show_id}/queue`.
 router = APIRouter(prefix="/shows/{show_id}/queue", tags=["queue"])
@@ -115,3 +116,17 @@ async def queue_heartbeat(
     # `heartbeat_queue_token` chỉ nhận token đã admitted; token waiting sẽ bị từ chối.
     entry = await heartbeat_queue_token(session, show_id=show_id, token=token, user_id=current_user.id)
     return QueueHeartbeatResponse(token=entry.token, status=entry.status, admitted_until=entry.expires_at)
+
+
+@router.post("/leave/{token}", response_model=APIMessage, dependencies=[Depends(rate_limit("queue-leave", times=30, seconds=60))])
+async def leave_queue(
+    show_id: int,
+    token: str,
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+) -> APIMessage:
+    """Hủy lượt hàng đợi khi người dùng rời luồng mua vé trước khi thanh toán."""
+
+    await _get_public_show_or_404(session, show_id)
+    expired = await leave_queue_token(session, show_id=show_id, token=token, user_id=current_user.id)
+    return APIMessage(detail="Đã rời phòng chờ" if expired else "Không có lượt phòng chờ đang hoạt động")

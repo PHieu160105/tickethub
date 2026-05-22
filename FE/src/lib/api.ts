@@ -244,6 +244,9 @@ export const queueApi = {
   async heartbeat(showId: number, token: string) {
     await api.post(`/shows/${showId}/queue/heartbeat/${token}`)
   },
+  async leave(showId: number, token: string) {
+    await api.post(`/shows/${showId}/queue/leave/${token}`)
+  },
 }
 
 export const bookingApi = {

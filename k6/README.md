@@ -70,6 +70,20 @@ Script này sẽ:
 - bật Waiting Room trong Redis.
 - chạy k6 tạo user vào queue rồi dừng nhanh, để còn người `WAITING` cho bạn vào test bằng nick thật.
 
+Tạo dòng người vào liên tục để test tay thực tế hơn:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File k6/live-manual-queue.ps1 -ShowId 2 -ActiveUsers 10 -ReleaseBatch 3 -ArrivalRate 2 -Duration 5m -SessionSeconds 120
+```
+
+Trong lúc script còn đang chạy, mở:
+
+```text
+http://localhost:5173/queue?showId=2
+```
+
+Script này reset queue cũ, bật Waiting Room, rồi tạo thêm user ảo theo thời gian thật. Vị trí của nick thật sẽ phụ thuộc thời điểm bạn vào, tốc độ user ảo đang vào, `ReleaseBatch`, và số `ActiveUsers` đang giữ slot.
+
 Smoke test backend, auth và seat route:
 
 ```powershell
@@ -131,8 +145,10 @@ k6 run k6/booking-lock-flow.js
 - `waiting-room-seat-pressure.js`: tạo áp lực vào seat route để test UI người dùng thật mà không spam auth/register.
 - `waiting-room-guard.js`: xác nhận khi đang Waiting Room thì route nặng trả `WAITING_ROOM_REQUIRED`, còn queue endpoints vẫn hoạt động.
 - `queue-flow.js`: mô phỏng user vào phòng chờ, poll trạng thái, heartbeat và vào seat matrix khi được admit.
+- `queue-live-arrivals.js`: mô phỏng người dùng vào queue liên tục và rời sau một phiên ngắn, dùng để test tay vị trí queue thực tế hơn.
 - `booking-lock-flow.js`: mô phỏng user được admit, lấy ghế available đầu tiên, lock ghế, rồi release hoặc checkout nếu bật `CHECKOUT=true`.
 - `prepare-manual-queue.ps1`: chuẩn bị dữ liệu queue thật cho test tay trên frontend.
+- `live-manual-queue.ps1`: bật Waiting Room và chạy dòng user ảo liên tục để bạn vào UI bằng nick thật giữa lúc test.
 
 ## Ghi chú
 

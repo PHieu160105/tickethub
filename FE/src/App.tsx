@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
 import { CustomerLayout } from './components/layout/CustomerLayout'
 import { AdminLayout } from './components/layout/AdminLayout'
+import { QueueSessionGuard } from './components/customer/QueueSessionGuard'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import Home from './pages/customer/Home'
@@ -56,6 +57,7 @@ function RedirectIfAuthenticated({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <BrowserRouter>
+      <QueueSessionGuard />
       <Routes>
         <Route path="/" element={<CustomerLayout />}>
           <Route index element={<Home />} />

@@ -2,8 +2,13 @@ param(
   [int]$ShowId = 1,
   [string]$EventKey = "",
   [int]$ActiveUsers = 10,
-  [int]$ReleaseBatch = 1,
-  [int]$QueueUsers = 100,
+  [int]$ReleaseBatch = 3,
+  [int]$ArrivalRate = 2,
+  [string]$Duration = "5m",
+  [int]$SessionSeconds = 120,
+  [int]$PollSeconds = 5,
+  [int]$PreAllocatedVUs = 80,
+  [int]$MaxVUs = 500,
   [string]$BaseUrl = "http://host.docker.internal:8000",
   [string]$RedisContainer = "ticketrush-redis-1"
 )
@@ -16,8 +21,14 @@ if ($ActiveUsers -lt 0) {
 if ($ReleaseBatch -lt 1) {
   throw "ReleaseBatch must be >= 1"
 }
-if ($QueueUsers -lt 1) {
-  throw "QueueUsers must be >= 1"
+if ($ArrivalRate -lt 1) {
+  throw "ArrivalRate must be >= 1"
+}
+if ($SessionSeconds -lt 10) {
+  throw "SessionSeconds must be >= 10"
+}
+if ($PollSeconds -lt 1) {
+  throw "PollSeconds must be >= 1"
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -104,25 +115,45 @@ asyncio.run(main())
 }
 
 $resolvedShowId = [int]($resolvedShowId | Select-Object -Last 1)
+$runId = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+$workerBatchRate = [math]::Round($ReleaseBatch / 3.0, 2)
+$slotTurnoverRate = [math]::Round($ActiveUsers / [double]$SessionSeconds, 2)
+$estimatedAdmitRate = [math]::Min($workerBatchRate, $slotTurnoverRate)
 
 docker exec $RedisContainer redis-cli SET waiting_room:state waiting_room | Out-Null
 docker exec $RedisContainer redis-cli SET waiting_room:protected_requests 10000 EX 900 | Out-Null
 docker exec $RedisContainer redis-cli DEL waiting_room:db_errors | Out-Null
+
+Write-Host "Live manual queue test is running"
+Write-Host "Open while k6 is still running: http://localhost:5173/queue?showId=$resolvedShowId"
+Write-Host "ShowId: $resolvedShowId"
+Write-Host "ActiveUsers: $ActiveUsers"
+Write-Host "ReleaseBatch per 3s worker tick: $ReleaseBatch"
+Write-Host "Virtual arrivals: $ArrivalRate user(s)/second for $Duration"
+Write-Host "Virtual session length: $SessionSeconds second(s)"
+Write-Host "Estimated worker release ceiling: $workerBatchRate admitted user(s)/second"
+Write-Host "Estimated active-slot turnover ceiling: $slotTurnoverRate admitted user(s)/second"
+Write-Host "Estimated sustained admit ceiling: $estimatedAdmitRate admitted user(s)/second"
+if ($ArrivalRate -gt $estimatedAdmitRate) {
+  Write-Host "Queue will grow: arrivals are higher than the estimated sustained admit ceiling."
+}
 
 docker run --rm `
   -v "${repoRoot}/k6:/scripts" `
   grafana/k6 run `
   -e BASE_URL=$BaseUrl `
   -e SHOW_ID=$resolvedShowId `
-  -e VUS=$QueueUsers `
-  -e ITERATIONS=$QueueUsers `
-  -e QUEUE_WAIT_TIMEOUT_SECONDS=1 `
-  -e STATUS_POLL_INTERVAL_SECONDS=1 `
-  -e THINK_TIME_SECONDS=0 `
-  /scripts/queue-flow.js
+  -e ARRIVAL_RATE=$ArrivalRate `
+  -e DURATION=$Duration `
+  -e SESSION_SECONDS=$SessionSeconds `
+  -e STATUS_POLL_INTERVAL_SECONDS=$PollSeconds `
+  -e PRE_ALLOCATED_VUS=$PreAllocatedVUs `
+  -e MAX_VUS=$MaxVUs `
+  -e RUN_ID=$runId `
+  /scripts/queue-live-arrivals.js
 
 if ($LASTEXITCODE -ne 0) {
-  Write-Host "k6 finished with a non-zero exit code, usually because the latency threshold was crossed."
+  Write-Host "k6 finished with a non-zero exit code. Check the summary above for 429/latency/check failures."
 }
 
 $env:WR_SHOW_ID = [string]$resolvedShowId
@@ -162,10 +193,3 @@ asyncio.run(main())
 } finally {
   Pop-Location
 }
-
-Write-Host "Manual queue test is ready"
-Write-Host "ShowId: $resolvedShowId"
-Write-Host "ActiveUsers: $ActiveUsers"
-Write-Host "ReleaseBatch: $ReleaseBatch"
-Write-Host "QueueUsers seeded: $QueueUsers"
-Write-Host "Queue URL: http://localhost:5173/queue?showId=$resolvedShowId"
