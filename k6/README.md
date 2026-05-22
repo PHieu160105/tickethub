@@ -57,6 +57,19 @@ Tắt Waiting Room và đưa show về mặc định:
 powershell -ExecutionPolicy Bypass -File k6/waiting-room-stop.ps1 -ShowId 1 -ActiveUsers 200 -ReleaseBatch 50
 ```
 
+Chuẩn bị nhanh một hàng chờ thật để test tay bằng trình duyệt:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File k6/prepare-manual-queue.ps1 -ShowId 2 -ActiveUsers 10 -ReleaseBatch 1 -QueueUsers 100
+```
+
+Script này sẽ:
+
+- expire toàn bộ token `WAITING`/`ADMITTED` cũ của show.
+- set `max_active_queue_tokens` và `queue_release_batch`.
+- bật Waiting Room trong Redis.
+- chạy k6 tạo user vào queue rồi dừng nhanh, để còn người `WAITING` cho bạn vào test bằng nick thật.
+
 Smoke test backend, auth và seat route:
 
 ```powershell
@@ -119,6 +132,7 @@ k6 run k6/booking-lock-flow.js
 - `waiting-room-guard.js`: xác nhận khi đang Waiting Room thì route nặng trả `WAITING_ROOM_REQUIRED`, còn queue endpoints vẫn hoạt động.
 - `queue-flow.js`: mô phỏng user vào phòng chờ, poll trạng thái, heartbeat và vào seat matrix khi được admit.
 - `booking-lock-flow.js`: mô phỏng user được admit, lấy ghế available đầu tiên, lock ghế, rồi release hoặc checkout nếu bật `CHECKOUT=true`.
+- `prepare-manual-queue.ps1`: chuẩn bị dữ liệu queue thật cho test tay trên frontend.
 
 ## Ghi chú
 

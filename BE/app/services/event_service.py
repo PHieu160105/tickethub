@@ -831,9 +831,9 @@ async def create_show_with_inventory(
         end_at=end_at,                                   # Datetime UTC
         status=payload.status,                           # Enum EventStatus
         hold_minutes=payload.hold_minutes,               # Số phút giữ ghế
-        queue_enabled=False,
-        queue_release_batch=settings.queue_release_batch_default,
-        max_active_queue_tokens=settings.queue_max_active_tokens_default,
+        queue_enabled=payload.queue_enabled,
+        queue_release_batch=payload.queue_release_batch,
+        max_active_queue_tokens=payload.max_active_queue_tokens,
         created_by_user_id=admin_id,
         venue_id=venue.id if venue else None,            # FK đến venues
         venue_layout_id=layout.id if layout else None,   # FK đến venue_layouts

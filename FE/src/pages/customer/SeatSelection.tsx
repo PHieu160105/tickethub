@@ -34,7 +34,6 @@ function groupSeatsByZone(seats: Seat[]) {
 }
 
 const DEFAULT_VIEWPORT = { scale: 1, offsetX: 0, offsetY: 0 }
-const MATRIX_REFRESH_INTERVAL_MS = 3000
 
 interface SeatSelectionLocationState {
   preselectedSeatIds?: number[]
@@ -69,7 +68,7 @@ export default function SeatSelection() {
   )
 
   const queueToken = showId ? queueStorage.getToken(showId) : null
-  const { seats: matrix, isLoading, error, rawError, refetch } = useShowSeats(showId, { pollIntervalMs: MATRIX_REFRESH_INTERVAL_MS, queueToken })
+  const { seats: matrix, isLoading, error, rawError, refetch } = useShowSeats(showId, { queueToken })
   const { isLoading: isLocking, lockSeats } = useLockSeats()
   const { isLoading: isReleasing, releaseSeats } = useReleaseSeats()
 
@@ -85,7 +84,9 @@ export default function SeatSelection() {
   const interruptionRedirectTimerRef = useRef<number | null>(null)
 
   const authToken = authStorage.getToken()
-  const wsUrl = showId && authToken ? `${WS_BASE_URL}/shows/${showId}/seats?token=${encodeURIComponent(authToken)}` : null
+  const wsUrl = showId
+    ? `${WS_BASE_URL}/shows/${showId}/seats${authToken ? `?token=${encodeURIComponent(authToken)}` : ''}`
+    : null
 
   useEffect(() => {
     hasAppliedPreselectedSeatsRef.current = false
@@ -121,17 +122,6 @@ export default function SeatSelection() {
     }, 1500)
   }, [navigate, showId])
 
-  const refreshSeatMap = useCallback(async () => {
-    if (!showId || Number.isNaN(showId)) return
-
-    try {
-      const nextSeatMap = await seatmapApi.get(showId, queueToken ?? undefined)
-      setSeatMap(nextSeatMap)
-    } catch {
-      setSeatMap(null)
-    }
-  }, [queueToken, showId])
-
   useEffect(() => {
     let disposed = false
 
@@ -147,15 +137,11 @@ export default function SeatSelection() {
     }
 
     void loadSeatMap()
-    const intervalId = window.setInterval(() => {
-      void loadSeatMap()
-    }, MATRIX_REFRESH_INTERVAL_MS)
 
     return () => {
       disposed = true
-      window.clearInterval(intervalId)
     }
-  }, [matrix, queueToken, showId])
+  }, [matrix?.show_id, queueToken, showId])
 
   useEffect(() => {
     if (!showId || Number.isNaN(showId) || !rawError || !isWaitingRoomRequiredError(rawError)) return
@@ -224,6 +210,27 @@ export default function SeatSelection() {
     return () => window.cancelAnimationFrame(frameId)
   }, [matrix, preselectedSeatIds, selectedSeatIds, showId])
 
+  const displaySeatMap = useMemo(() => {
+    if (!seatMap || !matrix) return seatMap
+
+    const latestSeats = new Map(matrix.seats.map((seat) => [seat.id, seat]))
+    return {
+      ...seatMap,
+      seats: seatMap.seats.map((seat) => {
+        const latest = latestSeats.get(seat.id)
+        if (!latest) return seat
+        return {
+          ...seat,
+          price: latest.price,
+          status: latest.status,
+          lock_expires_at: latest.lock_expires_at,
+          is_locked_by_me: latest.is_locked_by_me,
+          is_admin_locked: latest.is_admin_locked,
+        }
+      }),
+    }
+  }, [matrix, seatMap])
+
   const seatsByZone = useMemo(() => groupSeatsByZone(matrix?.seats ?? []), [matrix?.seats])
 
   const selectedSeats = useMemo(
@@ -235,27 +242,27 @@ export default function SeatSelection() {
   )
 
   const subtotal = selectedSeats.reduce((sum, seat) => sum + Number(seat.price), 0)
-  const useCanvas = Boolean(seatMap)
+  const useCanvas = Boolean(displaySeatMap)
 
   const seatColorMap = useMemo(() => {
-    if (!seatMap) return undefined
+    if (!displaySeatMap) return undefined
 
     const map = new Map<number, string>()
 
-    seatMap.zones.forEach((zone) => {
-      seatMap.seats
+    displaySeatMap.zones.forEach((zone) => {
+      displaySeatMap.seats
         .filter((seat) => seat.zone_id === zone.id)
         .forEach((seat) => map.set(seat.id, zone.color))
     })
 
-    seatMap.sections.forEach((section) => {
-      seatMap.seats
+    displaySeatMap.sections.forEach((section) => {
+      displaySeatMap.seats
         .filter((seat) => seat.section_id === section.id && !map.has(seat.id))
         .forEach((seat) => map.set(seat.id, section.color))
     })
 
     return map
-  }, [seatMap])
+  }, [displaySeatMap])
 
   const toggleSeatSelection = useCallback((seatId: number) => {
     setSelectedSeatIds((previous) =>
@@ -294,7 +301,6 @@ export default function SeatSelection() {
         }
 
         await refetch(false)
-        await refreshSeatMap()
         setSelectedSeatIds((previous) => previous.filter((id) => !result.failed_seat_ids.includes(id)))
         setStatusMessage('Một hoặc nhiều ghế bạn chọn vừa được người khác giữ. Vui lòng kiểm tra lại.')
         return
@@ -311,7 +317,6 @@ export default function SeatSelection() {
         }
 
         await refetch(false)
-        await refreshSeatMap()
         setStatusMessage('Không thể xác nhận giữ đủ ghế để thanh toán. Vui lòng thử lại.')
         return
       }
@@ -325,16 +330,14 @@ export default function SeatSelection() {
         setSelectedSeatIds([])
         setStatusMessage('Phiên phòng chờ không còn hợp lệ. Hệ thống sẽ đưa bạn quay lại phòng chờ để cấp token mới.')
         await refetch(false)
-        await refreshSeatMap()
         navigate(`/queue?showId=${matrix.show_id}&eventKey=${encodeURIComponent(matrix.event_slug)}`)
         return
       }
 
       setStatusMessage(extractApiErrorMessage(checkoutError, 'Không thể giữ ghế để thanh toán.'))
       await refetch(false)
-      await refreshSeatMap()
     }
-  }, [isAuthenticated, lockSeats, matrix, navigate, queueToken, refetch, refreshSeatMap, releaseSeats, selectedSeatIds])
+  }, [isAuthenticated, lockSeats, matrix, navigate, queueToken, refetch, releaseSeats, selectedSeatIds])
 
   const handleCanvasMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0 && event.button !== 1) return
@@ -385,7 +388,6 @@ export default function SeatSelection() {
       const message = JSON.parse(event.data) as { type?: string; payload?: { event_slug?: string } }
       if (message.type === 'seat_changes') {
         void refetch(false)
-        void refreshSeatMap()
       }
       if (message.type === 'show_unpublished') {
         handleShowInterrupted(message.payload?.event_slug ?? matrix?.event_slug)
@@ -393,7 +395,7 @@ export default function SeatSelection() {
     } catch {
       // Bỏ qua gói tin WebSocket không đúng định dạng để luồng cập nhật ghế tiếp tục ổn định.
     }
-  }, [handleShowInterrupted, matrix?.event_slug, refetch, refreshSeatMap])
+  }, [handleShowInterrupted, matrix?.event_slug, refetch])
 
   useWebSocketHeartbeat({ url: wsUrl, onMessage: handleSeatUpdates })
 
@@ -419,7 +421,7 @@ export default function SeatSelection() {
           <div className="flex flex-wrap items-start justify-between gap-4 rounded-3xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6">
             <div>
               <p className="text-[11px] uppercase tracking-[0.24em] text-gray-500">Chọn chỗ ngồi</p>
-              <h1 className="mt-2 text-3xl font-black customer-text-header">{seatMap?.show_title ?? 'Chọn ghế trên sơ đồ'}</h1>
+              <h1 className="mt-2 text-3xl font-black customer-text-header">{displaySeatMap?.show_title ?? 'Chọn ghế trên sơ đồ'}</h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-400">
                 {useCanvas
                   ? 'Bấm vào ghế trống để xem giá và chọn thử. Ghế chỉ được giữ khi bạn đăng nhập, qua hàng đợi hợp lệ và bấm tiếp tục thanh toán.'
@@ -431,9 +433,9 @@ export default function SeatSelection() {
             </Link>
           </div>
 
-          {useCanvas && seatMap ? (
+          {useCanvas && displaySeatMap ? (
             <CustomerSeatMap
-              seatMap={seatMap}
+              seatMap={displaySeatMap}
               selectedSeatIds={selectedSeatIds}
               seatColorMap={seatColorMap}
               viewport={viewport}
@@ -499,7 +501,7 @@ export default function SeatSelection() {
 
           {useCanvas && (
             <div className="xl:hidden">
-              <SeatMapLegend zones={seatMap?.zones ?? []} />
+              <SeatMapLegend zones={displaySeatMap?.zones ?? []} />
             </div>
           )}
         </section>
@@ -507,14 +509,14 @@ export default function SeatSelection() {
         <aside className="space-y-4">
           {useCanvas && (
             <div className="hidden xl:block">
-              <SeatMapLegend zones={seatMap?.zones ?? []} />
+              <SeatMapLegend zones={displaySeatMap?.zones ?? []} />
             </div>
           )}
 
           <div className="rounded-3xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6">
             <div className="mb-4 flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] text-gray-500">
               <MapPin className="h-4 w-4" />
-              {seatMap?.venue_name ?? ''}
+              {displaySeatMap?.venue_name ?? ''}
             </div>
 
             <div className="max-h-56 space-y-2 overflow-auto">

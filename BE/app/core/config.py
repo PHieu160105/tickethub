@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     backend_port: int = 8000
 
     database_url: str = Field(validation_alias="DATABASE_URL")
+    database_pool_size: int = Field(default=10, validation_alias="DATABASE_POOL_SIZE")
+    database_max_overflow: int = Field(default=20, validation_alias="DATABASE_MAX_OVERFLOW")
+    database_pool_timeout: int = Field(default=30, validation_alias="DATABASE_POOL_TIMEOUT")
 
     secret_key: str = "change-me"
     algorithm: str = "HS256"
@@ -54,7 +57,7 @@ class Settings(BaseSettings):
     queue_admit_ttl_minutes: int = 15
     waiting_room_db_latency_ms: int = Field(default=500, validation_alias="WAITING_ROOM_DB_LATENCY_MS")
     waiting_room_error_threshold: int = Field(default=5, validation_alias="WAITING_ROOM_ERROR_THRESHOLD")
-    waiting_room_request_threshold: int = Field(default=1000, validation_alias="WAITING_ROOM_REQUEST_THRESHOLD")
+    waiting_room_request_threshold: int = Field(default=200, validation_alias="WAITING_ROOM_REQUEST_THRESHOLD")
     waiting_room_recovery_seconds: int = Field(default=60, validation_alias="WAITING_ROOM_RECOVERY_SECONDS")
     queue_release_batch_default: int = Field(default=50, validation_alias="QUEUE_RELEASE_BATCH_DEFAULT")
     queue_max_active_tokens_default: int = Field(default=200, validation_alias="QUEUE_MAX_ACTIVE_TOKENS_DEFAULT")

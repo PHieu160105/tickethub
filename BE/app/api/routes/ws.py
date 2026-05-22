@@ -32,12 +32,8 @@ async def _resolve_ws_user(token: str) -> User | None:
 async def show_seat_ws(websocket: WebSocket, show_id: int, token: str | None = None) -> None:
     """Đẩy cập nhật ghế tăng dần cho một buổi diễn."""
 
-    if not token:
-        await websocket.close(code=1008, reason="Bắt buộc có token xác thực")
-        return
-
-    user = await _resolve_ws_user(token)
-    if not user:
+    user = await _resolve_ws_user(token) if token else None
+    if token and not user:
         await websocket.close(code=1008, reason="Token xác thực không hợp lệ")
         return
 
@@ -47,11 +43,11 @@ async def show_seat_ws(websocket: WebSocket, show_id: int, token: str | None = N
     if not show:
         await websocket.close(code=1008, reason="Không tìm thấy buổi diễn")
         return
-    if user.role != UserRole.ADMIN and show.status != EventStatus.LIVE:
+    if (not user or user.role != UserRole.ADMIN) and show.status != EventStatus.LIVE:
         await websocket.close(code=1008, reason="Buổi diễn đang được cập nhật")
         return
 
-    connected = await seat_ws_manager.connect(show.id, user.id, websocket)
+    connected = await seat_ws_manager.connect(show.id, user.id if user else None, websocket)
     if not connected:
         return
 
@@ -60,7 +56,7 @@ async def show_seat_ws(websocket: WebSocket, show_id: int, token: str | None = N
             # Giữ socket sống và cho phép client gửi ping.
             await websocket.receive_text()
     except WebSocketDisconnect:
-        await seat_ws_manager.disconnect(show.id, user.id, websocket)
+        await seat_ws_manager.disconnect(show.id, user.id if user else None, websocket)
 
 
 @router.websocket("/ws/admin/dashboard")

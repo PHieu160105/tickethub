@@ -58,15 +58,16 @@ async def _set_waiting_room_state(state: WaitingRoomState) -> None:
         pass
 
 
-async def record_protected_route_hit() -> None:
+async def record_protected_route_hit() -> int:
     """Ghi nhận request vào route cần admission để phục vụ quan sát tải."""
 
     try:
         current = await redis_client.incr(PROTECTED_REQUEST_KEY)
         if current == 1:
             await redis_client.expire(PROTECTED_REQUEST_KEY, 60)
+        return int(current)
     except Exception:
-        pass
+        return 0
 
 
 async def record_db_error() -> None:
@@ -121,11 +122,16 @@ async def ensure_admission_for_show(
     show: Show,
     current_user: User | None,
     queue_token: str | None,
+    *,
+    record_hit: bool = True,
 ) -> None:
     """Chặn route nặng khi Waiting Room đang bật và user chưa có token admitted."""
 
-    await record_protected_route_hit()
+    hit_count = await record_protected_route_hit() if record_hit else 0
     state = await get_waiting_room_state()
+    if state == "normal" and hit_count >= settings.waiting_room_request_threshold:
+        await _set_waiting_room_state("waiting_room")
+        state = "waiting_room"
     if state == "normal":
         return
 
@@ -136,6 +142,29 @@ async def ensure_admission_for_show(
 
     if not await _has_admitted_queue_token(session, show.id, current_user.id, queue_token):
         raise _waiting_room_required(show.id)
+
+
+async def reject_before_show_lookup_if_waiting_room(
+    show_id: int,
+    current_user: User | None,
+    queue_token: str | None,
+) -> None:
+    """Chặn request chắc chắn chưa qua queue trước khi lookup show/event trong DB."""
+
+    hit_count = await record_protected_route_hit()
+    state = await get_waiting_room_state()
+    if state == "normal" and hit_count >= settings.waiting_room_request_threshold:
+        await _set_waiting_room_state("waiting_room")
+        state = "waiting_room"
+    if state == "normal":
+        return
+
+    if not current_user:
+        raise _waiting_room_required(show_id)
+    if getattr(current_user.role, "value", str(current_user.role)) == "admin":
+        return
+    if not queue_token:
+        raise _waiting_room_required(show_id)
 
 
 async def evaluate_waiting_room_health(session: AsyncSession) -> WaitingRoomState:
