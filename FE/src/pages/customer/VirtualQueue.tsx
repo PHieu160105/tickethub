@@ -49,7 +49,6 @@ export default function VirtualQueue() {
   const [message, setMessage] = useState('Đang kết nối phòng chờ...')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [retryNonce, setRetryNonce] = useState(0)
   const interruptionRedirectTimerRef = useRef<number | null>(null)
   const positionRef = useRef<number | null>(null)
 
@@ -232,7 +231,7 @@ export default function VirtualQueue() {
       disposed = true
       if (statusTimer) window.clearInterval(statusTimer)
     }
-  }, [handleShowUnavailable, isAuthenticated, navigate, retryNonce, showId])
+  }, [handleShowUnavailable, isAuthenticated, navigate, showId])
 
   useEffect(() => {
     if (!showId || Number.isNaN(showId) || status !== 'admitted' || !queueToken) {

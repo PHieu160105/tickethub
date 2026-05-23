@@ -15,10 +15,25 @@ from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.db import get_db_session
 from app.core.google_auth import GoogleTokenError, verify_google_access_token
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import (
+    TokenDecodeError,
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    hash_password,
+    verify_password,
+)
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.auth import AuthTokenResponse, GoogleTokenRequest, LoginRequest, RegisterRequest, UpdateProfileRequest, UserResponse
+from app.schemas.auth import (
+    AuthTokenResponse,
+    GoogleTokenRequest,
+    LoginRequest,
+    RefreshTokenRequest,
+    RegisterRequest,
+    UpdateProfileRequest,
+    UserResponse,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -71,7 +86,18 @@ def _verify_discord_state(state: str) -> None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="State OAuth Discord không hợp lệ")
 
 
-def _frontend_auth_redirect(access_token: str, user: UserResponse) -> RedirectResponse:
+def _build_auth_response(user: User) -> AuthTokenResponse:
+    """Tạo cặp access/refresh token cho một user đã xác thực."""
+
+    user_id = str(user.id)
+    return AuthTokenResponse(
+        access_token=create_access_token(user_id),
+        refresh_token=create_refresh_token(user_id),
+        user=UserResponse.model_validate(user),
+    )
+
+
+def _frontend_auth_redirect(access_token: str, refresh_token: str, user: UserResponse) -> RedirectResponse:
     """Chuyển hướng về frontend kèm access token và hồ sơ người dùng đã encode.
 
     Input:
@@ -87,7 +113,12 @@ def _frontend_auth_redirect(access_token: str, user: UserResponse) -> RedirectRe
     """
 
     encoded_user = quote(json.dumps(user.model_dump(mode="json"), separators=(",", ":")))
-    url = f"{settings.frontend_app_url.rstrip('/')}/login?access_token={quote(access_token)}&user={encoded_user}"
+    url = (
+        f"{settings.frontend_app_url.rstrip('/')}/login"
+        f"?access_token={quote(access_token)}"
+        f"&refresh_token={quote(refresh_token)}"
+        f"&user={encoded_user}"
+    )
     return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
 
 
@@ -141,8 +172,7 @@ async def register(payload: RegisterRequest, session: AsyncSession = Depends(get
     await session.commit()
     await session.refresh(user)
 
-    token = create_access_token(str(user.id))
-    return AuthTokenResponse(access_token=token, user=UserResponse.model_validate(user))
+    return _build_auth_response(user)
 
 
 @router.post("/login", response_model=AuthTokenResponse)
@@ -166,8 +196,7 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_db_se
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email hoặc mật khẩu không đúng")
 
-    token = create_access_token(str(user.id))
-    return AuthTokenResponse(access_token=token, user=UserResponse.model_validate(user))
+    return _build_auth_response(user)
 
 
 @router.post("/google-token", response_model=AuthTokenResponse)
@@ -221,8 +250,7 @@ async def google_auth(payload: GoogleTokenRequest, session: AsyncSession = Depen
         await session.commit()
         await session.refresh(user)
 
-    jwt_token = create_access_token(str(user.id))
-    return AuthTokenResponse(access_token=jwt_token, user=UserResponse.model_validate(user))
+    return _build_auth_response(user)
 
 
 @router.get("/discord/login")
@@ -351,8 +379,31 @@ async def discord_callback(
             await session.commit()
             await session.refresh(user)
 
-    jwt_token = create_access_token(str(user.id))
-    return _frontend_auth_redirect(jwt_token, UserResponse.model_validate(user))
+    auth_response = _build_auth_response(user)
+    return _frontend_auth_redirect(auth_response.access_token, auth_response.refresh_token, auth_response.user)
+
+
+@router.post("/refresh", response_model=AuthTokenResponse)
+async def refresh_token(payload: RefreshTokenRequest, session: AsyncSession = Depends(get_db_session)) -> AuthTokenResponse:
+    """Đổi refresh token hợp lệ lấy cặp access/refresh token mới."""
+
+    credentials_exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Refresh token không hợp lệ hoặc đã hết hạn",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        token_payload = decode_refresh_token(payload.refresh_token)
+    except TokenDecodeError as exc:
+        raise credentials_exc from exc
+
+    user_id = int(token_payload["sub"])
+    user = await session.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise credentials_exc
+
+    return _build_auth_response(user)
 
 
 @router.get("/me", response_model=UserResponse)

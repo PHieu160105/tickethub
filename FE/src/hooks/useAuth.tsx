@@ -33,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const response = await authApi.login(email, password)
     authStorage.setToken(response.access_token)
+    authStorage.setRefreshToken(response.refresh_token)
     authStorage.setUser(response.user)
     setToken(response.access_token)
     setUser(response.user)
@@ -49,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }) => {
       const response = await authApi.register(payload)
       authStorage.setToken(response.access_token)
+      authStorage.setRefreshToken(response.refresh_token)
       authStorage.setUser(response.user)
       setToken(response.access_token)
       setUser(response.user)

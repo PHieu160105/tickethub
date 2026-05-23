@@ -39,6 +39,7 @@ class AuthTokenResponse(BaseModel):
     """Dữ liệu phản hồi xác thực gồm JWT và hồ sơ người dùng."""
 
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: UserResponse
 
@@ -55,3 +56,9 @@ class GoogleTokenRequest(BaseModel):
     """Payload xác minh Google access token."""
 
     access_token: str
+
+
+class RefreshTokenRequest(BaseModel):
+    """Payload đổi refresh token lấy cặp token mới."""
+
+    refresh_token: str = Field(min_length=1)

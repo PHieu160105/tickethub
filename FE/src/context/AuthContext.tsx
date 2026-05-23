@@ -20,7 +20,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<User>
   loginWithGoogle: () => Promise<User>
   startDiscordLogin: () => void
-  acceptExternalAuth: (payload: { access_token: string; user: ApiUser }) => User
+  acceptExternalAuth: (payload: { access_token: string; refresh_token: string; user: ApiUser }) => User
   register: (
     email: string,
     password: string,
@@ -73,11 +73,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void bootstrap()
   }, [])
 
+  useEffect(() => {
+    const syncFromStorage = () => {
+      const storedUser = authStorage.getUser()
+      setUser(storedUser ? enrichUser(storedUser) : null)
+    }
+
+    window.addEventListener('ticketrush-auth-storage', syncFromStorage)
+    return () => window.removeEventListener('ticketrush-auth-storage', syncFromStorage)
+  }, [])
+
   const login = async (email: string, password: string) => {
     setIsLoading(true)
     try {
       const response = await authApi.login(email, password)
       authStorage.setToken(response.access_token)
+      authStorage.setRefreshToken(response.refresh_token)
       authStorage.setUser(response.user)
       const enrichedUser = enrichUser(response.user)
       setUser(enrichedUser)
@@ -95,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const accessToken = await signInWithGoogle()
       const response = await authApi.googleTokenLogin(accessToken)
       authStorage.setToken(response.access_token)
+      authStorage.setRefreshToken(response.refresh_token)
       authStorage.setUser(response.user)
       const enrichedUser = enrichUser(response.user)
       setUser(enrichedUser)
@@ -110,8 +122,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.assign(`${API_BASE_URL}/auth/discord/login`)
   }
 
-  const acceptExternalAuth = (payload: { access_token: string; user: ApiUser }) => {
+  const acceptExternalAuth = (payload: { access_token: string; refresh_token: string; user: ApiUser }) => {
     authStorage.setToken(payload.access_token)
+    authStorage.setRefreshToken(payload.refresh_token)
     authStorage.setUser(payload.user)
     const enrichedUser = enrichUser(payload.user)
     setUser(enrichedUser)
@@ -134,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         age: options?.age ?? 18,
       })
       authStorage.setToken(response.access_token)
+      authStorage.setRefreshToken(response.refresh_token)
       authStorage.setUser(response.user)
       const enrichedUser = enrichUser(response.user)
       setUser(enrichedUser)

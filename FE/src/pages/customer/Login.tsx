@@ -28,6 +28,7 @@ export default function Login() {
 
   useEffect(() => {
     const accessToken = searchParams.get('access_token')
+    const refreshToken = searchParams.get('refresh_token')
     const userParam = searchParams.get('user')
     const oauthError = searchParams.get('oauth_error')
 
@@ -37,11 +38,11 @@ export default function Login() {
       return
     }
 
-    if (!accessToken || !userParam) return
+    if (!accessToken || !refreshToken || !userParam) return
 
     try {
       const parsedUser = JSON.parse(userParam) as ApiUser
-      const user = acceptExternalAuth({ access_token: accessToken, user: parsedUser })
+      const user = acceptExternalAuth({ access_token: accessToken, refresh_token: refreshToken, user: parsedUser })
       setSearchParams({}, { replace: true })
       navigate(user.role === 'admin' ? '/admin' : '/', { replace: true })
     } catch {

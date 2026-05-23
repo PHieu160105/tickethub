@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     secret_key: str = "change-me"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440
+    refresh_token_expire_minutes: int = 10080
 
     # pydantic-settings v2 có thể tự parse kiểu phức tạp theo JSON.
     # Ở đây giữ chuỗi gốc để chấp nhận cả định dạng danh sách cách nhau bằng dấu phẩy.
