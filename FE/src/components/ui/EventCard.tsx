@@ -18,6 +18,7 @@ export interface EventCardProps extends Omit<HTMLAttributes<HTMLAnchorElement>, 
 export const EventCard = forwardRef<HTMLAnchorElement, EventCardProps>(
   ({ className, variant = 'default', image, title, date, endDate, venue, price, badge, href, ...props }, ref) => {
     const startDate = new Date(date)
+    const displayDate = endDate ? `${date} - ${endDate}` : date
     const dateBadgeDay = Number.isNaN(startDate.getTime())
       ? '--'
       : startDate.toLocaleDateString('vi-VN', { day: '2-digit' })
@@ -45,7 +46,7 @@ export const EventCard = forwardRef<HTMLAnchorElement, EventCardProps>(
                 <div className="flex items-center gap-4 text-sm text-slate-300">
                   <span className="flex items-center gap-1">
                     <Calendar className="w-4 h-4 text-secondary" />
-                    {date}
+                    {displayDate}
                   </span>
                   <span className="flex items-center gap-1">
                     <MapPin className="w-4 h-4 text-secondary" />

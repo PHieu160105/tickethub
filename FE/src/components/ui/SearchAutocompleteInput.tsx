@@ -46,7 +46,7 @@ export function SearchAutocompleteInput({ value, onChange, onSelect, placeholder
       {open && (
         <div className="absolute z-50 mt-1 w-full rounded-lg border border-white/10 bg-slate-900 shadow-xl">
           {loading ? (
-            <div className="px-3 py-2 text-xs text-slate-400">Loading suggestions...</div>
+            <div className="px-3 py-2 text-xs text-slate-400">Đang tải gợi ý...</div>
           ) : hasItems ? (
             items.map((item) => (
               <button
@@ -63,7 +63,7 @@ export function SearchAutocompleteInput({ value, onChange, onSelect, placeholder
               </button>
             ))
           ) : (
-            <div className="px-3 py-2 text-xs text-slate-400">No suggestions</div>
+            <div className="px-3 py-2 text-xs text-slate-400">Không có gợi ý phù hợp</div>
           )}
         </div>
       )}

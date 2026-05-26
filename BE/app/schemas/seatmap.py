@@ -90,6 +90,7 @@ class SeatMapResponse(BaseModel):
     event_title: str
     venue_name: str
     queue_enabled: bool
+    queue_required: bool = False
     background: SeatMapBackgroundResponse | None = None
     zones: list[SeatMapZoneResponse]
     sections: list[SeatMapSectionResponse]

@@ -21,6 +21,7 @@ import type {
   PaginatedAdminTicketSalesResponse,
   PaginatedAdminUsersResponse,
   QueueJoinResponse,
+  QueueRequirementResponse,
   QueueStatusResponse,
   RevenuePoint,
   SeatMatrixResponse,
@@ -303,6 +304,9 @@ export const seatmapApi = {
 }
 
 export const queueApi = {
+  async check(showId: number) {
+    return withRetry(() => api.get<QueueRequirementResponse>(`/shows/${showId}/queue/check`))
+  },
   async join(showId: number) {
     const response = await api.post<QueueJoinResponse>(`/shows/${showId}/queue/join`)
     return response.data

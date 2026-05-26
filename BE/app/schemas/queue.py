@@ -33,3 +33,12 @@ class QueueHeartbeatResponse(BaseModel):
     token: str
     status: QueueStatus
     admitted_until: datetime | None = None
+
+
+class QueueRequirementResponse(BaseModel):
+    """Phản hồi cho biết show hiện có bắt buộc đi qua phòng chờ hay không."""
+
+    required: bool
+    active_users: int
+    threshold: int
+    message: str

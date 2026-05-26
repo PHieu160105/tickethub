@@ -7,9 +7,16 @@
  */
 
 import { api, withRetry } from '../../../lib/api'
-import type { QueueJoinResponse, QueueStatusResponse } from '../../../types'
+import type { QueueJoinResponse, QueueRequirementResponse, QueueStatusResponse } from '../../../types'
 
 export const queueApi = {
+  /**
+   * Kiểm tra show hiện có bắt buộc đi qua phòng chờ hay không.
+   */
+  async check(showId: number) {
+    return withRetry(() => api.get<QueueRequirementResponse>(`/shows/${showId}/queue/check`))
+  },
+
   /**
    * Tham gia hàng đợi của một buổi diễn.
    */

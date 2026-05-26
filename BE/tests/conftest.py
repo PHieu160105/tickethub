@@ -5,11 +5,13 @@ from datetime import UTC, datetime, time, timedelta
 
 import pytest
 import pytest_asyncio
+from redis.exceptions import RedisError
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import sqlalchemy as sa
 
+from app.core.redis_client import get_redis_client
 from app.core.security import hash_password
 from app.models import Base
 from app.models.enums import EventStatus, Gender, UserRole
@@ -17,6 +19,25 @@ from app.models.user import User
 from app.models.event import Event, Show
 from app.schemas.event import EventCreateRequest, SeatZoneCreate, ShowCreateRequest
 from app.services.event_service import create_event, create_show_with_inventory
+from app.services.queue_service import _memory_active_sessions
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def clean_queue_runtime_state() -> AsyncGenerator[None, None]:
+    """Dọn trạng thái Redis/memory của hàng đợi để mỗi test chạy độc lập."""
+
+    _memory_active_sessions.clear()
+    try:
+        redis = get_redis_client()
+        keys = [key async for key in redis.scan_iter("queue:show:*")]
+        if keys:
+            await redis.delete(*keys)
+    except RedisError:
+        pass
+
+    yield
+
+    _memory_active_sessions.clear()
 
 
 @pytest_asyncio.fixture()
@@ -111,8 +132,6 @@ async def sample_event_with_show(db_session: AsyncSession, admin_user: User) -> 
         status=EventStatus.LIVE,
         hold_minutes=10,
         queue_enabled=False,
-        queue_release_batch=50,
-        max_active_queue_tokens=100,
         zones=[SeatZoneCreate(code="VIP", name="VIP", row_count=2, seats_per_row=3, price=100.0, color="#024ddf")],
     )
 

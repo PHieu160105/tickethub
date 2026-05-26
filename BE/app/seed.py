@@ -81,8 +81,6 @@ async def seed_demo_data(session: AsyncSession) -> None:
         status=EventStatus.LIVE,
         hold_minutes=10,
         queue_enabled=True,
-        queue_release_batch=50,
-        max_active_queue_tokens=200,
         zones=[
             SeatZoneCreate(code="VIP", name="Khu VIP", row_count=8, seats_per_row=12, price=1_490_000, color="#024ddf"),
             SeatZoneCreate(code="A", name="Khu cao cấp A", row_count=10, seats_per_row=15, price=990_000, color="#3569f9"),

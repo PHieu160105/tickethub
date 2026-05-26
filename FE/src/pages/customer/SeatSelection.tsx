@@ -177,7 +177,10 @@ export default function SeatSelection() {
 
   useEffect(() => {
     if (error && matrix?.event_slug) {
-      handleShowInterrupted(matrix.event_slug)
+      const frameId = window.requestAnimationFrame(() => {
+        handleShowInterrupted(matrix.event_slug)
+      })
+      return () => window.cancelAnimationFrame(frameId)
     }
   }, [error, handleShowInterrupted, matrix?.event_slug])
 
@@ -321,7 +324,7 @@ export default function SeatSelection() {
         return
       }
 
-      navigate(`/checkout?showId=${matrix.show_id}&eventKey=${matrix.event_slug}`, {
+      navigate(`/checkout?showId=${matrix.show_id}&eventKey=${matrix.event_id}`, {
         state: { lockedSeatIds: result.locked_seat_ids, lockedSeats },
       })
     } catch (checkoutError) {
@@ -383,7 +386,7 @@ export default function SeatSelection() {
     })
   }, [])
 
-  const handleSeatUpdates = useCallback((event: MessageEvent) => {
+  const handleSeatUpdates = (event: MessageEvent) => {
     try {
       const message = JSON.parse(event.data) as { type?: string; payload?: { event_slug?: string } }
       if (message.type === 'seat_changes') {

@@ -69,6 +69,12 @@ export default function VirtualQueue() {
     return `Bạn đang ở vị trí thứ ${position} trong hàng đợi. Vui lòng không tải lại trang.`
   }, [message, position, status])
 
+  const positionText = useMemo(() => {
+    if (status !== 'waiting') return '-'
+    if (!position || position <= 0) return 'Đang tính...'
+    return `#${position}`
+  }, [position, status])
+
   useEffect(() => {
     positionRef.current = position
   }, [position])
@@ -270,6 +276,18 @@ export default function VirtualQueue() {
             <p className="text-slate-400 mt-2">Buổi diễn: {showId || 'Không xác định'}</p>
           </div>
 
+          {status === 'waiting' ? (
+            <section className="rounded-2xl border border-cyan-400/40 bg-cyan-400/10 p-6 text-center">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-200">Số thứ tự của bạn</p>
+              <p className="mt-3 text-6xl font-black text-white">{positionText}</p>
+              <p className="mt-3 text-sm text-cyan-100">
+                {position && position > 0
+                  ? `Bạn đang đứng thứ ${position}. Hệ thống sẽ tự chuyển bạn sang màn chọn ghế khi đến lượt.`
+                  : 'Hệ thống đang tính vị trí chính xác của bạn trong hàng đợi.'}
+              </p>
+            </section>
+          ) : null}
+
           {isLoading ? (
             <div className="flex items-center gap-2 text-slate-300">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -291,7 +309,7 @@ export default function VirtualQueue() {
             </div>
             <div className="rounded-lg border border-white/10 bg-slate-800/60 p-4">
               <p className="text-xs text-slate-400 uppercase">Vị trí</p>
-              <p className="text-lg font-semibold mt-2">{position ?? '-'}</p>
+              <p className="text-lg font-semibold mt-2">{positionText}</p>
             </div>
             <div className="rounded-lg border border-white/10 bg-slate-800/60 p-4">
               <p className="text-xs text-slate-400 uppercase">ETA</p>

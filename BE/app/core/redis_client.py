@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from redis.asyncio import Redis
 
 from app.core.config import get_settings
 
 settings = get_settings()
 
-# Biến module-level này giữ Redis client duy nhất để tránh tạo kết nối mới cho từng request.
-_redis_client: Redis | None = None
+# Mỗi event loop cần một Redis client riêng.
+# Redis async giữ Future/transport theo loop; dùng chung qua nhiều loop sẽ lỗi trong pytest và worker.
+_redis_clients_by_loop: dict[int, Redis] = {}
 
 
 def get_redis_client() -> Redis:
@@ -22,17 +25,21 @@ def get_redis_client() -> Redis:
     - Một đối tượng `Redis` async đã cấu hình timeout ngắn để không làm nghẽn request.
 
     Cách hoạt động:
-    - Client chỉ được tạo một lần theo kiểu singleton nội bộ.
+    - Client chỉ được tạo một lần cho mỗi event loop đang chạy.
     - URL Redis dùng giá trị đã được `Settings.resolved_redis_url` chuẩn hóa.
     """
 
-    global _redis_client
-    if _redis_client is None:
+    try:
+        loop_key = id(asyncio.get_running_loop())
+    except RuntimeError:
+        loop_key = 0
+
+    if loop_key not in _redis_clients_by_loop:
         # URL đã được chuẩn hóa ở `Settings`, ví dụ môi trường cục bộ dùng Redis Docker trên port 6380.
         redis_url = settings.resolved_redis_url
 
         # `decode_responses=True` giúp Redis trả string thay vì bytes, code nghiệp vụ đọc dễ hơn.
-        _redis_client = Redis.from_url(
+        _redis_clients_by_loop[loop_key] = Redis.from_url(
             redis_url,
             decode_responses=True,
             # Timeout ngắn để Redis lỗi không kéo sập request API chính.
@@ -42,4 +49,4 @@ def get_redis_client() -> Redis:
             # Health check định kỳ giữ kết nối sống khi worker chạy lâu.
             health_check_interval=30,
         )
-    return _redis_client
+    return _redis_clients_by_loop[loop_key]

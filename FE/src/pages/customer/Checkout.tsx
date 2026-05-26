@@ -156,11 +156,14 @@ export default function Checkout() {
       return
     }
     if (matrixError) {
-      handleShowInterrupted(eventKey ?? matrix?.event_slug)
+      const frameId = window.requestAnimationFrame(() => {
+        handleShowInterrupted(eventKey ?? matrix?.event_slug)
+      })
+      return () => window.cancelAnimationFrame(frameId)
     }
   }, [eventKey, handleShowInterrupted, matrix?.event_slug, matrixError, matrixRawError, navigate, showId])
 
-  const handleShowSocketMessage = useCallback((event: MessageEvent) => {
+  const handleShowSocketMessage = (event: MessageEvent) => {
     try {
       const message = JSON.parse(event.data) as { type?: string; payload?: { event_slug?: string } }
       if (message.type === 'show_unpublished') {
@@ -169,7 +172,7 @@ export default function Checkout() {
     } catch {
       // Bỏ qua gói tin WebSocket không đúng định dạng.
     }
-  }, [eventKey, handleShowInterrupted, matrix?.event_slug])
+  }
 
   useWebSocketHeartbeat({ url: wsUrl, onMessage: handleShowSocketMessage })
 
@@ -490,10 +493,10 @@ export default function Checkout() {
                 </div>
               </div>
 
-              {eventKey && (
+              {matrix?.event_title && (
                 <div className="mt-6 flex items-center gap-2 text-xs text-slate-400 uppercase tracking-wider">
                   <MapPin className="w-4 h-4" />
-                  {eventKey}
+                  {matrix.event_title}
                 </div>
               )}
             </div>

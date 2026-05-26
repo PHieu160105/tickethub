@@ -8,11 +8,12 @@ import { Toast } from '@/components/ui/Toast'
 import { eventsApi } from '@/features/events/api/eventsApi'
 import { useEventDetail } from '@/features/events/hooks/useEvents'
 import { useAuth } from '@/context/AuthContext'
+import { queueApi } from '@/lib/api'
 import type { EventReview, EventStatus } from '@/types'
 import { Calendar, Clock, MapPin, Star, Users } from 'lucide-react'
 import { Heart } from 'lucide-react'
 import { isFavourite, toggleFavourite } from '@/lib/favourites'
-import { flashNoticeStorage, type FlashNotice } from '@/lib/storage'
+import { flashNoticeStorage, queueStorage, type FlashNotice } from '@/lib/storage'
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80'
@@ -30,9 +31,9 @@ function formatDate(date: string) {
 
 function statusBadge(status: EventStatus) {
   const variants: Record<EventStatus, { text: string; variant: ComponentProps<typeof Badge>['variant'] }> = {
-    draft: { text: 'Draft', variant: 'default' },
-    live: { text: 'Live', variant: 'success' },
-    closed: { text: 'Closed', variant: 'danger' },
+    draft: { text: 'Bản nháp', variant: 'default' },
+    live: { text: 'Đang mở bán', variant: 'success' },
+    closed: { text: 'Đã đóng', variant: 'danger' },
   }
 
   const variant = variants[status]
@@ -41,7 +42,7 @@ function statusBadge(status: EventStatus) {
 
 function showStatusBadge(show: { status: EventStatus; end_at: string }) {
   if (new Date(show.end_at).getTime() <= Date.now()) {
-    return <Badge variant="danger">End</Badge>
+    return <Badge variant="danger">Đã kết thúc</Badge>
   }
   return statusBadge(show.status)
 }
@@ -68,6 +69,7 @@ export default function EventDetail() {
   const [fav, setFav] = useState(false)
   const [hasLoadedReviews, setHasLoadedReviews] = useState(false)
   const [flashNotice, setFlashNotice] = useState<FlashNotice | null>(null)
+  const [checkingQueueShowId, setCheckingQueueShowId] = useState<number | null>(null)
 
   useEffect(() => {
     setFlashNotice(flashNoticeStorage.consume())
@@ -152,6 +154,32 @@ export default function EventDetail() {
       setReviewError(e instanceof Error ? e.message : 'Không thể gửi đánh giá')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleBookShow = async (showId: number) => {
+    if (!isAuthenticated) {
+      navigate('/login')
+      return
+    }
+
+    setCheckingQueueShowId(showId)
+    try {
+      const queueEntry = await queueApi.join(showId)
+      if (queueEntry.token) {
+        queueStorage.setToken(showId, queueEntry.token)
+      }
+
+      if (queueEntry.status === 'waiting') {
+        navigate(`/queue?showId=${showId}&eventKey=${encodeURIComponent(String(event?.id ?? eventKey ?? ''))}`)
+        return
+      }
+
+      navigate(`/shows/${showId}/seats`)
+    } catch {
+      navigate(`/shows/${showId}/seats`)
+    } finally {
+      setCheckingQueueShowId(null)
     }
   }
 
@@ -267,11 +295,15 @@ export default function EventDetail() {
                             <p>{new Date(show.start_at).toLocaleString('vi-VN')}</p>
                             <p>{show.venue}</p>
                           </div>
-                          {isBookable && (
-                            <Link to={`/shows/${show.id}/seats`} className="mt-4 inline-block ">
-                              <Button className='bg-[var(--customer-bg-opt)] hover:bg-[var(--customer-bg-opt)]/50'>Đặt vé</Button>
-                            </Link>
-                          )}
+	                          {isBookable && (
+	                            <Button
+	                              className="mt-4 bg-[var(--customer-bg-opt)] hover:bg-[var(--customer-bg-opt)]/50"
+	                              isLoading={checkingQueueShowId === show.id}
+	                              onClick={() => void handleBookShow(show.id)}
+	                            >
+	                              Đặt vé
+	                            </Button>
+	                          )}
                         </div>
                       )
                     })}

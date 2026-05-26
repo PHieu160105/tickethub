@@ -14,4 +14,4 @@ async def test_event_search_uses_mapped_event_date_columns(db_session: AsyncSess
 
     assert items
     assert items[0].item_type == "event"
-    assert items[0].value == sample_event.slug
+    assert items[0].value == str(sample_event.id)

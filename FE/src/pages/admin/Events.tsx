@@ -49,7 +49,7 @@ const INITIAL_EVENT_FORM: EventFormState = {
   category: '',
   start_date: '',
   end_date: '',
-  status: 'draft',
+  status: 'live',
   cover_image_url: '',
   image_file: null,
 }
@@ -62,13 +62,14 @@ const INITIAL_SHOW_FORM: ShowFormState = {
   start_time: '19:00',
   end_time: '21:00',
   status: 'draft',
+
   hold_minutes: '10',
   seat_map_mode: 'free',
   create_seed_zone: false,
   venue_id: '',
   venue_layout_id: '',
   zone_code: 'A',
-  zone_name: 'Standard',
+  zone_name: 'Khu tiêu chuẩn',
   row_count: '10',
   seats_per_row: '20',
   zone_price: '500000',
@@ -79,9 +80,9 @@ const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 
 function statusBadge(status: EventStatus) {
   const variants: Record<EventStatus, { text: string; className: string }> = {
-    draft: { text: 'Draft', className: 'bg-gray-500/20 text-gray-300' },
-    live: { text: 'Live', className: 'bg-green-700/20 text-green-300' },
-    closed: { text: 'Closed', className: 'bg-red-500/20 text-red-300' },
+    draft: { text: 'Bản nháp', className: 'bg-gray-500/20 text-gray-300' },
+    live: { text: 'Đang mở bán', className: 'bg-green-700/20 text-green-300' },
+    closed: { text: 'Đã đóng', className: 'bg-red-500/20 text-red-300' },
   }
 
   const variant = variants[status]
@@ -390,7 +391,7 @@ export default function AdminEvents() {
       venue_layout_id: detail.venue_layout_id ? String(detail.venue_layout_id) : '',
       hold_minutes: String(detail.hold_minutes),
       zone_code: 'A',
-      zone_name: 'Standard',
+      zone_name: 'Khu tiêu chuẩn',
       row_count: '10',
       seats_per_row: '20',
       zone_price: '500000',
@@ -557,9 +558,9 @@ export default function AdminEvents() {
               onChange={(event) => setStatusFilter(event.target.value as 'all' | EventStatus)}
             >
               <option value="all">Tất cả status</option>
-              <option value="draft">Draft</option>
-              <option value="live">Live</option>
-              <option value="closed">Closed</option>
+              <option value="draft">Bản nháp</option>
+              <option value="live">Đang mở bán</option>
+              <option value="closed">Đã đóng</option>
             </select>
           </div>
         </CardContent>
@@ -609,12 +610,12 @@ export default function AdminEvents() {
 
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="warning" size="sm">{event.category}</Badge>
-                  <Badge variant="default" size="sm">/{event.slug}</Badge>
+                  <Badge variant="default" size="sm">Mã sự kiện #{event.id}</Badge>
                 </div>
 
                 <div className="flex flex-wrap justify-end gap-2 pt-2">
                   <Button variant="ghost" size="sm" className="text-slate-200 hover:text-slate-500" onClick={() => void openDetailModal(event)}>
-                    <Ticket className="h-4 w-4" /> Detail
+                    <Ticket className="h-4 w-4" /> Chi tiết
                   </Button>
                   <Button variant="ghost" size="sm" className="text-slate-200 hover:text-slate-500" onClick={() => openEditEventModal(event)}>
                     <Edit className="h-4 w-4" /> Sửa event
@@ -658,15 +659,15 @@ export default function AdminEvents() {
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-white">Category</label>
+              <label className="mb-2 block text-sm font-medium text-white">Thể loại</label>
               <Input className="text-white" value={eventForm.category} onChange={(event) => setEventForm((prev) => ({ ...prev, category: event.target.value }))} />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-300">Status</label>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Trạng thái</label>
               <select className="w-full rounded-lg border border-white/10 admin-bg-listbox px-3 py-2 text-gray-500" value={eventForm.status} onChange={(event) => setEventForm((prev) => ({ ...prev, status: event.target.value as EventStatus }))}>
-                <option value="draft">Draft</option>
-                <option value="live">Live</option>
-                <option value="closed">Closed</option>
+                <option value="live">Đang mở bán</option>
+                <option value="draft">Bản nháp</option>
+                <option value="closed">Đã đóng</option>
               </select>
             </div>
           </div>
@@ -741,18 +742,18 @@ export default function AdminEvents() {
                           <div className="flex items-center gap-2">
                             <h3 className="text-lg font-semibold customer-text-header">{show.title}</h3>
                             {statusBadge(show.status)}
-                            <Badge variant="info" size="sm">{show.venue_layout_id ? 'Venue Map' : 'Chọn chỗ tự do'}</Badge>
+                            <Badge variant="info" size="sm">{show.venue_layout_id ? 'Sơ đồ venue' : 'Chọn chỗ tự do'}</Badge>
                           </div>
                           <p className="text-sm text-gray-500">{show.description}</p>
                           <div className="space-y-1 text-sm text-gray-400">
                             <p>{formatDateTime(show.start_at)} - {formatDateTime(show.end_at)}</p>
-                            <p>{show.venue}</p>
+                            <p>{show.venue}</p>n
                           </div>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
                           <Button variant="ghost" size="sm" onClick={() => void openSeatPlanner(show)}>
-                            Seat Planner
+                            Sơ đồ ghế
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => void openEditShowModal(show)}>
                             <Edit className="h-4 w-4" /> Sửa show
@@ -809,11 +810,11 @@ export default function AdminEvents() {
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-300">Status</label>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Trạng thái</label>
               <select className="w-full rounded-lg border border-white/10 admin-bg-listbox px-3 py-2 text-gray-500" value={showForm.status} onChange={(event) => setShowForm((prev) => ({ ...prev, status: event.target.value as EventStatus }))}>
-                <option value="draft">Draft</option>
-                <option value="live">Live</option>
-                <option value="closed">Closed</option>
+                <option value="live">Đang mở bán</option>
+                <option value="draft">Bản nháp</option>
+                <option value="closed">Đã đóng</option>
               </select>
             </div>
           </div>
@@ -842,7 +843,7 @@ export default function AdminEvents() {
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-300">Hold</label>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Thời gian giữ ghế</label>
               <Input className="text-white" type="number" min={1} value={showForm.hold_minutes} onChange={(event) => setShowForm((prev) => ({ ...prev, hold_minutes: event.target.value }))} />
             </div>
           </div>
@@ -907,7 +908,7 @@ export default function AdminEvents() {
                       <Input className="text-white" value={showForm.zone_code} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_code: event.target.value }))} />
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-gray-300">Zone name</label>
+                      <label className="mb-2 block text-sm font-medium text-gray-300">Tên khu</label>
                       <Input className="text-white" value={showForm.zone_name} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_name: event.target.value }))} />
                     </div>
                   </div>

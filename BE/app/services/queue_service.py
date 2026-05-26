@@ -29,6 +29,7 @@ from uuid import uuid4
 # IMPORTS TỪ THƯ VIỆN BÊN NGOÀI (cài qua pip install)
 # ============================================================
 from fastapi import HTTPException, status
+from redis.exceptions import RedisError
 #   HTTPException : class của FastAPI để ném lỗi HTTP
 #                   Dùng khi muốn trả về lỗi cho client (400, 403, 404, 429...)
 #   status        : module chứa hằng số mã trạng thái HTTP
@@ -60,6 +61,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # IMPORTS TỪ NỘI BỘ DỰ ÁN (code tự viết trong project TicketRush)
 # ============================================================
 from app.core.config import get_settings
+from app.core.redis_client import get_redis_client
 #   get_settings() : hàm tự viết trong app/core/config.py
 #                    Trả về object Settings chứa mọi cấu hình của app
 #                    Đã được cache bằng @lru_cache nên gọi nhiều lần không tốn chi phí
@@ -103,10 +105,11 @@ QUEUE_LOCK_NAMESPACE = 7042
 #   Object này được cache bởi @lru_cache trong config.py
 #   Dùng để đọc các cấu hình như: queue_admit_ttl_minutes, queue_batch_size_default...
 #   Biến module-level: tồn tại suốt vòng đời app, tất cả request dùng chung
+_memory_active_sessions: dict[int, dict[int, datetime]] = {}
 
 
 # ============================================================
-# HÀM TIỆN ÍCH (utility function)
+# HÀM TIỆN ÍCH
 # ============================================================
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -118,11 +121,11 @@ def _as_utc(value: datetime | None) -> datetime | None:
     
     GIẢI PHÁP: Hàm này kiểm tra và gắn múi giờ UTC nếu datetime chưa có.
     
-    Args:
-        value: datetime từ database, có thể có hoặc không có timezone
+    Đầu vào:
+    - `value`: datetime từ database, có thể có hoặc không có timezone.
         
-    Returns:
-        datetime đã có timezone UTC, hoặc None nếu đầu vào là None
+    Đầu ra:
+    - Datetime đã có timezone UTC, hoặc None nếu đầu vào là None.
     """
 
     # Kiểm tra value có phải None không
@@ -142,12 +145,215 @@ def _as_utc(value: datetime | None) -> datetime | None:
     #                           └── CHƯA có tzinfo → gắn UTC vào rồi trả về
 
 
+def _show_active_users_key(show_id: int) -> str:
+    """Sinh Redis key lưu tập người dùng đang quan tâm đến một show."""
+
+    return f"queue:show:{show_id}:active-users"
+
+
+def _show_active_user_session_key(show_id: int, user_id: int) -> str:
+    """Sinh Redis key TTL cho một user đang mở luồng mua vé của show."""
+
+    return f"queue:show:{show_id}:active-user:{user_id}"
+
+
+async def track_show_active_user(show_id: int, user_id: int) -> None:
+    """Ghi nhận một user đang quan tâm đến show để quyết định có cần bật queue hay không.
+
+    Input:
+    - `show_id`: buổi diễn đang được xem hoặc chuẩn bị đặt vé.
+    - `user_id`: người dùng hiện tại.
+
+    Output:
+    - Không trả dữ liệu; Redis sẽ tự hết hạn dấu vết hoạt động sau một khoảng ngắn.
+
+    Cách hoạt động:
+    - Lưu `user_id` vào một Redis set theo show.
+    - Tạo key phiên riêng có TTL để biết user nào đã rời trang hoặc mất kết nối.
+    - Nếu Redis tạm thời không sẵn sàng, backend bỏ qua tracking để không làm hỏng luồng đặt vé.
+    """
+
+    redis = get_redis_client()
+    set_key = _show_active_users_key(show_id)
+    session_key = _show_active_user_session_key(show_id, user_id)
+    ttl_seconds = settings.queue_active_user_ttl_seconds
+    try:
+        await redis.sadd(set_key, str(user_id))
+        await redis.set(session_key, "1", ex=ttl_seconds)
+        await redis.expire(set_key, ttl_seconds * 2)
+    except RedisError:
+        expires_at = datetime.now(UTC) + timedelta(seconds=ttl_seconds)
+        _memory_active_sessions.setdefault(show_id, {})[user_id] = expires_at
+        return
+
+
+async def get_show_active_user_count(show_id: int) -> int:
+    """Đếm số user còn hoạt động trong cửa sổ ngắn của một show.
+
+    Input:
+    - `show_id`: buổi diễn cần kiểm tra tải truy cập.
+
+    Output:
+    - Số user còn có key TTL hợp lệ trong Redis.
+
+    Cách hoạt động:
+    - Đọc tập user theo show.
+    - Với từng user, kiểm tra key phiên riêng còn tồn tại không.
+    - User đã hết TTL sẽ bị xóa khỏi set để lần sau đếm nhẹ hơn.
+    """
+
+    redis = get_redis_client()
+    set_key = _show_active_users_key(show_id)
+    try:
+        members = await redis.smembers(set_key)
+    except RedisError:
+        now = datetime.now(UTC)
+        sessions = _memory_active_sessions.get(show_id, {})
+        active_user_ids = [user_id for user_id, expires_at in sessions.items() if expires_at > now]
+        _memory_active_sessions[show_id] = {user_id: sessions[user_id] for user_id in active_user_ids}
+        return len(active_user_ids)
+
+    active_count = 0
+    for raw_user_id in members:
+        try:
+            user_id = int(raw_user_id)
+        except (TypeError, ValueError):
+            await redis.srem(set_key, raw_user_id)
+            continue
+
+        session_key = _show_active_user_session_key(show_id, user_id)
+        try:
+            exists = await redis.exists(session_key)
+        except RedisError:
+            return active_count
+
+        if exists:
+            active_count += 1
+        else:
+            await redis.srem(set_key, raw_user_id)
+
+    return active_count
+
+
+async def _waiting_queue_count(session: AsyncSession, show_id: int) -> int:
+    """Đếm số người đang chờ trong DB cho một show."""
+
+    count = await session.scalar(
+        select(func.count(QueueEntry.id)).where(
+            QueueEntry.show_id == show_id,
+            QueueEntry.status == QueueStatus.WAITING,
+        )
+    )
+    return int(count or 0)
+
+
+async def _active_admitted_count(session: AsyncSession, show_id: int, now: datetime) -> int:
+    """Đếm số token đã được cấp lượt và còn hạn."""
+
+    count = await session.scalar(
+        select(func.count(QueueEntry.id)).where(
+            QueueEntry.show_id == show_id,
+            QueueEntry.status == QueueStatus.ADMITTED,
+            QueueEntry.expires_at.is_not(None),
+            QueueEntry.expires_at > now,
+        )
+    )
+    return int(count or 0)
+
+
+async def _has_valid_admitted_entry(session: AsyncSession, show_id: int, user_id: int, now: datetime) -> bool:
+    """Kiểm tra user hiện tại đã có quyền vào chọn ghế còn hạn hay chưa.
+
+    Đầu vào:
+    - `session`: phiên database đang dùng.
+    - `show_id`: buổi diễn cần kiểm tra quyền vào.
+    - `user_id`: người dùng đang thao tác.
+    - `now`: thời điểm hiện tại theo UTC để so sánh hạn token.
+
+    Đầu ra:
+    - `True` nếu user đã có bản ghi ADMITTED còn hạn, ngược lại trả `False`.
+    """
+
+    entry_id = await session.scalar(
+        select(QueueEntry.id).where(
+            QueueEntry.show_id == show_id,
+            QueueEntry.user_id == user_id,
+            QueueEntry.status == QueueStatus.ADMITTED,
+            QueueEntry.expires_at.is_not(None),
+            QueueEntry.expires_at > now,
+        )
+    )
+    return entry_id is not None
+
+
+async def get_queue_requirement_details(
+    session: AsyncSession,
+    show: Show,
+    user_id: int | None = None,
+) -> tuple[bool, int, int]:
+    """Cho biết show hiện có bắt buộc qua phòng chờ hay không.
+
+    Input:
+    - `session`: phiên DB đang dùng.
+    - `show`: buổi diễn cần kiểm tra.
+    - `user_id`: user hiện tại, nếu có thì được ghi nhận vào cửa sổ active user.
+
+    Output:
+    - Tuple gồm `required`, `active_users`, `threshold`.
+
+    Cách hoạt động:
+    - Nếu admin tắt queue cho show thì luôn cho đi thẳng.
+    - Nếu queue bật, hệ thống chỉ yêu cầu phòng chờ khi số active user chạm ngưỡng
+      hoặc đang có người chờ để giữ đúng thứ tự FIFO.
+    """
+
+    threshold = settings.queue_active_threshold_default
+    if not show.queue_enabled:
+        return False, 0, threshold
+
+    now = datetime.now(UTC)
+    if user_id is not None and await _has_valid_admitted_entry(session, show.id, user_id, now):
+        active_users = await get_show_active_user_count(show.id)
+        return False, active_users, threshold
+
+    if user_id is not None:
+        await track_show_active_user(show.id, user_id)
+
+    active_users = await get_show_active_user_count(show.id)
+    waiting_count = await _waiting_queue_count(session, show.id)
+    required = active_users >= threshold or waiting_count > 0
+    return required, active_users, threshold
+
+
+async def is_show_queue_required(session: AsyncSession, show: Show, user_id: int | None = None) -> bool:
+    """Trả về `True` nếu show hiện phải ép user đi qua phòng chờ."""
+
+    required, _, _ = await get_queue_requirement_details(session, show, user_id)
+    return required
+
+
 # ============================================================
-# HÀM NỘI BỘ (internal function, chỉ dùng trong file này)
+# HÀM NỘI BỘ CHỈ DÙNG TRONG FILE NÀY
 # ============================================================
 
 async def _acquire_show_queue_lock(session: AsyncSession, show_id: int) -> None:
-    """Khóa giao dịch theo show để chống admit vượt slot khi nhiều request/worker song song."""
+    """Khóa giao dịch theo show để chống admit vượt slot khi nhiều request/worker song song.    
+    MỤC ĐÍCH: Đếm xem có bao nhiêu người ĐỨNG TRƯỚC entry này trong hàng đợi.
+    Kết quả dùng để hiển thị cho user: "Bạn đang ở vị trí số X trong hàng đợi".
+    
+    NGUYÊN TẮC XẾP HÀNG:
+    1. Ai vào trước (created_at nhỏ hơn) → đứng trước
+    2. Nếu vào cùng giây → ai có ID nhỏ hơn → đứng trước (tie-break)
+       (ID là khóa chính tự tăng, ai insert trước có ID nhỏ hơn)
+    
+    Đầu vào:
+    - `session`: phiên kết nối database bất đồng bộ.
+    - `entry`: bản ghi hàng đợi cần tính vị trí.
+        
+    Đầu ra:
+    - Vị trí trong hàng đợi (1, 2, 3...), hoặc 0 nếu entry không còn WAITING.
+    """
+
 
     bind = session.get_bind()
     if bind.dialect.name != "postgresql":
@@ -199,8 +405,8 @@ async def join_show_queue(session: AsyncSession, show: Show, user_id: int) -> Qu
     - Nếu buổi diễn còn slot active thì cấp trạng thái `ADMITTED` ngay.
     - Nếu đang quá tải thì tạo bản ghi `WAITING`; worker nền sẽ cấp lượt theo batch.
     """
-
     lock_acquired = await _try_acquire_show_queue_lock(session, show.id)
+
 
     # ============================================================
     # BƯỚC 2: LẤY THỜI GIAN HIỆN TẠI THEO UTC
@@ -315,7 +521,6 @@ async def join_show_queue(session: AsyncSession, show: Show, user_id: int) -> Qu
             )
         )
         active_admitted_count = int(active_admitted_count or 0)
-
     # ============================================================
     # TẠO OBJECT QueueEntry MỚI (chưa INSERT vào database)
     # ============================================================
@@ -358,24 +563,17 @@ async def join_show_queue(session: AsyncSession, show: Show, user_id: int) -> Qu
     await session.refresh(entry)  # SQLAlchemy: load lại từ DB để lấy giá trị auto-generated
                                   #   vd: id (auto-increment), created_at (default)
 
-    # ============================================================
-    # TRẢ VỀ RESPONSE TƯƠNG ỨNG VỚI TRẠNG THÁI
-    # ============================================================
-    if entry.status == QueueStatus.ADMITTED:
-        return QueueJoinResponse(
-            token=entry.token,              # Token mới tạo
-            status=entry.status,             # ADMITTED
-            position=0,                      # Được vào ngay → vị trí 0
-            message="Bạn đã được cấp lượt ngay.",
-            admitted_until=entry.expires_at, # Thời hạn 15 phút
-        )
+    # Tính lại vị trí thật sau khi insert để tránh sai lệch khi nhiều người vào queue gần như cùng lúc.
+    current_position = await _queue_position(session, entry)
+    entry.position_hint = current_position
+    await session.commit()
 
-    # Còn lại là WAITING (không đủ điều kiện vào ngay)
+    # Trả về WAITING để frontend hiển thị phòng chờ; worker sẽ cấp lượt theo batch.
     return QueueJoinResponse(
         token=entry.token,                  # Token mới tạo
         status=entry.status,                 # WAITING
-        position=entry.position_hint,        # Vị trí dự kiến
-        message="Lượng truy cập đang cao. Vui lòng chờ đến lượt của bạn.",
+        position=current_position,           # Vị trí thật trong hàng đợi
+        message=f"Bạn đang ở vị trí thứ {current_position} trong hàng đợi. Vui lòng không tải lại trang.",
     )
 
 
@@ -432,6 +630,7 @@ async def get_queue_status(session: AsyncSession, show_id: int, token: str, user
             position=entry.position_hint,
             # f-string Python: chèn biến vào chuỗi
             message=f"Bạn đang ở vị trí {entry.position_hint} trong hàng đợi. Vui lòng không tải lại trang.",
+
         )
 
     # ADMITTED: được vào rồi → trả thời hạn
@@ -539,7 +738,6 @@ async def ensure_queue_access(session: AsyncSession, show: Show, user_id: int, q
     5. Còn hạn không? → Hết hạn → 410 Gone + cập nhật EXPIRED
     """
 
-    # Waiting Room là cơ chế platform. Khi không có token, caller ở trạng thái normal được đi tiếp.
     if not queue_token:
         return
 
@@ -621,8 +819,8 @@ async def process_virtual_queue(session: AsyncSession) -> int:
     3. CHO VÀO tối đa batch_size người WAITING đầu hàng (FIFO)
     4. CẬP NHẬT position_hint cho những người còn chờ
     
-    Returns:
-        int: tổng số thay đổi đã thực hiện (để log/debug, không ảnh hưởng logic)
+    Đầu ra:
+    - Tổng số thay đổi đã thực hiện để worker ghi log, không ảnh hưởng logic nghiệp vụ.
     """
 
     now = datetime.now(UTC)      # Python built-in: thời gian hiện tại
@@ -681,30 +879,23 @@ async def process_virtual_queue(session: AsyncSession) -> int:
         #        AND expires_at IS NOT NULL
         #        AND expires_at > NOW()
         # ----------------------------------------------------------
-        active_admitted_count = await session.scalar(
-            select(func.count(QueueEntry.id)).where(
-                QueueEntry.show_id == show.id,
-                QueueEntry.status == QueueStatus.ADMITTED,     # Đang được vào
-                QueueEntry.expires_at.is_not(None),            # Có thời hạn
-                QueueEntry.expires_at > now,                   # CÒN HẠN (> now)
-            )
-        )
-        active_admitted_count = int(active_admitted_count or 0)
+        active_admitted_count = await _active_admitted_count(session, show.id, now)
 
         # ----------------------------------------------------------
         # BƯỚC 3: TÍNH SLOT TRỐNG VÀ BATCH SIZE
         # ----------------------------------------------------------
-        # show.max_active_queue_tokens: cột INTEGER (default=200)
-        #   Số người tối đa được vào khu vực chọn ghế
+        max_active_tokens = settings.queue_max_active_tokens_default
+        release_batch = settings.queue_batch_size_default
+        # max_active_tokens/release_batch là cấu hình cố định của backend để admin không chỉnh sai từng show.
         # max(a, 0): Python built-in - đảm bảo không âm
         max_active_tokens = min(show.max_active_queue_tokens, settings.queue_max_active_tokens_default)
+
         available_slots = max(max_active_tokens - active_admitted_count, 0)
         
-        # show.queue_release_batch: cột INTEGER (default=50)
-        #   Số người tối đa được cho vào mỗi đợt
+        # release_batch: số người tối đa được cho vào mỗi đợt
         # min(a, b): Python built-in - lấy số nhỏ hơn
         batch_size = min(show.queue_release_batch, settings.queue_release_batch_default, available_slots)
-        
+
         # Không còn slot → bỏ qua show này, xử lý show tiếp theo
         if batch_size <= 0:
             continue  # Python built-in: nhảy sang vòng lặp tiếp theo
@@ -774,8 +965,8 @@ async def cleanup_expired_queue_entries(session: AsyncSession) -> int:
     MỤC ĐÍCH: Dọn dẹp định kỳ - xóa các queue entry đã EXPIRED quá 24 giờ.
     Việc này giữ cho bảng queue_entries không bị phình to vô hạn theo thời gian.
     
-    Returns:
-        int: số dòng đã xóa
+    Đầu ra:
+    - Số dòng đã xóa.
     """
 
     # Tính mốc cutoff: 24 giờ trước

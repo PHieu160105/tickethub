@@ -55,6 +55,8 @@ class Settings(BaseSettings):
 
     hold_minutes_default: int = 10
     queue_batch_size_default: int = 50
+    queue_active_threshold_default: int = 2
+    queue_max_active_tokens_default: int = 200
     queue_admit_ttl_minutes: int = 15
     waiting_room_db_latency_ms: int = Field(default=500, validation_alias="WAITING_ROOM_DB_LATENCY_MS")
     waiting_room_error_threshold: int = Field(default=5, validation_alias="WAITING_ROOM_ERROR_THRESHOLD")
@@ -63,6 +65,7 @@ class Settings(BaseSettings):
     queue_release_batch_default: int = Field(default=50, validation_alias="QUEUE_RELEASE_BATCH_DEFAULT")
     queue_max_active_tokens_default: int = Field(default=200, validation_alias="QUEUE_MAX_ACTIVE_TOKENS_DEFAULT")
     queue_inactive_grace_seconds: int = Field(default=90, validation_alias="QUEUE_INACTIVE_GRACE_SECONDS")
+
     redis_url: str | None = Field(default=None, validation_alias="REDIS_URL")
     redis_host: str = Field(default="127.0.0.1", validation_alias="REDIS_HOST")
     redis_port: int = Field(default=6380, validation_alias="REDIS_PORT")

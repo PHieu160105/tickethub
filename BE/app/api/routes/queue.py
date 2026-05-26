@@ -23,6 +23,7 @@ from app.schemas.queue import QueueHeartbeatResponse, QueueJoinResponse, QueueSt
 from app.services.event_service import get_show_by_id
 from app.services.queue_service import get_queue_status, heartbeat_queue_token, join_show_queue, leave_queue_token
 
+
 # Mọi route trong file này đều nằm dưới `/api/shows/{show_id}/queue`.
 router = APIRouter(prefix="/shows/{show_id}/queue", tags=["queue"])
 
@@ -61,6 +62,24 @@ async def join_queue(
 
     # Service tự quyết định user được `admitted` ngay hay phải `waiting`.
     return await join_show_queue(session, show=show, user_id=current_user.id)
+
+
+@router.get("/check", response_model=QueueRequirementResponse, dependencies=[Depends(rate_limit("queue-check", times=30, seconds=60))])
+async def queue_requirement(
+    show_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+) -> QueueRequirementResponse:
+    """Kiểm tra show hiện có cần phòng chờ hay không trước khi chuyển sang màn chọn ghế."""
+
+    show = await _get_public_show_or_404(session, show_id)
+    required, active_users, threshold = await get_queue_requirement_details(session, show=show, user_id=current_user.id)
+    message = (
+        "Lưu lượng đã chạm ngưỡng, người dùng cần đi qua phòng chờ."
+        if required
+        else "Lưu lượng chưa chạm ngưỡng, người dùng có thể vào chọn ghế ngay."
+    )
+    return QueueRequirementResponse(required=required, active_users=active_users, threshold=threshold, message=message)
 
 
 @router.get("/status/{token}", response_model=QueueStatusResponse, dependencies=[Depends(rate_limit("queue-status", times=60, seconds=60))])

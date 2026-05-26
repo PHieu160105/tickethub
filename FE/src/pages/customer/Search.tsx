@@ -28,17 +28,13 @@ export default function Search() {
   const [hasTouchedPriceRange, setHasTouchedPriceRange] = useState(false)
   const [sortBy, setSortBy] = useState<'recommended' | 'date' | 'title'>('recommended')
   const [currentPage, setCurrentPage] = useState(1)
-  const [flashNotice, setFlashNotice] = useState<FlashNotice | null>(null)
+  const [flashNotice, setFlashNotice] = useState<FlashNotice | null>(() => flashNoticeStorage.consume())
   const itemsPerPage = 6
 
   const { events, isLoading, error } = useEvents({
     search: searchQuery || undefined,
     category: selectedCategory === 'all' ? undefined : selectedCategory,
   })
-
-  useEffect(() => {
-    setFlashNotice(flashNoticeStorage.consume())
-  }, [])
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {

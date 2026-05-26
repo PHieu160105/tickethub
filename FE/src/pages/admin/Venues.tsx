@@ -2272,7 +2272,7 @@ export default function AdminVenues() {
                                         <div
                                             className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-brand-red bg-brand-red/30 shadow-[0_0_0_6px_rgba(252,83,109,0.18)]"
                                             style={{ left: `${singleSeatForm.x}%`, top: `${singleSeatForm.y}%` }}
-                                            title="Seat target"
+                                            title="Vị trí ghế đang chọn"
                                         />
                                 </InteractiveSeatCanvas>
                                 {tooltip && (

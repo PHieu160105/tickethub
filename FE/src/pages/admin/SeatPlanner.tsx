@@ -1569,7 +1569,7 @@ export default function AdminSeatPlanner() {
                                 <div
                                     className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-brand-red bg-brand-red/30 shadow-[0_0_0_6px_rgba(252,83,109,0.18)]"
                                     style={{ left: `${singleForm.x}%`, top: `${singleForm.y}%` }}
-                                    title="Current single-seat target"
+                                    title="Vị trí ghế đơn đang chọn"
                                 />
                             )}
                             {selectionStart && selectionCurrent && (
@@ -1695,7 +1695,7 @@ export default function AdminSeatPlanner() {
                         <CardContent className="space-y-3 text-sm text-slate-500">
                             <div className="flex items-center justify-between">
                                 <span>Sự kiện</span>
-                                <span className="customer-text-body">{showDetail.event_slug}</span>
+                                <span className="customer-text-body">{showDetail.event_title}</span>
                             </div>
                             <div className="flex items-center justify-between">
                                 <span>Số khu</span>

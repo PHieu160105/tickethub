@@ -76,7 +76,7 @@ async def suggest(
         # Map từng Event ORM sang schema gợi ý thống nhất cho frontend.
         items.extend(
             [
-                SearchSuggestionItem(label=row.title, value=row.slug, item_type="event", meta={"venue": row.venue, "id": row.id})
+                SearchSuggestionItem(label=row.title, value=str(row.id), item_type="event", meta={"venue": row.venue, "id": row.id})
                 for row in rows
             ]
         )

@@ -41,7 +41,7 @@ class EventCreateRequest(BaseModel):
     start_date: date
     end_date: date
     cover_image_url: str = ""
-    status: EventStatus = EventStatus.DRAFT
+    status: EventStatus = EventStatus.LIVE
 
     @model_validator(mode="after")
     def validate_range(self) -> "EventCreateRequest":
@@ -71,11 +71,9 @@ class ShowCreateRequest(BaseModel):
     show_date: date
     start_time: time
     end_time: time
-    status: EventStatus = EventStatus.DRAFT
+    status: EventStatus = EventStatus.LIVE
     hold_minutes: int = Field(default=10, ge=1, le=60)
     queue_enabled: bool = True
-    queue_release_batch: int = Field(default=50, ge=1, le=500)
-    max_active_queue_tokens: int = Field(default=200, ge=1, le=5000)
     venue_id: int | None = Field(default=None, ge=1)
     venue_layout_id: int | None = Field(default=None, ge=1)
     zones: list[SeatZoneCreate] = Field(default_factory=list)
@@ -103,8 +101,6 @@ class ShowUpdateRequest(BaseModel):
     status: EventStatus | None = None
     hold_minutes: int | None = Field(default=None, ge=1, le=60)
     queue_enabled: bool | None = None
-    queue_release_batch: int | None = Field(default=None, ge=1, le=500)
-    max_active_queue_tokens: int | None = Field(default=None, ge=1, le=5000)
     venue_id: int | None = Field(default=None, ge=1)
     venue_layout_id: int | None = Field(default=None, ge=1)
 
@@ -157,8 +153,6 @@ class ShowDetailResponse(ShowSummaryResponse):
     event_slug: str
     event_title: str
     hold_minutes: int
-    queue_release_batch: int
-    max_active_queue_tokens: int
     zones: list["SeatZoneResponse"]
 
 
@@ -222,6 +216,7 @@ class SeatMatrixResponse(BaseModel):
     event_slug: str
     event_title: str
     queue_enabled: bool
+    queue_required: bool = False
     zones: list[SeatZoneResponse]
     seats: list[SeatResponse]
 

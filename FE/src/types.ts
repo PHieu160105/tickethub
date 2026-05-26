@@ -153,8 +153,6 @@ export interface ShowDetail extends ShowSummary {
   event_slug: string
   event_title: string
   hold_minutes: number
-  queue_release_batch: number
-  max_active_queue_tokens: number
   zones: SeatZone[]
 }
 
@@ -196,6 +194,7 @@ export interface SeatMatrixResponse {
   event_slug: string
   event_title: string
   queue_enabled: boolean
+  queue_required: boolean
   zones: SeatZone[]
   seats: Seat[]
 }
@@ -269,6 +268,7 @@ export interface SeatMapResponse {
   event_title: string
   venue_name: string
   queue_enabled: boolean
+  queue_required: boolean
   background: SeatMapBackground | null
   zones: SeatMapZone[]
   sections: SeatMapSection[]
@@ -307,6 +307,13 @@ export interface QueueStatusResponse {
   status: QueueStatus
   position?: number | null
   admitted_until?: string | null
+  message: string
+}
+
+export interface QueueRequirementResponse {
+  required: boolean
+  active_users: number
+  threshold: number
   message: string
 }
 
