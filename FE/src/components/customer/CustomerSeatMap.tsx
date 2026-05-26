@@ -112,7 +112,7 @@ export function CustomerSeatMap({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Sơ đồ ghế tương tác</p>
-          <h2 className="text-2xl font-black text-white">{seatMap.event_title}</h2>
+          <h2 className="text-2xl font-black customer-text-body">{seatMap.event_title}</h2>
           <p className="text-sm text-slate-400">{seatMap.venue_name}</p>
         </div>
         <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white/95 p-2 shadow-lg">
@@ -220,6 +220,7 @@ export function CustomerSeatMap({
                   }}
                   onMouseDown={(event) => event.stopPropagation()}
                   onMouseEnter={(event) => setTooltip({ x: event.clientX, y: event.clientY, content: tooltipContent })}
+                  onMouseMove={(event) => setTooltip((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current)}
                   onMouseLeave={() => setTooltip(null)}
                   disabled={isSeatBlocked(seat)}
                   className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border transition ${seatClassName(seat, isSelected)}`}
@@ -235,16 +236,17 @@ export function CustomerSeatMap({
               )
             })}
 
-            {tooltip && (
-              <div
-                className="pointer-events-none fixed z-[9999] max-w-[220px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 shadow-2xl"
-                style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}
-              >
-                {tooltip.content}
-              </div>
-            )}
           </div>
         </div>
+
+        {tooltip && (
+          <div
+            className="pointer-events-none fixed z-[9999] max-w-[220px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 shadow-2xl"
+            style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}
+          >
+            {tooltip.content}
+          </div>
+        )}
 
         <div className="absolute bottom-4 left-4 right-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white/90 px-4 py-3 text-xs text-slate-700 shadow-lg">
           <span>{visibleSeats.length} ghế có tọa độ{hiddenSeatCount > 0 ? ` · ${hiddenSeatCount} ghế chưa có tọa độ` : ''}</span>

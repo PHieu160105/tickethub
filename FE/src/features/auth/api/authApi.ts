@@ -3,6 +3,7 @@
  */
 
 import { api, withRetry } from '../../../lib/api'
+import type { AxiosRequestConfig } from 'axios'
 import type { AuthResponse } from '../../../types'
 
 export interface RegisterPayload {
@@ -24,14 +25,16 @@ export const authApi = {
    * Đăng nhập bằng email và mật khẩu.
    */
   async login(email: string, password: string) {
-    return withRetry(() => api.post<AuthResponse>('/auth/login', { email, password }, { timeout: 10000 }), 2)
+    const config = { timeout: 10000, skipAuthRefresh: true } as AxiosRequestConfig & { skipAuthRefresh: boolean }
+    return withRetry(() => api.post<AuthResponse>('/auth/login', { email, password }, config), 2)
   },
 
   /**
    * Đăng ký tài khoản mới.
    */
   async register(payload: RegisterPayload) {
-    const response = await api.post<AuthResponse>('/auth/register', payload)
+    const config = { skipAuthRefresh: true } as AxiosRequestConfig & { skipAuthRefresh: boolean }
+    const response = await api.post<AuthResponse>('/auth/register', payload, config)
     return response.data
   },
 

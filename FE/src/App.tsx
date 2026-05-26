@@ -39,6 +39,8 @@ import { CustomerLayout } from './components/layout/CustomerLayout'
 // ═══════════════════════════════════════════════════════════════
 
 import { AdminLayout } from './components/layout/AdminLayout'
+import { QueueSessionGuard } from './components/customer/QueueSessionGuard'
+
 // ═══════════════════════════════════════════════════════════════
 // COMPONENT TỰ VIẾT: AdminLayout
 // Đường dẫn: ./components/layout/AdminLayout.tsx
@@ -247,6 +249,8 @@ function AppRoutes() {
   return (
     // ── BrowserRouter: component gốc của routing ────────────
     <BrowserRouter>
+      <QueueSessionGuard />
+
       {/*
         BrowserRouter: dùng HTML5 History API
         → URL KHÔNG có dấu # (khác với HashRouter)
@@ -255,6 +259,7 @@ function AppRoutes() {
       */}
 
       {/* ── Routes: container chứa tất cả Route ────────────── */}
+
       <Routes>
         {/*
           Routes: component của react-router-dom v6

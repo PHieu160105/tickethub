@@ -48,6 +48,8 @@ async def test_virtual_queue_batches_users(
 
     event = await create_event(db_session, admin_user.id, event_payload)
     show = await create_show_with_inventory(db_session, event, admin_user.id, show_payload)
+    show.max_active_queue_tokens = 1
+    show.queue_release_batch = 1
     await db_session.commit()
 
     first_join = await join_show_queue(db_session, show=show, user_id=user1.id)

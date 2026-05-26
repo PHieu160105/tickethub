@@ -21,15 +21,14 @@ export const queueApi = {
    * Tham gia hàng đợi của một buổi diễn.
    */
   async join(showId: number) {
-    const response = await api.post<QueueJoinResponse>(`/shows/${showId}/queue/join`)
-    return response.data
+    return withRetry(() => api.post<QueueJoinResponse>(`/shows/${showId}/queue/join`, undefined, { timeout: 30000 }), 2)
   },
 
   /**
    * Lấy trạng thái hiện tại của token hàng đợi.
    */
   async status(showId: number, token: string) {
-    return withRetry(() => api.get<QueueStatusResponse>(`/shows/${showId}/queue/status/${token}`))
+    return withRetry(() => api.get<QueueStatusResponse>(`/shows/${showId}/queue/status/${token}`, { timeout: 30000 }), 2)
   },
 
   /**
@@ -37,5 +36,12 @@ export const queueApi = {
    */
   async heartbeat(showId: number, token: string) {
     await api.post(`/shows/${showId}/queue/heartbeat/${token}`)
+  },
+
+  /**
+   * Rời hàng đợi/lượt vào khi người dùng thoát khỏi luồng mua vé.
+   */
+  async leave(showId: number, token: string) {
+    await api.post(`/shows/${showId}/queue/leave/${token}`)
   },
 }

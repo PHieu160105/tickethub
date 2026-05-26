@@ -36,17 +36,15 @@ from redis.exceptions import RedisError
 #                   vd: status.HTTP_404_NOT_FOUND = 404
 #                       status.HTTP_429_TOO_MANY_REQUESTS = 429
 
-from sqlalchemy import and_, delete, func, or_, select, update
-#   and_   : hàm tạo điều kiện AND trong SQL
-#            vd: and_(A == 1, B == 2) → WHERE A=1 AND B=2
+from sqlalchemy import case, delete, func, select, text, update
+#   case   : hàm tạo biểu thức CASE WHEN trong SQL
+#            vd: case((condition, value), else_=fallback)
 #   delete : hàm tạo câu lệnh DELETE trong SQL
 #            vd: delete(QueueEntry) → DELETE FROM queue_entries
 #   func   : cầu nối gọi các hàm SQL của database
 #            vd: func.count() → COUNT()
 #                func.sum()   → SUM()
 #                func.coalesce() → COALESCE()
-#   or_    : hàm tạo điều kiện OR trong SQL
-#            vd: or_(A == 1, B == 2) → WHERE A=1 OR B=2
 #   select : hàm tạo câu lệnh SELECT trong SQL
 #            vd: select(QueueEntry) → SELECT * FROM queue_entries
 #   update : hàm tạo câu lệnh UPDATE trong SQL
@@ -91,7 +89,6 @@ from app.models.queue import QueueEntry
 #                Chứa: token, status, created_at, admitted_at, expires_at...
 
 from app.schemas.queue import QueueJoinResponse, QueueStatusResponse
-from app.services.dashboard_service import broadcast_dashboard_update
 #   QueueJoinResponse   : Pydantic schema tự viết trong app/schemas/queue.py
 #                         Định dạng JSON trả về khi user gọi API join queue
 #                         Gồm: token, status, position, message, admitted_until
@@ -103,6 +100,7 @@ from app.services.dashboard_service import broadcast_dashboard_update
 # KHỞI TẠO SINGLETON SETTINGS
 # ============================================================
 settings = get_settings()
+QUEUE_LOCK_NAMESPACE = 7042
 #   Gọi get_settings() MỘT LẦN ở module level để lấy object Settings
 #   Object này được cache bởi @lru_cache trong config.py
 #   Dùng để đọc các cấu hình như: queue_admit_ttl_minutes, queue_batch_size_default...
@@ -338,9 +336,8 @@ async def is_show_queue_required(session: AsyncSession, show: Show, user_id: int
 # HÀM NỘI BỘ CHỈ DÙNG TRONG FILE NÀY
 # ============================================================
 
-async def _queue_position(session: AsyncSession, entry: QueueEntry) -> int:
-    """Tính vị trí chờ hiện tại của một lượt trong hàng đợi.
-    
+async def _acquire_show_queue_lock(session: AsyncSession, show_id: int) -> None:
+    """Khóa giao dịch theo show để chống admit vượt slot khi nhiều request/worker song song.    
     MỤC ĐÍCH: Đếm xem có bao nhiêu người ĐỨNG TRƯỚC entry này trong hàng đợi.
     Kết quả dùng để hiển thị cho user: "Bạn đang ở vị trí số X trong hàng đợi".
     
@@ -357,68 +354,28 @@ async def _queue_position(session: AsyncSession, entry: QueueEntry) -> int:
     - Vị trí trong hàng đợi (1, 2, 3...), hoặc 0 nếu entry không còn WAITING.
     """
 
-    # Chỉ tính vị trí cho người đang WAITING (đang chờ)
-    # QueueStatus.WAITING: enum tự viết - trạng thái "đang xếp hàng"
-    # Nếu đã ADMITTED, EXPIRED, COMPLETED → vị trí = 0 (không còn trong hàng)
-    if entry.status != QueueStatus.WAITING:
-        return 0  # Python built-in: trả về số nguyên 0
 
-    # ============================================================
-    # SQL được tạo ra:
-    # SELECT COUNT(id)
-    # FROM queue_entries
-    # WHERE show_id = <entry.show_id>
-    #   AND status = 'WAITING'
-    #   AND (
-    #       created_at < <entry.created_at>          -- vào trước
-    #       OR
-    #       (created_at = <entry.created_at> AND id <= <entry.id>)  -- cùng lúc + ID nhỏ hơn/bằng
-    #   )
-    # ============================================================
-    position = await session.scalar(
-        # select() là SQLAlchemy: bắt đầu câu SELECT
-        # func.count(QueueEntry.id): gọi hàm COUNT(id) của SQL
-        #   QueueEntry.id: cột id trong bảng queue_entries (tự viết trong model)
-        select(func.count(QueueEntry.id)).where(
-            # Điều kiện 1: CÙNG SHOW
-            # QueueEntry.show_id: ForeignKey đến shows.id (tự viết)
-            # entry.show_id: lấy từ QueueEntry object truyền vào
-            QueueEntry.show_id == entry.show_id,
-            
-            # Điều kiện 2: CÙNG TRẠNG THÁI WAITING
-            # Chỉ đếm những người ĐANG CHỜ, không tính ADMITTED hay EXPIRED
-            # QueueStatus.WAITING: enum tự viết
-            QueueEntry.status == QueueStatus.WAITING,
-            
-            # Điều kiện 3: ĐỨNG TRƯỚC trong hàng
-            # or_() là SQLAlchemy: tạo toán tử OR trong SQL
-            or_(
-                # Điều kiện 3a: VÀO TRƯỚC
-                # created_at nhỏ hơn → đứng trước
-                # QueueEntry.created_at: cột TIMESTAMP trong bảng queue_entries
-                QueueEntry.created_at < entry.created_at,
-                
-                # Điều kiện 3b: VÀO CÙNG LÚC + ID NHỎ HƠN/BẰNG
-                # and_() là SQLAlchemy: tạo toán tử AND trong SQL
-                and_(
-                    # Cùng created_at (cùng giây)
-                    QueueEntry.created_at == entry.created_at,
-                    # ID nhỏ hơn hoặc bằng (bao gồm chính entry này)
-                    # <= để đếm cả chính mình, kết quả ít nhất là 1
-                    QueueEntry.id <= entry.id,
-                ),
-            ),
+    bind = session.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(:namespace, :show_id)"),
+        {"namespace": QUEUE_LOCK_NAMESPACE, "show_id": show_id},
+    )
+
+
+async def _try_acquire_show_queue_lock(session: AsyncSession, show_id: int) -> bool:
+    """Thử khóa theo show nhưng không để request user chờ trên connection DB."""
+
+    bind = session.get_bind()
+    if bind.dialect.name != "postgresql":
+        return True
+    return bool(
+        await session.scalar(
+            text("SELECT pg_try_advisory_xact_lock(:namespace, :show_id)"),
+            {"namespace": QUEUE_LOCK_NAMESPACE, "show_id": show_id},
         )
     )
-    # session.scalar(): SQLAlchemy - thực thi query và trả về GIÁ TRỊ ĐƠN
-    #   Nếu query trả về nhiều dòng: lấy cột đầu, dòng đầu
-    #   Nếu query trả về 0 dòng: trả về None
-    
-    # int() Python built-in: chuyển đổi về kiểu số nguyên
-    # position or 0: Python short-circuit evaluation
-    #   Nếu position là None → lấy 0
-    #   Nếu position là số → giữ nguyên
-    return int(position or 0)
 
 
 # ============================================================
@@ -448,63 +405,8 @@ async def join_show_queue(session: AsyncSession, show: Show, user_id: int) -> Qu
     - Nếu buổi diễn còn slot active thì cấp trạng thái `ADMITTED` ngay.
     - Nếu đang quá tải thì tạo bản ghi `WAITING`; worker nền sẽ cấp lượt theo batch.
     """
+    lock_acquired = await _try_acquire_show_queue_lock(session, show.id)
 
-    # ============================================================
-    # BƯỚC 1: KIỂM TRA SHOW CÓ BẬT QUEUE KHÔNG
-    # ============================================================
-    queue_required, _, _ = await get_queue_requirement_details(session, show, user_id)
-    if not queue_required:
-        now = datetime.now(UTC)
-        existing_direct = await session.scalar(
-            select(QueueEntry)
-            .where(
-                QueueEntry.show_id == show.id,
-                QueueEntry.user_id == user_id,
-                QueueEntry.status == QueueStatus.ADMITTED,
-                QueueEntry.expires_at.is_not(None),
-                QueueEntry.expires_at > now,
-            )
-            .order_by(QueueEntry.created_at.desc())
-        )
-        if existing_direct:
-            return QueueJoinResponse(
-                token=existing_direct.token,
-                status=QueueStatus.ADMITTED,
-                position=0,
-                message="Bạn đã có quyền vào chọn ghế.",
-                admitted_until=existing_direct.expires_at,
-            )
-
-        if show.queue_enabled:
-            entry = QueueEntry(
-                event_id=show.event_id,
-                show_id=show.id,
-                user_id=user_id,
-                token=str(uuid4()),
-                status=QueueStatus.ADMITTED,
-                position_hint=0,
-                admitted_at=now,
-                expires_at=now + timedelta(minutes=settings.queue_admit_ttl_minutes),
-                last_seen_at=now,
-            )
-            session.add(entry)
-            await session.commit()
-            await session.refresh(entry)
-            return QueueJoinResponse(
-                token=entry.token,
-                status=QueueStatus.ADMITTED,
-                position=0,
-                message="Lưu lượng hiện tại chưa chạm ngưỡng phòng chờ. Bạn có thể vào chọn ghế ngay.",
-                admitted_until=entry.expires_at,
-            )
-
-        return QueueJoinResponse(
-            token="",
-            status=QueueStatus.ADMITTED,
-            position=0,
-            message="Lưu lượng hiện tại chưa chạm ngưỡng phòng chờ. Bạn có thể vào chọn ghế ngay.",
-            admitted_until=None,
-        )
 
     # ============================================================
     # BƯỚC 2: LẤY THỜI GIAN HIỆN TẠI THEO UTC
@@ -573,16 +475,11 @@ async def join_show_queue(session: AsyncSession, show: Show, user_id: int) -> Qu
         # Case B: WAITING → Vẫn phải chờ, báo vị trí
         # ----------------------------------------------------------
         if existing.status == QueueStatus.WAITING:
-            # await _queue_position(...): gọi hàm tự viết để đếm vị trí
-            #   Hàm này query database đếm số người đứng trước
-            current_position = await _queue_position(session, existing)
-            existing.position_hint = current_position
-            await session.commit()
             return QueueJoinResponse(
                 token=existing.token,           # Token cũ, dùng lại
                 status=existing.status,          # WAITING
-                position=current_position,       # Vị trí thật tại thời điểm trả response
-                message=f"Bạn đang ở vị trí thứ {current_position} trong hàng đợi. Vui lòng không tải lại trang.",
+                position=existing.position_hint,  # Vị trí gần nhất do join/worker cập nhật
+                message="Bạn đang ở phòng chờ. Vui lòng giữ trang này mở.",
             )
 
         # ----------------------------------------------------------
@@ -599,8 +496,31 @@ async def join_show_queue(session: AsyncSession, show: Show, user_id: int) -> Qu
 
     # ĐẾM SỐ NGƯỜI ĐANG WAITING trong show này
     # Mục đích: Để tính position_hint (vị trí dự kiến) cho người mới
-    waiting_count = await _waiting_queue_count(session, show.id)
+    waiting_count = await session.scalar(
+        # func.count(QueueEntry.id): SQLAlchemy gọi hàm COUNT của SQL
+        #   Đếm số dòng thỏa điều kiện
+        select(func.count(QueueEntry.id)).where(
+            QueueEntry.show_id == show.id,
+            QueueEntry.status == QueueStatus.WAITING,  # Chỉ đếm người đang chờ
+        )
+    )
+    # int() Python built-in: chuyển về số nguyên
+    # waiting_count or 0: nếu None → 0, nếu có giá trị → giữ nguyên
+    waiting_count = int(waiting_count or 0)
 
+    # ĐẾM SỐ NGƯỜI ĐANG ADMITTED CÒN HẠN
+    # Mục đích: Để biết còn slot trống không
+    active_admitted_count = 0
+    if lock_acquired:
+        active_admitted_count = await session.scalar(
+            select(func.count(QueueEntry.id)).where(
+                QueueEntry.show_id == show.id,
+                QueueEntry.status == QueueStatus.ADMITTED,      # Đã được cấp lượt
+                QueueEntry.expires_at.is_not(None),              # Phải có thời hạn (không NULL)
+                QueueEntry.expires_at > now,                     # Chưa hết hạn
+            )
+        )
+        active_admitted_count = int(active_admitted_count or 0)
     # ============================================================
     # TẠO OBJECT QueueEntry MỚI (chưa INSERT vào database)
     # ============================================================
@@ -615,8 +535,24 @@ async def join_show_queue(session: AsyncSession, show: Show, user_id: int) -> Qu
         position_hint=waiting_count + 1,       # Vị trí dự kiến = số người đang chờ + 1
     )
 
-    # Khi queue đã bắt buộc, lượt mới luôn vào WAITING.
-    # Worker nền sẽ cấp quyền theo batch cố định để không đẩy tải đột ngột vào màn chọn ghế.
+    # ============================================================
+    # KIỂM TRA CÓ ĐƯỢC VÀO NGAY KHÔNG
+    # Điều kiện: CÒN SLOT TRỐNG VÀ KHÔNG CÓ AI ĐANG CHỜ
+    # ============================================================
+    # show.max_active_queue_tokens: cột INTEGER trong bảng shows (tự viết)
+    #   Số người TỐI ĐA được vào khu vực chọn ghế cùng lúc (default=200)
+    # Điều kiện 1: active_admitted_count < max → còn slot
+    # Điều kiện 2: waiting_count == 0 → không ai đang xếp hàng (công bằng FIFO)
+    max_active_tokens = min(show.max_active_queue_tokens, settings.queue_max_active_tokens_default)
+    if lock_acquired and active_admitted_count < max_active_tokens and waiting_count == 0:
+        # Được vào ngay → đổi trạng thái từ WAITING thành ADMITTED
+        entry.status = QueueStatus.ADMITTED         # Enum tự viết
+        entry.admitted_at = now                      # Ghi nhận thời điểm được cấp lượt
+        # settings.queue_admit_ttl_minutes: từ config (app/core/config.py)
+        #   Mặc định = 15 phút - thời gian user có để chọn ghế và thanh toán
+        # timedelta(minutes=...): Python built-in - tạo khoảng thời gian
+        entry.expires_at = now + timedelta(minutes=settings.queue_admit_ttl_minutes)
+        entry.last_seen_at = now                     # Đánh dấu user đang online
 
     # ============================================================
     # LƯU VÀO DATABASE
@@ -626,8 +562,6 @@ async def join_show_queue(session: AsyncSession, show: Show, user_id: int) -> Qu
                               #   Sau dòng này, entry đã có trong DB
     await session.refresh(entry)  # SQLAlchemy: load lại từ DB để lấy giá trị auto-generated
                                   #   vd: id (auto-increment), created_at (default)
-    if entry.status == QueueStatus.WAITING:
-        await broadcast_dashboard_update()
 
     # Tính lại vị trí thật sau khi insert để tránh sai lệch khi nhiều người vào queue gần như cùng lúc.
     current_position = await _queue_position(session, entry)
@@ -690,16 +624,13 @@ async def get_queue_status(session: AsyncSession, show_id: int, token: str, user
 
     # WAITING: đang xếp hàng → trả vị trí
     if entry.status == QueueStatus.WAITING:
-        # Gọi hàm tự viết để đếm vị trí thực tế trong hàng
-        position = await _queue_position(session, entry)
-        entry.position_hint = position
-        await session.commit()
         return QueueStatusResponse(  # Pydantic schema tự viết
             token=entry.token,
             status=entry.status,
-            position=position,
+            position=entry.position_hint,
             # f-string Python: chèn biến vào chuỗi
-            message=f"Bạn đang ở vị trí thứ {position} trong hàng đợi. Vui lòng không tải lại trang.",
+            message=f"Bạn đang ở vị trí {entry.position_hint} trong hàng đợi. Vui lòng không tải lại trang.",
+
         )
 
     # ADMITTED: được vào rồi → trả thời hạn
@@ -772,6 +703,26 @@ async def heartbeat_queue_token(session: AsyncSession, show_id: int, token: str,
     return entry  # Trả về ORM object cho caller (route sẽ chuyển thành response)
 
 
+async def leave_queue_token(session: AsyncSession, show_id: int, token: str, user_id: int) -> bool:
+    """Hủy lượt hàng đợi đang hoạt động khi người dùng rời luồng mua vé."""
+
+    entry = await session.scalar(
+        select(QueueEntry).where(
+            QueueEntry.show_id == show_id,
+            QueueEntry.token == token,
+            QueueEntry.user_id == user_id,
+            QueueEntry.status.in_([QueueStatus.WAITING, QueueStatus.ADMITTED]),
+        )
+    )
+    if not entry:
+        return False
+
+    entry.status = QueueStatus.EXPIRED
+    entry.expires_at = datetime.now(UTC)
+    await session.commit()
+    return True
+
+
 async def ensure_queue_access(session: AsyncSession, show: Show, user_id: int, queue_token: str | None) -> None:
     """Chặn thao tác giữ/thanh toán ghế nếu thiếu token hàng đợi đã được cấp lượt.
     
@@ -787,15 +738,8 @@ async def ensure_queue_access(session: AsyncSession, show: Show, user_id: int, q
     5. Còn hạn không? → Hết hạn → 410 Gone + cập nhật EXPIRED
     """
 
-    queue_required = await is_show_queue_required(session, show, user_id)
-    if not queue_required:
-        return  # Python built-in: thoát hàm, không trả về gì
-
-    # Show bật queue mà user không gửi token lên → từ chối
-    # HTTP_429_TOO_MANY_REQUESTS: mã lỗi "quá nhiều request"
-    #   Phù hợp vì user đang cố vượt qua cơ chế queue
     if not queue_token:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Buổi diễn này yêu cầu token hàng đợi")
+        return
 
     # Tìm phiếu queue trong database
     # Cần khớp CẢ 3: show_id, token, user_id
@@ -889,8 +833,8 @@ async def process_virtual_queue(session: AsyncSession) -> int:
     shows = list(
         await session.scalars(
             select(Show).where(
-                Show.queue_enabled.is_(True),       # Có bật queue
                 Show.is_deleted.is_(False),          # Chưa bị xóa mềm
+                Show.queue_enabled.is_(True),
                 Show.status.in_([                    # Đang ở trạng thái hoạt động
                     EventStatus.LIVE,                # Đang diễn ra
                     EventStatus.DRAFT,               # Nháp nhưng đã public
@@ -903,6 +847,7 @@ async def process_virtual_queue(session: AsyncSession) -> int:
     # XỬ LÝ TỪNG SHOW MỘT
     # ============================================================
     for show in shows:
+        await _acquire_show_queue_lock(session, show.id)
         # ----------------------------------------------------------
         # BƯỚC 1: ĐUỔI NGƯỜI ADMITTED ĐÃ HẾT HẠN
         # SQL: UPDATE queue_entries
@@ -943,12 +888,14 @@ async def process_virtual_queue(session: AsyncSession) -> int:
         release_batch = settings.queue_batch_size_default
         # max_active_tokens/release_batch là cấu hình cố định của backend để admin không chỉnh sai từng show.
         # max(a, 0): Python built-in - đảm bảo không âm
+        max_active_tokens = min(show.max_active_queue_tokens, settings.queue_max_active_tokens_default)
+
         available_slots = max(max_active_tokens - active_admitted_count, 0)
         
         # release_batch: số người tối đa được cho vào mỗi đợt
         # min(a, b): Python built-in - lấy số nhỏ hơn
-        batch_size = min(release_batch, available_slots)
-        
+        batch_size = min(show.queue_release_batch, settings.queue_release_batch_default, available_slots)
+
         # Không còn slot → bỏ qua show này, xử lý show tiếp theo
         if batch_size <= 0:
             continue  # Python built-in: nhảy sang vòng lặp tiếp theo
@@ -987,24 +934,21 @@ async def process_virtual_queue(session: AsyncSession) -> int:
             entry.position_hint = index                  # Vị trí trong đợt này (1, 2, 3...)
             updated_entries += 1                         # Tăng biến đếm
 
-        # ----------------------------------------------------------
-        # BƯỚC 6: CẬP NHẬT LẠI VỊ TRÍ CHO NGƯỜI CÒN CHỜ
-        # ----------------------------------------------------------
-        # Sau khi cho batch_size người vào, những người còn lại cần được
-        # cập nhật position_hint để frontend hiển thị đúng vị trí mới
-        remaining_waiting = list(
-            await session.scalars(
-                select(QueueEntry)
+        admitted_now = len(waiting_entries)
+        if admitted_now:
+            await session.execute(
+                update(QueueEntry)
                 .where(
                     QueueEntry.show_id == show.id,
                     QueueEntry.status == QueueStatus.WAITING,
                 )
-                .order_by(QueueEntry.created_at.asc())  # Vẫn giữ thứ tự FIFO
+                .values(
+                    position_hint=case(
+                        (QueueEntry.position_hint > admitted_now, QueueEntry.position_hint - admitted_now),
+                        else_=1,
+                    )
+                )
             )
-        )
-        # Cập nhật vị trí: 1, 2, 3... từ đầu hàng
-        for pos, waiting_entry in enumerate(remaining_waiting, start=1):
-            waiting_entry.position_hint = pos  # pos bắt đầu từ 1
 
     # ============================================================
     # COMMIT TẤT CẢ THAY ĐỔI

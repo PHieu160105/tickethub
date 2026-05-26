@@ -10,7 +10,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_admin
-from app.core.cache import EVENT_DETAIL_CACHE_NAMESPACE, EVENT_LIST_CACHE_NAMESPACE, public_api_cache, show_seat_cache_namespace
+from app.core.cache import EVENT_DETAIL_CACHE_NAMESPACE, EVENT_LIST_CACHE_NAMESPACE, SHOW_DETAIL_CACHE_NAMESPACE, public_api_cache, show_seat_cache_namespace
 from app.core.db import get_db_session
 from app.core.search import build_ilike_pattern, sanitize_search_query
 from app.models.enums import EventStatus, OrderStatus, QueueStatus, SeatStatus
@@ -108,6 +108,7 @@ def _apply_admin_lock_state(seat: Seat, is_admin_locked: bool) -> None:
 
 async def _invalidate_show_cache(show_id: int) -> None:
     await public_api_cache.invalidate_namespace(show_seat_cache_namespace(show_id))
+    await public_api_cache.invalidate_namespace(SHOW_DETAIL_CACHE_NAMESPACE)
     await public_api_cache.invalidate_namespace(EVENT_LIST_CACHE_NAMESPACE)
     await public_api_cache.invalidate_namespace(EVENT_DETAIL_CACHE_NAMESPACE)
 
@@ -313,6 +314,7 @@ async def create_admin_event(
 
     await public_api_cache.invalidate_namespace(EVENT_LIST_CACHE_NAMESPACE)
     await public_api_cache.invalidate_namespace(EVENT_DETAIL_CACHE_NAMESPACE)
+    await public_api_cache.invalidate_namespace(SHOW_DETAIL_CACHE_NAMESPACE)
     await broadcast_dashboard_update()
     return await build_event_detail_response(session, event, include_unpublished_shows=True)
 
@@ -376,6 +378,8 @@ async def update_event(
 
     event = await get_event_by_slug_or_id(session, event_key)
     updates = payload.model_dump(exclude_unset=True)
+    for queue_field in ("queue_enabled", "queue_release_batch", "max_active_queue_tokens"):
+        updates.pop(queue_field, None)
     next_start = updates.get("start_date", event.start_date)
     next_end = updates.get("end_date", event.end_date)
     if next_end < next_start:
@@ -396,6 +400,7 @@ async def update_event(
 
     await public_api_cache.invalidate_namespace(EVENT_LIST_CACHE_NAMESPACE)
     await public_api_cache.invalidate_namespace(EVENT_DETAIL_CACHE_NAMESPACE)
+    await public_api_cache.invalidate_namespace(SHOW_DETAIL_CACHE_NAMESPACE)
     await broadcast_dashboard_update()
     return await build_event_detail_response(session, event, include_unpublished_shows=True)
 
@@ -424,6 +429,7 @@ async def delete_event(
 
     await public_api_cache.invalidate_namespace(EVENT_LIST_CACHE_NAMESPACE)
     await public_api_cache.invalidate_namespace(EVENT_DETAIL_CACHE_NAMESPACE)
+    await public_api_cache.invalidate_namespace(SHOW_DETAIL_CACHE_NAMESPACE)
     for show in shows:
         await public_api_cache.invalidate_namespace(show_seat_cache_namespace(show.id))
     await broadcast_dashboard_update()
@@ -491,8 +497,10 @@ async def update_admin_show(
 
     event, show = await _build_event_or_404_show(session, event_key, show_id)
     updates = payload.model_dump(exclude_unset=True)
-    updates.pop("queue_release_batch", None)
-    updates.pop("max_active_queue_tokens", None)
+    for queue_field in ("queue_enabled", "queue_release_batch", "max_active_queue_tokens"):
+        updates.pop(queue_field, None)
+    if not updates:
+        return ShowDetailResponse(**(await build_show_detail_response(session, show)))
     is_status_only_update = set(updates) == {"status"}
     previous_status = show.status
     is_unpublishing_show = previous_status == EventStatus.LIVE and updates.get("status") == EventStatus.DRAFT

@@ -30,7 +30,6 @@ interface ShowFormState {
   start_time: string
   end_time: string
   status: EventStatus
-  queue_enabled: boolean
   hold_minutes: string
   seat_map_mode: 'free' | 'venue'
   create_seed_zone: boolean
@@ -62,8 +61,8 @@ const INITIAL_SHOW_FORM: ShowFormState = {
   show_date: '',
   start_time: '19:00',
   end_time: '21:00',
-  status: 'live',
-  queue_enabled: true,
+  status: 'draft',
+
   hold_minutes: '10',
   seat_map_mode: 'free',
   create_seed_zone: false,
@@ -386,7 +385,6 @@ export default function AdminEvents() {
       start_time: formatVietnamTimeInput(detail.start_at),
       end_time: formatVietnamTimeInput(detail.end_at),
       status: detail.status,
-      queue_enabled: detail.queue_enabled,
       seat_map_mode: detail.venue_layout_id ? 'venue' : 'free',
       create_seed_zone: false,
       venue_id: detail.venue_id ? String(detail.venue_id) : '',
@@ -482,7 +480,6 @@ export default function AdminEvents() {
         start_time: utcStart.time,
         end_time: utcEnd.time,
         status: showForm.status,
-        queue_enabled: showForm.queue_enabled,
         hold_minutes: Number(showForm.hold_minutes),
         ...(editingShow
           ? {}
@@ -535,7 +532,7 @@ export default function AdminEvents() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold admin-text-header">Quản lý Event / Show</h1>
-          <p className="mt-1 text-sm text-gray-400">Event chỉ giữ metadata. Show giữ venue, queue, seat planner và ticket logic.</p>
+          <p className="mt-1 text-sm text-gray-400">Event chỉ giữ metadata. Show giữ venue, seat planner và ticket logic.</p>
         </div>
         <Button variant="primary" onClick={openCreateEventModal}>
           <Plus className="mr-2 h-4 w-4" /> Tạo event
@@ -750,8 +747,7 @@ export default function AdminEvents() {
                           <p className="text-sm text-gray-500">{show.description}</p>
                           <div className="space-y-1 text-sm text-gray-400">
                             <p>{formatDateTime(show.start_at)} - {formatDateTime(show.end_at)}</p>
-                            <p>{show.venue}</p>
-                            <p>Phòng chờ: {show.queue_enabled ? 'bật' : 'tắt'}</p>
+                            <p>{show.venue}</p>n
                           </div>
                         </div>
 
@@ -846,13 +842,6 @@ export default function AdminEvents() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-300">Phòng chờ</label>
-              <select className="w-full rounded-lg border border-white/10 admin-bg-listbox px-3 py-2 text-gray-500" value={showForm.queue_enabled ? 'true' : 'false'} onChange={(event) => setShowForm((prev) => ({ ...prev, queue_enabled: event.target.value === 'true' }))}>
-                <option value="true">Bật</option>
-                <option value="false">Tắt</option>
-              </select>
-            </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-300">Thời gian giữ ghế</label>
               <Input className="text-white" type="number" min={1} value={showForm.hold_minutes} onChange={(event) => setShowForm((prev) => ({ ...prev, hold_minutes: event.target.value }))} />

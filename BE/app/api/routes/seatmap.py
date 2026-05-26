@@ -6,7 +6,7 @@ Ghi chú:
 """
 
 # FastAPI dùng `APIRouter` để gom route và `Depends` để inject dependency.
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 # SQLAlchemy dùng `select` để tạo câu SQL đọc section/venue layout.
 from sqlalchemy import select
@@ -23,6 +23,7 @@ from app.models.venue import Section
 from app.schemas.event import SeatMatrixResponse
 from app.schemas.seatmap import SeatMapResponse, SeatMapSectionResponse
 from app.services.event_service import get_show_by_id, get_show_seat_matrix
+from app.services.admission_service import ensure_admission_for_show, read_queue_token, reject_before_show_lookup_if_waiting_room
 from app.services.inventory_service import get_seatmap
 from app.services.queue_service import is_show_queue_required
 
@@ -45,6 +46,7 @@ async def _ensure_show_visible_to_user(session: AsyncSession, show_id: int, curr
 @router.get("/{show_id}/seats", response_model=SeatMatrixResponse)
 async def show_seat_matrix(
     show_id: int,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
     current_user: User | None = Depends(get_optional_current_user),
 ) -> SeatMatrixResponse:
@@ -63,8 +65,12 @@ async def show_seat_matrix(
     - Nếu là admin, service có thể trả thêm thông tin người giữ/người mua để inspect.
     """
 
+    queue_token = read_queue_token(request)
+    await reject_before_show_lookup_if_waiting_room(show_id, current_user, queue_token)
+
     # Lấy show trước để xác thực `show_id` tồn tại và lấy event_id/queue_enabled.
     show, event = await _ensure_show_visible_to_user(session, show_id, current_user)
+    await ensure_admission_for_show(session, show, current_user, queue_token, record_hit=False)
     if current_user is None:
         # Guest không có thông tin cá nhân hóa nên có thể dùng cache public.
         cached = await public_api_cache.get(show_seat_cache_namespace(show.id), "anonymous")
@@ -103,6 +109,7 @@ async def show_seat_matrix(
 @router.get("/{show_id}/seatmap", response_model=SeatMapResponse)
 async def show_seatmap(
     show_id: int,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
     current_user: User | None = Depends(get_optional_current_user),
 ) -> SeatMapResponse:
@@ -121,7 +128,11 @@ async def show_seatmap(
     - Cache guest 10 giây vì seat map có trạng thái lock cần cập nhật nhanh hơn matrix.
     """
 
+    queue_token = read_queue_token(request)
+    await reject_before_show_lookup_if_waiting_room(show_id, current_user, queue_token)
+
     show, _ = await _ensure_show_visible_to_user(session, show_id, current_user)
+    await ensure_admission_for_show(session, show, current_user, queue_token, record_hit=False)
     if current_user is None:
         cached = await public_api_cache.get(show_seat_cache_namespace(show.id), "seatmap_anonymous")
         if cached is not None:

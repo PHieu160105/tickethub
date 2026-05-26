@@ -93,53 +93,60 @@ interface UseShowSeatsState {
   seats: SeatMatrixResponse | null
   isLoading: boolean
   error: string | null
+  rawError: unknown | null
 }
 
-export function useShowSeats(showId?: number, options?: { pollIntervalMs?: number }) {
+export function useShowSeats(showId?: number, options?: { pollIntervalMs?: number; queueToken?: string | null; enabled?: boolean }) {
   const [state, setState] = useState<UseShowSeatsState>({
     seats: null,
     isLoading: false,
     error: null,
+    rawError: null,
   })
   const hasLoadedRef = useRef(false)
   const pollIntervalMs = options?.pollIntervalMs ?? 0
+  const enabled = options?.enabled ?? true
+  const queueToken = options?.queueToken ?? undefined
 
   const fetchSeats = useCallback(async (showLoading = true) => {
-    if (!showId) return
+    if (!showId || !enabled) return
 
     if (showLoading) {
-      setState((prev) => ({ ...prev, isLoading: true, error: null }))
+      setState((prev) => ({ ...prev, isLoading: true, error: null, rawError: null }))
     }
     try {
-      const seats = await eventsApi.seats(showId)
+      const seats = await eventsApi.seats(showId, queueToken ?? undefined)
       hasLoadedRef.current = true
-      setState({ seats, isLoading: false, error: null })
+      setState({ seats, isLoading: false, error: null, rawError: null })
     } catch (error) {
       const statusCode = axios.isAxiosError(error) ? error.response?.status : null
       setState((prev) => ({
         ...prev,
         isLoading: false,
+        rawError: error,
         error: !hasLoadedRef.current || statusCode === 404 || statusCode === 410
           ? error instanceof Error ? error.message : 'Không tải được sơ đồ ghế'
           : prev.error,
       }))
     }
-  }, [showId])
+  }, [enabled, queueToken, showId])
 
   useEffect(() => {
     hasLoadedRef.current = false
-    void fetchSeats(true)
-  }, [fetchSeats])
+    if (enabled) {
+      void fetchSeats(true)
+    }
+  }, [enabled, fetchSeats])
 
   useEffect(() => {
-    if (!showId || pollIntervalMs <= 0) return
+    if (!showId || !enabled || pollIntervalMs <= 0) return
 
     const intervalId = window.setInterval(() => {
       void fetchSeats(false)
     }, pollIntervalMs)
 
     return () => window.clearInterval(intervalId)
-  }, [showId, fetchSeats, pollIntervalMs])
+  }, [enabled, showId, fetchSeats, pollIntervalMs])
 
   return { ...state, refetch: fetchSeats }
 }

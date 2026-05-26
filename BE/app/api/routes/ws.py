@@ -9,7 +9,7 @@ from app.models.enums import EventStatus, UserRole
 from app.models.event import Show
 from app.models.help import HelpThread
 from app.models.user import User
-from app.services.dashboard_service import get_dashboard_stream
+from app.services.dashboard_service import dump_dashboard_stream, get_dashboard_stream
 from app.ws.connection_manager import admin_ws_manager, help_ws_manager, seat_ws_manager
 
 router = APIRouter(tags=["websocket"])
@@ -32,12 +32,8 @@ async def _resolve_ws_user(token: str) -> User | None:
 async def show_seat_ws(websocket: WebSocket, show_id: int, token: str | None = None) -> None:
     """Đẩy cập nhật ghế tăng dần cho một buổi diễn."""
 
-    if not token:
-        await websocket.close(code=1008, reason="Bắt buộc có token xác thực")
-        return
-
-    user = await _resolve_ws_user(token)
-    if not user:
+    user = await _resolve_ws_user(token) if token else None
+    if token and not user:
         await websocket.close(code=1008, reason="Token xác thực không hợp lệ")
         return
 
@@ -47,11 +43,11 @@ async def show_seat_ws(websocket: WebSocket, show_id: int, token: str | None = N
     if not show:
         await websocket.close(code=1008, reason="Không tìm thấy buổi diễn")
         return
-    if user.role != UserRole.ADMIN and show.status != EventStatus.LIVE:
+    if (not user or user.role != UserRole.ADMIN) and show.status != EventStatus.LIVE:
         await websocket.close(code=1008, reason="Buổi diễn đang được cập nhật")
         return
 
-    connected = await seat_ws_manager.connect(show.id, user.id, websocket)
+    connected = await seat_ws_manager.connect(show.id, user.id if user else None, websocket)
     if not connected:
         return
 
@@ -60,7 +56,7 @@ async def show_seat_ws(websocket: WebSocket, show_id: int, token: str | None = N
             # Giữ socket sống và cho phép client gửi ping.
             await websocket.receive_text()
     except WebSocketDisconnect:
-        await seat_ws_manager.disconnect(show.id, user.id, websocket)
+        await seat_ws_manager.disconnect(show.id, user.id if user else None, websocket)
 
 
 @router.websocket("/ws/admin/dashboard")
@@ -83,11 +79,13 @@ async def admin_dashboard_ws(websocket: WebSocket, token: str | None = None) -> 
     try:
         async with AsyncSessionLocal() as session:
             payload = await get_dashboard_stream(session)
-            await websocket.send_json({"type": "dashboard_update", "payload": payload.model_dump()})
+            await websocket.send_json({"type": "dashboard_update", "payload": dump_dashboard_stream(payload)})
 
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
+        pass
+    finally:
         await admin_ws_manager.disconnect(user.id, websocket)
 
 

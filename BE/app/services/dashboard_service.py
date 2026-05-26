@@ -169,6 +169,12 @@ async def get_dashboard_stream(session: AsyncSession) -> DashboardStreamResponse
     )
 
 
+def dump_dashboard_stream(payload: DashboardStreamResponse) -> dict:
+    """Chuyển payload realtime sang dict thuần JSON trước khi gửi qua WebSocket."""
+
+    return payload.model_dump(mode="json")
+
+
 async def broadcast_dashboard_update() -> None:
     """Đọc snapshot dashboard mới nhất sau commit rồi push tới admin đang online."""
 
@@ -177,7 +183,7 @@ async def broadcast_dashboard_update() -> None:
 
     async with AsyncSessionLocal() as session:
         payload = await get_dashboard_stream(session)
-    await admin_ws_manager.broadcast(payload.model_dump())
+    await admin_ws_manager.broadcast(dump_dashboard_stream(payload))
 
 
 async def get_audience_distribution(session: AsyncSession) -> AudienceDistributionResponse:

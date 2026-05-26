@@ -37,10 +37,14 @@ class Settings(BaseSettings):
     backend_port: int = 8000
 
     database_url: str = Field(validation_alias="DATABASE_URL")
+    database_pool_size: int = Field(default=10, validation_alias="DATABASE_POOL_SIZE")
+    database_max_overflow: int = Field(default=20, validation_alias="DATABASE_MAX_OVERFLOW")
+    database_pool_timeout: int = Field(default=30, validation_alias="DATABASE_POOL_TIMEOUT")
 
     secret_key: str = "change-me"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440
+    refresh_token_expire_minutes: int = 10080
 
     # pydantic-settings v2 có thể tự parse kiểu phức tạp theo JSON.
     # Ở đây giữ chuỗi gốc để chấp nhận cả định dạng danh sách cách nhau bằng dấu phẩy.
@@ -54,15 +58,21 @@ class Settings(BaseSettings):
     queue_active_threshold_default: int = 2
     queue_max_active_tokens_default: int = 200
     queue_admit_ttl_minutes: int = 15
-    queue_active_user_ttl_seconds: int = 60
+    waiting_room_db_latency_ms: int = Field(default=500, validation_alias="WAITING_ROOM_DB_LATENCY_MS")
+    waiting_room_error_threshold: int = Field(default=5, validation_alias="WAITING_ROOM_ERROR_THRESHOLD")
+    waiting_room_request_threshold: int = Field(default=200, validation_alias="WAITING_ROOM_REQUEST_THRESHOLD")
+    waiting_room_recovery_seconds: int = Field(default=60, validation_alias="WAITING_ROOM_RECOVERY_SECONDS")
+    queue_release_batch_default: int = Field(default=50, validation_alias="QUEUE_RELEASE_BATCH_DEFAULT")
+    queue_max_active_tokens_default: int = Field(default=200, validation_alias="QUEUE_MAX_ACTIVE_TOKENS_DEFAULT")
+    queue_inactive_grace_seconds: int = Field(default=90, validation_alias="QUEUE_INACTIVE_GRACE_SECONDS")
+
     redis_url: str | None = Field(default=None, validation_alias="REDIS_URL")
     redis_host: str = Field(default="127.0.0.1", validation_alias="REDIS_HOST")
     redis_port: int = Field(default=6380, validation_alias="REDIS_PORT")
     redis_password: str = Field(default="", validation_alias="REDIS_PASSWORD")
 
-    firebase_project_id: str = ""
-    firebase_private_key: str = ""
-    firebase_client_email: str = ""
+    google_client_id: str = ""
+    google_client_secret: str = ""
     frontend_app_url: str = "http://localhost:5173"
     discord_client_id: str = ""
     discord_client_secret: str = ""

@@ -41,24 +41,28 @@ class TTLCacheStore:
     async def get(self, namespace: str, key: Any) -> Any | None:
         """Lấy giá trị cache nếu còn tồn tại và chưa hết hạn."""
 
-        redis_key = f"cache:{namespace}:{key!r}"
-        try:
-            raw = await self._redis.get(redis_key)
-            if raw is not None:
-                return json.loads(raw)
-        except Exception:
-            pass
-
         async with self._lock:
             version = self._namespace_versions.get(namespace, 0)
             composite_key = (namespace, version, key)
             entry = self._entries.get(composite_key)
-            if not entry:
-                return None
-            if entry.expires_at <= monotonic():
+            if entry and entry.expires_at > monotonic():
+                return entry.value
+            if entry:
                 self._entries.pop(composite_key, None)
-                return None
-            return entry.value
+    
+        redis_key = f"cache:{namespace}:{key!r}"
+        try:
+            raw = await self._redis.get(redis_key)
+            if raw is not None:
+                value = json.loads(raw)
+                async with self._lock:
+                    version = self._namespace_versions.get(namespace, 0)
+                    self._entries[(namespace, version, key)] = CacheEntry(expires_at=monotonic() + 1, value=value)
+                return value
+        except Exception:
+            pass
+
+        return None
 
     async def set(self, namespace: str, key: Any, value: Any, ttl_seconds: int) -> Any:
         """Ghi giá trị vào cache rồi trả lại chính giá trị đó để caller dùng tiếp."""
@@ -120,6 +124,7 @@ public_api_cache = TTLCacheStore()
 
 EVENT_LIST_CACHE_NAMESPACE = "events:list"
 EVENT_DETAIL_CACHE_NAMESPACE = "events:detail"
+SHOW_DETAIL_CACHE_NAMESPACE = "shows:detail"
 
 
 def show_seat_cache_namespace(show_id: int) -> str:

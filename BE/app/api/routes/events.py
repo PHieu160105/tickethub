@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
-from app.core.cache import EVENT_DETAIL_CACHE_NAMESPACE, EVENT_LIST_CACHE_NAMESPACE, public_api_cache
+from app.core.cache import EVENT_DETAIL_CACHE_NAMESPACE, EVENT_LIST_CACHE_NAMESPACE, SHOW_DETAIL_CACHE_NAMESPACE, public_api_cache
 from app.core.db import get_db_session
 from app.models.review import EventReview
 from app.models.enums import EventStatus
@@ -92,11 +92,16 @@ async def event_detail(event_key: str, session: AsyncSession = Depends(get_db_se
 async def show_detail(show_id: int, session: AsyncSession = Depends(get_db_session)) -> ShowDetailResponse:
     """Lấy chi tiết một buổi diễn bằng ID."""
 
+    cached = await public_api_cache.get(SHOW_DETAIL_CACHE_NAMESPACE, show_id)
+    if cached is not None:
+        return cached
+
     show = await get_show_by_id(session, show_id)
     event = await get_event_by_slug_or_id(session, str(show.event_id))
     if show.status != EventStatus.LIVE or event.status != EventStatus.LIVE:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy buổi diễn")
-    return ShowDetailResponse(**(await build_show_detail_response(session, show)))
+    response = ShowDetailResponse(**(await build_show_detail_response(session, show)))
+    return await public_api_cache.set(SHOW_DETAIL_CACHE_NAMESPACE, show_id, response, ttl_seconds=120)
 
 
 @event_router.get("/{event_key}/reviews", response_model=list[EventReviewResponse])

@@ -9,12 +9,13 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-from sqlalchemy.pool import NullPool
-
 engine = create_async_engine(
     settings.database_url,
     future=True,
-    poolclass=NullPool,
+    pool_size=settings.database_pool_size,
+    max_overflow=settings.database_max_overflow,
+    pool_timeout=settings.database_pool_timeout,
+    pool_pre_ping=True,
     connect_args={
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,

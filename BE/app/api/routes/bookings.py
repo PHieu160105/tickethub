@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_customer
@@ -20,6 +20,8 @@ from app.schemas.booking import (
 )
 from app.schemas.common import APIMessage
 from app.services.booking_service import checkout_locked_seats, fetch_my_tickets, lock_seats, release_seats
+from app.services.admission_service import ensure_admission_for_show, read_queue_token
+from app.services.event_service import get_show_by_id
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
@@ -27,9 +29,12 @@ router = APIRouter(prefix="/bookings", tags=["bookings"])
 @router.post("/lock", response_model=LockSeatsResponse, dependencies=[Depends(rate_limit("bookings-lock", times=60, seconds=60))])
 async def lock_event_seats(
     payload: LockSeatsRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_customer),
 ) -> LockSeatsResponse:
+    show = await get_show_by_id(session, payload.show_id)
+    await ensure_admission_for_show(session, show, current_user, read_queue_token(request, payload.queue_token))
     return await lock_seats(
         session=session,
         user_id=current_user.id,
@@ -57,9 +62,12 @@ async def release_event_seats(
 @router.post("/checkout", response_model=CheckoutResponse, dependencies=[Depends(rate_limit("bookings-checkout", times=10, seconds=60))])
 async def checkout(
     payload: CheckoutRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_customer),
 ) -> CheckoutResponse:
+    show = await get_show_by_id(session, payload.show_id)
+    await ensure_admission_for_show(session, show, current_user, read_queue_token(request, payload.queue_token))
     return await checkout_locked_seats(
         session=session,
         user_id=current_user.id,

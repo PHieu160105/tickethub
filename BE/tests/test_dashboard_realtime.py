@@ -1,5 +1,7 @@
 """Kiểm thử payload và trigger realtime dashboard admin."""
 
+import json
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.seat import Seat
 from app.services import booking_service
 from app.services.booking_service import checkout_locked_seats, lock_seats
-from app.services.dashboard_service import get_dashboard_stream
+from app.services.dashboard_service import dump_dashboard_stream, get_dashboard_stream
 
 
 @pytest.mark.asyncio
@@ -20,6 +22,19 @@ async def test_dashboard_stream_contains_summary_revenue_and_occupancy(
     assert payload.summary.active_events >= 1
     assert len(payload.revenue) == 14
     assert any(item.show_id == sample_show.id for item in payload.occupancy)
+
+
+@pytest.mark.asyncio
+async def test_dashboard_stream_dump_is_websocket_json_serializable(
+    db_session: AsyncSession,
+    sample_show,
+):
+    payload = await get_dashboard_stream(db_session)
+    dumped = dump_dashboard_stream(payload)
+
+    json.dumps({"type": "dashboard_update", "payload": dumped})
+    occupancy = next(item for item in dumped["occupancy"] if item["show_id"] == sample_show.id)
+    assert isinstance(occupancy["show_start_at"], str)
 
 
 @pytest.mark.asyncio

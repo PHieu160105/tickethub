@@ -1,6 +1,7 @@
 import type { User } from '../types'
 
 const TOKEN_KEY = 'ticketrush_token'
+const REFRESH_TOKEN_KEY = 'ticketrush_refresh_token'
 const USER_KEY = 'ticketrush_user'
 const QUEUE_TOKEN_PREFIX = 'ticketrush_queue_'
 const CHECKOUT_RETURN_SEATS_PREFIX = 'ticketrush_checkout_return_seats_'
@@ -25,15 +26,34 @@ function clearAllQueueTokensFromSessionStorage() {
   queueKeys.forEach((key) => sessionStorage.removeItem(key))
 }
 
+function emitAuthStorageEvent() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('ticketrush-auth-storage'))
+  }
+}
+
 export const authStorage = {
   getToken(): string | null {
     return localStorage.getItem(TOKEN_KEY)
   },
   setToken(token: string) {
     localStorage.setItem(TOKEN_KEY, token)
+    emitAuthStorageEvent()
   },
   clearToken() {
     localStorage.removeItem(TOKEN_KEY)
+    emitAuthStorageEvent()
+  },
+  getRefreshToken(): string | null {
+    return localStorage.getItem(REFRESH_TOKEN_KEY)
+  },
+  setRefreshToken(token: string) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, token)
+    emitAuthStorageEvent()
+  },
+  clearRefreshToken() {
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+    emitAuthStorageEvent()
   },
   getUser(): User | null {
     const raw = localStorage.getItem(USER_KEY)
@@ -47,12 +67,15 @@ export const authStorage = {
   },
   setUser(user: User) {
     localStorage.setItem(USER_KEY, JSON.stringify(user))
+    emitAuthStorageEvent()
   },
   clearUser() {
     localStorage.removeItem(USER_KEY)
+    emitAuthStorageEvent()
   },
   clearAll() {
     this.clearToken()
+    this.clearRefreshToken()
     this.clearUser()
     clearAllQueueTokensFromSessionStorage()
   },

@@ -43,10 +43,17 @@ import type {
 
 const apiBaseURL = API_BASE_URL
 
+type RetryableAuthRequestConfig = InternalAxiosRequestConfig & {
+  _retry?: boolean
+  skipAuthRefresh?: boolean
+}
+
 export const api = axios.create({
   baseURL: apiBaseURL,
   timeout: API_TIMEOUT,
 })
+
+let refreshPromise: Promise<string | null> | null = null
 
 type RetryableRequest<T> = () => Promise<{ data: T }>
 type ApiValidationError = {
@@ -159,7 +166,22 @@ export function extractApiErrorMessage(error: unknown, fallback: string): string
   return fallback
 }
 
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+export function isWaitingRoomRequiredError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false
+  const detail = (error as AxiosError<ApiErrorBody>).response?.data?.detail
+  return error.response?.status === 429 && typeof detail === 'object' && detail !== null && !Array.isArray(detail) && detail['code'] === 'WAITING_ROOM_REQUIRED'
+}
+
+export function getWaitingRoomQueueUrl(error: unknown, fallback: string): string {
+  if (!axios.isAxiosError(error)) return fallback
+  const detail = (error as AxiosError<ApiErrorBody>).response?.data?.detail
+  if (typeof detail === 'object' && detail !== null && !Array.isArray(detail) && typeof detail['queue_url'] === 'string') {
+    return detail['queue_url']
+  }
+  return fallback
+}
+
+api.interceptors.request.use((config: RetryableAuthRequestConfig) => {
   const token = authStorage.getToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -167,9 +189,59 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config
 })
 
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = authStorage.getRefreshToken()
+  if (!refreshToken) return null
+
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const response = await api.post<AuthResponse>(
+          '/auth/refresh',
+          { refresh_token: refreshToken },
+          { skipAuthRefresh: true } as RetryableAuthRequestConfig,
+        )
+        authStorage.setToken(response.data.access_token)
+        authStorage.setRefreshToken(response.data.refresh_token)
+        authStorage.setUser(response.data.user)
+        return response.data.access_token
+      } catch {
+        authStorage.clearAll()
+        return null
+      } finally {
+        refreshPromise = null
+      }
+    })()
+  }
+
+  return refreshPromise
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError<ApiErrorBody>) => {
+    const originalRequest = error.config as RetryableAuthRequestConfig | undefined
+    if (!originalRequest || originalRequest.skipAuthRefresh || error.response?.status !== 401 || originalRequest._retry) {
+      throw error
+    }
+
+    originalRequest._retry = true
+    const nextAccessToken = await refreshAccessToken()
+    if (!nextAccessToken) {
+      throw error
+    }
+
+    originalRequest.headers.Authorization = `Bearer ${nextAccessToken}`
+    return api(originalRequest)
+  },
+)
+
 export const authApi = {
   async login(email: string, password: string) {
-    return withRetry(() => api.post<AuthResponse>('/auth/login', { email, password }, { timeout: 10000 }), 2)
+    return withRetry(
+      () => api.post<AuthResponse>('/auth/login', { email, password }, { timeout: 10000, skipAuthRefresh: true } as RetryableAuthRequestConfig),
+      2,
+    )
   },
   async register(payload: {
     full_name: string
@@ -178,11 +250,23 @@ export const authApi = {
     gender: 'male' | 'female' | 'other'
     age: number
   }) {
-    const response = await api.post<AuthResponse>('/auth/register', payload)
+    const response = await api.post<AuthResponse>('/auth/register', payload, { skipAuthRefresh: true } as RetryableAuthRequestConfig)
     return response.data
   },
-  async firebaseTokenLogin(idToken: string) {
-    const response = await api.post<AuthResponse>('/auth/firebase-token', { id_token: idToken })
+  async googleTokenLogin(accessToken: string) {
+    const response = await api.post<AuthResponse>(
+      '/auth/google-token',
+      { access_token: accessToken },
+      { skipAuthRefresh: true } as RetryableAuthRequestConfig,
+    )
+    return response.data
+  },
+  async refresh(refreshToken: string) {
+    const response = await api.post<AuthResponse>(
+      '/auth/refresh',
+      { refresh_token: refreshToken },
+      { skipAuthRefresh: true } as RetryableAuthRequestConfig,
+    )
     return response.data
   },
   async me() {
@@ -204,14 +288,18 @@ export const eventApi = {
   async show(showId: number) {
     return withRetry(() => api.get<ShowDetail>(`/shows/${showId}`))
   },
-  async seats(showId: number) {
-    return withRetry(() => api.get<SeatMatrixResponse>(`/shows/${showId}/seats`))
+  async seats(showId: number, queueToken?: string) {
+    return withRetry(() => api.get<SeatMatrixResponse>(`/shows/${showId}/seats`, {
+      headers: queueToken ? { 'X-Queue-Token': queueToken } : undefined,
+    }))
   },
 }
 
 export const seatmapApi = {
-  async get(showId: number) {
-    return withRetry(() => api.get<SeatMapResponse>(`/shows/${showId}/seatmap`))
+  async get(showId: number, queueToken?: string) {
+    return withRetry(() => api.get<SeatMapResponse>(`/shows/${showId}/seatmap`, {
+      headers: queueToken ? { 'X-Queue-Token': queueToken } : undefined,
+    }))
   },
 }
 
@@ -228,6 +316,9 @@ export const queueApi = {
   },
   async heartbeat(showId: number, token: string) {
     await api.post(`/shows/${showId}/queue/heartbeat/${token}`)
+  },
+  async leave(showId: number, token: string) {
+    await api.post(`/shows/${showId}/queue/leave/${token}`)
   },
 }
 
