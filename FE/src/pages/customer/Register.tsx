@@ -107,7 +107,7 @@ export default function Register() {
             <div className="relative z-10">
               <div className="mb-8 text-center">
                 <h2 className="text-3xl font-headline font-bold tracking-tight customer-text-header mb-2">
-                  Tham gia <span className="text-[var(--customer-bg-opt)]">TicketRush</span>
+                  Tham gia <span className="text-[var(--customer-bg-opt)]">TicketHub</span>
                 </h2>
                 <p className="text-slate-400 text-sm font-body">
                   Tạo tài khoản để đặt vé nhanh và quản lý vé điện tử của bạn.
@@ -295,7 +295,7 @@ export default function Register() {
                     <a href="/info#dieu_khoan" className="text-secondary font-bold hover:underline decoration-secondary/30 underline-offset-4">
                       điều khoản sử dụng
                     </a>
-                    {' '}và chính sách xử lý dữ liệu cá nhân của TicketRush.
+                    {' '}và chính sách xử lý dữ liệu cá nhân của TicketHub.
                   </label>
                 </div>
 
@@ -397,7 +397,7 @@ export default function Register() {
       <footer className="relative z-10 py-8 px-6 text-center">
         <div className="max-w-screen-2xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-[10px] font-label tracking-widest uppercase text-slate-500/50">
-            © 2024 TicketRush. Nền tảng đặt vé sự kiện.
+            © 2024 TicketHub. Nền tảng đặt vé sự kiện.
           </p>
           <div className="flex gap-6">
             <a className="text-[10px] font-label tracking-widest uppercase text-slate-500/50 hover:text-secondary transition-colors" href="#support">

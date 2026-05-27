@@ -1616,6 +1616,8 @@ async def build_show_detail_response(
         "end_at": show.end_at,
         "status": show.status,
         "queue_enabled": show.queue_enabled,
+        "queue_release_batch": show.queue_release_batch,
+        "max_active_queue_tokens": show.max_active_queue_tokens,
         "venue_id": show.venue_id,
         "venue_layout_id": show.venue_layout_id,
         # Python or: nếu event None → dùng giá trị rỗng

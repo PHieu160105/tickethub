@@ -91,7 +91,7 @@ const CustomerTicket: React.FC = () => {
         <CustomerSidebar
           activeTab="tickets"
           userName={user?.full_name ?? 'Khách hàng'}
-          membershipLevel="Thành viên TicketRush"
+          membershipLevel="Thành viên TicketHub"
           onNavigate={onSidebarNavigate}
         />
       </div>
@@ -101,7 +101,7 @@ const CustomerTicket: React.FC = () => {
           <CustomerSidebar
             activeTab="tickets"
             userName={user?.full_name ?? 'Khách hàng'}
-            membershipLevel="Thành viên TicketRush"
+            membershipLevel="Thành viên TicketHub"
             onNavigate={onSidebarNavigate}
             className="relative"
           />

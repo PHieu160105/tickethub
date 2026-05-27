@@ -37,14 +37,14 @@ const INFO_SECTIONS: InfoSection[] = [
   {
     id: 'dieu-khoan',
     label: 'Điều khoản',
-    summary: 'Những nguyên tắc cơ bản khi sử dụng nền tảng mua vé và quản lý vé điện tử trên TicketRush.',
+    summary: 'Những nguyên tắc cơ bản khi sử dụng nền tảng mua vé và quản lý vé điện tử trên TicketHub.',
     bullets: [
       'Người dùng chịu trách nhiệm về tính chính xác của email, số điện thoại và thông tin đăng nhập dùng cho việc nhận vé, nhận thông báo và khôi phục tài khoản.',
       'Một đơn hàng chỉ được xác nhận khi hệ thống hoàn tất bước checkout và phát hành vé điện tử; việc chọn ghế hoặc thêm vé vào giỏ chưa đồng nghĩa với giữ chỗ thành công.',
       'Trong các đợt mở bán tải cao, quyền truy cập seat map có thể được điều phối bằng hàng chờ ảo để giảm nghẽn và hạn chế bot.',
       'Mỗi vé gắn với một sự kiện, buổi diễn, khu vực ghế và mã định danh riêng; người dùng cần kiểm tra kỹ trước khi xác nhận thanh toán.',
     ],
-    note: 'TicketRush ưu tiên trải nghiệm công bằng khi mở bán: khóa ghế tạm thời theo phiên đặt vé, tự nhả ghế khi hết thời gian giữ chỗ và cập nhật trạng thái ghế gần thời gian thực.',
+    note: 'TicketHub ưu tiên trải nghiệm công bằng khi mở bán: khóa ghế tạm thời theo phiên đặt vé, tự nhả ghế khi hết thời gian giữ chỗ và cập nhật trạng thái ghế gần thời gian thực.',
   },
   {
     id: 'huong-dan-su-dung',
@@ -97,14 +97,14 @@ const INFO_SECTIONS: InfoSection[] = [
       'Khi mua trên điện thoại, giữ màn hình sáng nếu đang ở queue để tránh phiên chờ bị gián đoạn.',
       'Nếu ghế vừa bị người khác giữ trước, hãy chọn nhanh phương án thay thế thay vì cố bấm lại cùng một ghế.',
     ],
-    note: 'Một số hệ thống vé di động ngoài thị trường dùng QR động; vì vậy ảnh chụp màn hình có thể không được chấp nhận ở cổng vào. Với TicketRush, cách an toàn nhất vẫn là mở vé trực tiếp trong tài khoản của bạn.',
+    note: 'Một số hệ thống vé di động ngoài thị trường dùng QR động; vì vậy ảnh chụp màn hình có thể không được chấp nhận ở cổng vào. Với TicketHub, cách an toàn nhất vẫn là mở vé trực tiếp trong tài khoản của bạn.',
   },
   {
     id: 'chinh-sach',
     label: 'Chính sách',
-    summary: 'Các nguyên tắc vận hành phổ biến trong ngành ticketing, được điều chỉnh cho phù hợp với TicketRush.',
+    summary: 'Các nguyên tắc vận hành phổ biến trong ngành ticketing, được điều chỉnh cho phù hợp với TicketHub.',
     bullets: [
-      'Thanh toán: hiện tại TicketRush đang mô phỏng thanh toán nội bộ để hoàn tất quy trình đặt vé; hệ thống chỉ ghi nhận đơn khi checkout thành công.',
+      'Thanh toán: hiện tại TicketHub đang mô phỏng thanh toán nội bộ để hoàn tất quy trình đặt vé; hệ thống chỉ ghi nhận đơn khi checkout thành công.',
       'Hoàn tiền và hủy vé: trong thực tế, đa số đơn hàng hoàn tất thường không thể đổi ghế hoặc đổi sự kiện. Trường hợp hủy hoặc hoàn phụ thuộc trạng thái sự kiện và điều kiện của ban tổ chức.',
       'Sự kiện dời lịch: thông lệ phổ biến là vé vẫn giữ hiệu lực cho lịch mới; nếu không thể tham dự, người dùng cần theo thông báo chính thức hoặc liên hệ hỗ trợ.',
       'Vé điện tử: người dùng nên kiểm tra kỹ email, tài khoản và mã vé trước ngày diễn; không chia sẻ ảnh vé cho bên thứ ba nếu sự kiện dùng cơ chế quét mã động.',
@@ -134,7 +134,7 @@ const INFO_SECTIONS: InfoSection[] = [
     label: 'Về chúng tôi',
     summary: 'Thông tin ngắn gọn về sản phẩm và nhóm thực hiện.',
     paragraphs: [
-      'TicketRush là sản phẩm của môn Phát triển ứng dụng Web tại Trường Đại học Công nghệ, được xây dựng như một mẫu hệ thống bán vé theo thời gian thực với các bài toán thực tế: queue, seat locking, vé điện tử và thống kê vận hành.',
+      'TicketHub là sản phẩm của môn Phát triển ứng dụng Web tại Trường Đại học Công nghệ, được xây dựng như một mẫu hệ thống bán vé theo thời gian thực với các bài toán thực tế: queue, seat locking, vé điện tử và thống kê vận hành.',
       'Hướng phát triển của sản phẩm là tiệm cận luồng nghiệp vụ của các nền tảng ticketing hiện đại nhưng vẫn giữ giao diện gọn, dễ dùng và phù hợp cho demo học thuật.',
     ],
     bullets: [
@@ -240,7 +240,7 @@ export default function InfoPage() {
         <div className="mx-auto max-w-5xl space-y-8">
           <header className="space-y-3">
             <p className="font-headline text-3xl font-black tracking-tighter text-on-background sm:text-5xl">
-              TicketRush - Thông tin
+              TicketHub - Thông tin
             </p>
             <p className="max-w-2xl customer-text-muted">
               Trang tổng hợp dành cho người dùng cuối: cách mua vé, những lưu ý thường gặp và một số nguyên tắc vận hành thực tế của nền tảng bán vé điện tử.

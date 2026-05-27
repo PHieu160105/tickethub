@@ -46,7 +46,7 @@ export default function Favourites() {
           <CustomerSidebar
             activeTab="favourites"
             userName={user?.full_name ?? 'Khách hàng'}
-            membershipLevel="Thành viên TicketRush"
+            membershipLevel="Thành viên TicketHub"
             onNavigate={onSidebarNavigate}
           />
         </div>
@@ -56,7 +56,7 @@ export default function Favourites() {
             <CustomerSidebar
               activeTab="favourites"
               userName={user?.full_name ?? 'Khách hàng'}
-              membershipLevel="Thành viên TicketRush"
+              membershipLevel="Thành viên TicketHub"
               onNavigate={onSidebarNavigate}
               className="relative"
             />

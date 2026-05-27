@@ -35,9 +35,6 @@ export function GlobalLoader() {
       <div className="h-28 w-28 sm:h-40 sm:w-40">
         <Lottie animationData={animation} />
       </div>
-      <div className="hidden md:block">
-        <Logo />
-      </div>
     </div>,
     document.body,
   )

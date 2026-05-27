@@ -15,9 +15,9 @@ const adminLinks = [
   { label: 'Cài đặt', href: '/admin/settings', icon: Settings, exact: false },
 ]
 
-export function Logo() {
-  return <img src={LogoSVG} alt="Logo TicketRush" className="display-inline flex items-center gap-2 h-10 w-auto" />
-}
+// export function Logo() {
+//   // return <img src={LogoSVG} alt="Logo TicketRush" className="display-inline flex items-center gap-2 h-10 w-auto" />
+// }
 
 export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { logout } = useAuth()
@@ -39,7 +39,7 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
     <aside className="w-64 admin-bg-card admin-text-body border-r admin-border flex flex-col h-full shadow-2xl">
       <div className="border-b admin-border p-4">
         <span className="flex items-start text-lg font-display font-bold">
-          <Logo />
+          <p className='text-lg'>TICKETHUB</p>
           <span className="relative top-0.9 ml-1 px-1 py-0.5 rounded bg-brand-red/20 text-brand-red text-s">Admin</span>
         </span>
       </div>

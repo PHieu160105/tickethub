@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     waiting_room_recovery_seconds: int = Field(default=60, validation_alias="WAITING_ROOM_RECOVERY_SECONDS")
     queue_release_batch_default: int = Field(default=50, validation_alias="QUEUE_RELEASE_BATCH_DEFAULT")
     queue_max_active_tokens_default: int = Field(default=200, validation_alias="QUEUE_MAX_ACTIVE_TOKENS_DEFAULT")
+    queue_active_user_ttl_seconds: int = Field(default=30, validation_alias="QUEUE_ACTIVE_USER_TTL_SECONDS")
     queue_inactive_grace_seconds: int = Field(default=90, validation_alias="QUEUE_INACTIVE_GRACE_SECONDS")
 
     redis_url: str | None = Field(default=None, validation_alias="REDIS_URL")

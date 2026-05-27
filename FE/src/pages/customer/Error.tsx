@@ -6,8 +6,8 @@ import LogoSVG from '@/assets/logo.svg'
 
 export function Logo() {
   return (
-    <Link to="/" aria-label="Trang chủ TicketRush" className="flex items-center gap-2">
-      <img src={LogoSVG} alt="Logo TicketRush" className="h-12 w-auto" />
+    <Link to="/" aria-label="Trang chủ TicketHub" className="flex items-center gap-2">
+      <img src={LogoSVG} alt="Logo TicketHub" className="h-12 w-auto" />
     </Link>
   )
 }
@@ -36,11 +36,7 @@ export function ErrorPage() {
           <div className="flex justify-center md:justify-end order-1 md:order-2">
             <div className="relative w-64 h-64 md:w-96 md:h-96 animate-float">
               <div className="absolute inset-0 glass-panel rounded-full border border-white/10 flex items-center justify-center overflow-hidden">
-                <img
-                  src={LogoSVG}
-                  alt="Logo TicketRush"
-                  className="w-100 object-cover "
-                />
+                <p className='text-lg'>TICKETHUB</p>
               </div>
               {/* Vòng trang trí quanh logo. */}
               <div className="absolute -inset-4 border-2 border-dashed border-primary/20 rounded-full animate-[spin_20s_linear_infinite]"></div>

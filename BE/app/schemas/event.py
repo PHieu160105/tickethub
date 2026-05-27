@@ -74,6 +74,8 @@ class ShowCreateRequest(BaseModel):
     status: EventStatus = EventStatus.LIVE
     hold_minutes: int = Field(default=10, ge=1, le=60)
     queue_enabled: bool = True
+    queue_release_batch: int = Field(default=50, ge=1, le=500)
+    max_active_queue_tokens: int = Field(default=200, ge=1, le=5000)
     venue_id: int | None = Field(default=None, ge=1)
     venue_layout_id: int | None = Field(default=None, ge=1)
     zones: list[SeatZoneCreate] = Field(default_factory=list)
@@ -101,6 +103,8 @@ class ShowUpdateRequest(BaseModel):
     status: EventStatus | None = None
     hold_minutes: int | None = Field(default=None, ge=1, le=60)
     queue_enabled: bool | None = None
+    queue_release_batch: int | None = Field(default=None, ge=1, le=500)
+    max_active_queue_tokens: int | None = Field(default=None, ge=1, le=5000)
     venue_id: int | None = Field(default=None, ge=1)
     venue_layout_id: int | None = Field(default=None, ge=1)
 
@@ -117,6 +121,8 @@ class ShowSummaryResponse(BaseModel):
     end_at: datetime
     status: EventStatus
     queue_enabled: bool
+    queue_release_batch: int
+    max_active_queue_tokens: int
     venue_id: int | None = None
     venue_layout_id: int | None = None
 

@@ -127,7 +127,7 @@ export default function Help() {
           </button>
           <header className="mb-6">
             <h1 className="text-3xl sm:text-5xl font-black text-on-background font-headline tracking-tighter">Trung tâm hỗ trợ</h1>
-            <p className="text-on-surface-variant mt-2 max-w-lg">Trao đổi trực tiếp với đội ngũ quản trị TicketRush.</p>
+            <p className="text-on-surface-variant mt-2 max-w-lg">Trao đổi trực tiếp với đội ngũ quản trị TicketHub.</p>
           </header>
 
           {!isAuthenticated ? (

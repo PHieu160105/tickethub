@@ -386,7 +386,7 @@ export default function SeatSelection() {
     })
   }, [])
 
-  const handleSeatUpdates = (event: MessageEvent) => {
+  const handleSeatUpdates = useCallback((event: MessageEvent) => {
     try {
       const message = JSON.parse(event.data) as { type?: string; payload?: { event_slug?: string } }
       if (message.type === 'seat_changes') {
