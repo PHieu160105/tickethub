@@ -1,13 +1,10 @@
 """Khai báo các route xác thực, hồ sơ cá nhân và đăng nhập mạng xã hội."""
 
-from datetime import UTC, datetime, timedelta
 import json
 from urllib.parse import quote
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
-from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,53 +34,6 @@ from app.schemas.auth import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
-DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token"
-DISCORD_AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
-DISCORD_ME_URL = "https://discord.com/api/users/@me"
-
-
-def _create_discord_state() -> str:
-    """Sinh state chống giả mạo cho luồng OAuth Discord.
-
-    Input:
-    - Không nhận tham số; dùng secret key cấu hình của backend.
-
-    Output:
-    - Chuỗi JWT ngắn hạn dùng làm `state` gửi sang Discord.
-
-    Cách hoạt động:
-    - `purpose` giúp phân biệt token state với access token đăng nhập.
-    - `exp` giới hạn state trong 10 phút để giảm rủi ro bị tái sử dụng.
-    """
-
-    payload = {
-        "purpose": "discord_oauth",
-        "exp": datetime.now(UTC) + timedelta(minutes=10),
-    }
-    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
-
-
-def _verify_discord_state(state: str) -> None:
-    """Xác thực state OAuth Discord trước khi đổi code lấy token.
-
-    Input:
-    - `state`: chuỗi frontend nhận lại từ Discord callback.
-
-    Output:
-    - Không trả dữ liệu nếu state hợp lệ; ném HTTP 400 nếu sai.
-
-    Cách hoạt động:
-    - Giải mã state bằng cùng secret key đã dùng khi tạo.
-    - Kiểm tra `purpose` để tránh dùng nhầm token khác làm OAuth state.
-    """
-
-    try:
-        payload = jwt.decode(state, settings.secret_key, algorithms=[settings.algorithm])
-    except JWTError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="State OAuth Discord không hợp lệ") from exc
-
-    if payload.get("purpose") != "discord_oauth":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="State OAuth Discord không hợp lệ")
 
 
 def _build_auth_response(user: User) -> AuthTokenResponse:
@@ -132,7 +82,7 @@ def _frontend_auth_error_redirect(message: str) -> RedirectResponse:
     - HTTP 302 redirect về `/login?oauth_error=...`.
 
     Cách hoạt động:
-    - Không trả lỗi JSON vì đây là callback trình duyệt từ Discord.
+    - Không trả lỗi JSON vì đây là callback trình duyệt từ nhà cung cấp OAuth.
     - Encode message để tránh query string bị vỡ bởi khoảng trắng/ký tự đặc biệt.
     """
 
@@ -253,134 +203,24 @@ async def google_auth(payload: GoogleTokenRequest, session: AsyncSession = Depen
     return _build_auth_response(user)
 
 
-@router.get("/discord/login")
-async def discord_login() -> RedirectResponse:
-    """Bắt đầu luồng đăng nhập OAuth với Discord.
+@router.get("/zalo/login")
+async def zalo_login() -> RedirectResponse:
+    """Temporary Zalo OAuth entrypoint kept for the public auth surface.
 
-    Input:
-    - Không nhận body; browser gọi trực tiếp route này.
-
-    Output:
-    - Redirect sang trang cấp quyền của Discord.
-
-    Cách hoạt động:
-    - Kiểm tra cấu hình OAuth.
-    - Sinh `state` chống CSRF.
-    - Ghép query OAuth chuẩn rồi trả HTTP 302.
+    The actual Zalo OAuth handshake is not wired in this refactor phase yet.
     """
 
-    if not settings.discord_client_id or not settings.discord_client_secret:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Chưa cấu hình OAuth Discord")
+    if not settings.zalo_client_id or not settings.zalo_client_secret:
+        return _frontend_auth_error_redirect("Dang nhap Zalo chua duoc cau hinh")
 
-    state = _create_discord_state()
-    params = {
-        "client_id": settings.discord_client_id,
-        "response_type": "code",
-        "redirect_uri": settings.discord_redirect_uri,
-        "scope": "identify email",
-        "prompt": "consent",
-        "state": state,
-    }
-    query = "&".join(f"{key}={quote(str(value), safe='')}" for key, value in params.items())
-    return RedirectResponse(url=f"{DISCORD_AUTHORIZE_URL}?{query}", status_code=status.HTTP_302_FOUND)
+    return _frontend_auth_error_redirect("Dang nhap Zalo se duoc bo sung o phase tiep theo")
 
 
-@router.get("/discord/callback")
-async def discord_callback(
-    code: str | None = None,
-    state: str | None = None,
-    error: str | None = None,
-    session: AsyncSession = Depends(get_db_session),
-) -> RedirectResponse:
-    """Xử lý callback OAuth Discord rồi chuyển người dùng về frontend với JWT nội bộ.
+@router.get("/zalo/callback")
+async def zalo_callback() -> RedirectResponse:
+    """Temporary Zalo OAuth callback placeholder."""
 
-    Input:
-    - `code`: mã ủy quyền Discord trả về sau khi user đồng ý.
-    - `state`: token chống giả mạo đã sinh ở bước login.
-    - `error`: lỗi Discord trả về nếu user từ chối hoặc flow thất bại.
-
-    Output:
-    - Redirect về frontend kèm JWT hoặc thông báo lỗi.
-
-    Cách hoạt động:
-    - Xác thực state trước để chống callback giả.
-    - Đổi `code` lấy access token Discord.
-    - Gọi Discord `/users/@me` lấy hồ sơ rồi map sang user TicketRush.
-    """
-
-    if error:
-        return _frontend_auth_error_redirect(f"Đăng nhập Discord thất bại: {error}")
-    if not code or not state:
-        return _frontend_auth_error_redirect("Đăng nhập Discord thất bại: thiếu code hoặc state")
-
-    try:
-        _verify_discord_state(state)
-    except HTTPException:
-        return _frontend_auth_error_redirect("Đăng nhập Discord thất bại: state không hợp lệ")
-
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            token_response = await client.post(
-                DISCORD_TOKEN_URL,
-                data={
-                    "client_id": settings.discord_client_id,
-                    "client_secret": settings.discord_client_secret,
-                    "grant_type": "authorization_code",
-                    "code": code,
-                    "redirect_uri": settings.discord_redirect_uri,
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-            token_response.raise_for_status()
-            token_payload = token_response.json()
-            access_token = token_payload.get("access_token")
-            if not access_token:
-                return _frontend_auth_error_redirect("Đăng nhập Discord thất bại: thiếu access token")
-
-            profile_response = await client.get(
-                DISCORD_ME_URL,
-                headers={"Authorization": f"Bearer {access_token}"},
-            )
-            profile_response.raise_for_status()
-            profile = profile_response.json()
-    except httpx.HTTPError:
-        return _frontend_auth_error_redirect("Đăng nhập Discord thất bại khi kết nối tới Discord")
-
-    discord_id = str(profile.get("id") or "").strip()
-    email = str(profile.get("email") or "").strip().lower()
-    display_name = str(profile.get("global_name") or profile.get("username") or email or "Discord User").strip()
-    if not discord_id:
-        return _frontend_auth_error_redirect("Đăng nhập Discord thất bại: thiếu id tài khoản")
-
-    user = await session.scalar(select(User).where(User.discord_id == discord_id))
-    if not user and email:
-        user = await session.scalar(select(User).where(User.email == email))
-
-    if not user:
-        user = User(
-            full_name=display_name,
-            email=email or f"discord_{discord_id}@discord.local",
-            password_hash="SOCIAL_LOGIN",
-            discord_id=discord_id,
-            role=UserRole.CUSTOMER,
-        )
-        session.add(user)
-        await session.commit()
-        await session.refresh(user)
-    else:
-        updates = False
-        if not user.discord_id:
-            user.discord_id = discord_id
-            updates = True
-        if not user.full_name and display_name:
-            user.full_name = display_name
-            updates = True
-        if updates:
-            await session.commit()
-            await session.refresh(user)
-
-    auth_response = _build_auth_response(user)
-    return _frontend_auth_redirect(auth_response.access_token, auth_response.refresh_token, auth_response.user)
+    return _frontend_auth_error_redirect("Dang nhap Zalo chua san sang tren backend")
 
 
 @router.post("/refresh", response_model=AuthTokenResponse)

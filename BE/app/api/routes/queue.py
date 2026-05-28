@@ -19,9 +19,15 @@ from app.models.enums import EventStatus
 from app.models.event import Event
 from app.models.user import User
 from app.schemas.common import APIMessage
-from app.schemas.queue import QueueHeartbeatResponse, QueueJoinResponse, QueueStatusResponse
+from app.schemas.queue import QueueHeartbeatResponse, QueueJoinResponse, QueueRequirementResponse, QueueStatusResponse
 from app.services.event_service import get_show_by_id
-from app.services.queue_service import get_queue_status, heartbeat_queue_token, join_show_queue, leave_queue_token
+from app.services.queue_service import (
+    get_queue_requirement_details,
+    get_queue_status,
+    heartbeat_queue_token,
+    join_show_queue,
+    leave_queue_token,
+)
 
 
 # Mọi route trong file này đều nằm dưới `/api/shows/{show_id}/queue`.

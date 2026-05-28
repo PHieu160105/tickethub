@@ -35,8 +35,6 @@ import type {
   VenueSummary,
   SeatMapResponse,
   SeatZone,
-  HelpMessage,
-  HelpThread,
   SearchSuggestionItem,
   SiteSettings,
 } from '../types'
@@ -723,41 +721,6 @@ export const siteSettingsApi = {
   },
   async update(payload: SiteSettings) {
     const response = await api.put<SiteSettings>('/admin/settings/site', payload)
-    return response.data
-  },
-}
-
-export const helpApi = {
-  async getMyThread() {
-    const response = await api.get<HelpThread | null>('/help/threads/me', { timeout: 6000 })
-    return response.data
-  },
-  async createOrGetMyThread() {
-    return withRetry(() => api.post<HelpThread>('/help/threads/me'))
-  },
-  async markMyThreadSeen() {
-    const response = await api.post<ApiMessage>('/help/threads/me/mark-seen')
-    return response.data
-  },
-  async myMessages() {
-    return withRetry(() => api.get<HelpMessage[]>('/help/threads/me/messages'))
-  },
-  async sendMyMessage(content: string) {
-    const response = await api.post<HelpMessage>('/help/threads/me/messages', { content })
-    return response.data
-  },
-  async adminThreads() {
-    return withRetry(() => api.get<HelpThread[]>('/help/admin/threads'))
-  },
-  async adminMarkThreadsSeen() {
-    const response = await api.post<ApiMessage>('/help/admin/threads/mark-seen')
-    return response.data
-  },
-  async adminMessages(threadId: number) {
-    return withRetry(() => api.get<HelpMessage[]>(`/help/admin/threads/${threadId}/messages`))
-  },
-  async adminSendMessage(threadId: number, content: string) {
-    const response = await api.post<HelpMessage>(`/help/admin/threads/${threadId}/messages`, { content })
     return response.data
   },
 }

@@ -66,9 +66,7 @@ const CustomerTicket: React.FC = () => {
     setDrawerOpen(false)
     if (tab === 'tickets') return navigate('/tickets')
     if (tab === 'profile') return navigate('/profile')
-    if (tab === 'favourites') return navigate('/favourites')
     if (tab === 'settings') return navigate('/settings')
-    if (tab === 'help') return navigate('/help')
     if (tab === 'logout') {
       logout()
       return navigate('/')

@@ -5,7 +5,6 @@ import { ArrowLeft, Eye, EyeOff, Mail, Lock, Rocket } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import LogoSVG from '@/assets/logo.svg'
 import { FcGoogle } from 'react-icons/fc'
-import { SiDiscord } from 'react-icons/si'
 import type { User as ApiUser } from '@/types'
 
 export function Logo() {
@@ -23,7 +22,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
-  const { login, loginWithGoogle, startDiscordLogin, acceptExternalAuth } = useAuth()
+  const { login, loginWithGoogle, acceptExternalAuth } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -46,7 +45,7 @@ export default function Login() {
       setSearchParams({}, { replace: true })
       navigate(user.role === 'admin' ? '/admin' : '/', { replace: true })
     } catch {
-      setErrorMessage('Đăng nhập Discord đã hoàn tất nhưng hệ thống không xử lý được phản hồi.')
+      setErrorMessage('Dang nhap ngoai da hoan tat nhung he thong khong xu ly duoc phan hoi.')
       setSearchParams({}, { replace: true })
     }
   }, [acceptExternalAuth, navigate, searchParams, setSearchParams])
@@ -164,7 +163,7 @@ export default function Login() {
               </div>
 
               {/* Nút đăng nhập mạng xã hội. */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <button
                   className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc"
                   onClick={async () => {
@@ -183,17 +182,6 @@ export default function Login() {
                 >
                   <FcGoogle className="w-5 h-5" />
                   <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-slate-500">Google</span>
-                </button>
-                <button
-                  className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc"
-                  onClick={() => {
-                    setErrorMessage('')
-                    startDiscordLogin()
-                  }}
-                  disabled={isLoading}
-                >
-                  <SiDiscord className="w-5 h-5 text-[#5865F2]" />
-                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-slate-500">Discord</span>
                 </button>
               </div>
 

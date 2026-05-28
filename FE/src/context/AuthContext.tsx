@@ -1,10 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { signInWithGoogle } from '@/lib/google'
 import { authApi, extractApiErrorMessage } from '@/lib/api'
+import { signInWithGoogle } from '@/lib/google'
 import { authStorage } from '@/lib/storage'
-import { API_BASE_URL } from '@/constants'
 import type { User as ApiUser } from '@/types'
 
 export interface User extends ApiUser {
@@ -19,7 +18,6 @@ interface AuthContextType {
   isAdmin: boolean
   login: (email: string, password: string) => Promise<User>
   loginWithGoogle: () => Promise<User>
-  startDiscordLogin: () => void
   acceptExternalAuth: (payload: { access_token: string; refresh_token: string; user: ApiUser }) => User
   register: (
     email: string,
@@ -94,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(enrichedUser)
       return enrichedUser
     } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Đăng nhập thất bại. Vui lòng thử lại.'))
+      throw new Error(extractApiErrorMessage(error, 'Dang nhap that bai. Vui long thu lai.'))
     } finally {
       setIsLoading(false)
     }
@@ -112,14 +110,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(enrichedUser)
       return enrichedUser
     } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Đăng nhập Google thất bại. Vui lòng thử lại.'))
+      throw new Error(extractApiErrorMessage(error, 'Dang nhap Google that bai. Vui long thu lai.'))
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const startDiscordLogin = () => {
-    window.location.assign(`${API_BASE_URL}/auth/discord/login`)
   }
 
   const acceptExternalAuth = (payload: { access_token: string; refresh_token: string; user: ApiUser }) => {
@@ -153,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(enrichedUser)
       return enrichedUser
     } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Đăng ký thất bại. Vui lòng thử lại.'))
+      throw new Error(extractApiErrorMessage(error, 'Dang ky that bai. Vui long thu lai.'))
     } finally {
       setIsLoading(false)
     }
@@ -180,7 +174,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin,
       login,
       loginWithGoogle,
-      startDiscordLogin,
       acceptExternalAuth,
       register,
       updateProfile,
@@ -195,7 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
-    throw new Error('useAuth phải được dùng bên trong AuthProvider')
+    throw new Error('useAuth phai duoc dung ben trong AuthProvider')
   }
   return context
 }

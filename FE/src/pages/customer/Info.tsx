@@ -39,7 +39,7 @@ const INFO_SECTIONS: InfoSection[] = [
     label: 'Điều khoản',
     summary: 'Những nguyên tắc cơ bản khi sử dụng nền tảng mua vé và quản lý vé điện tử trên TicketRush.',
     bullets: [
-      'Người dùng chịu trách nhiệm về tính chính xác của email, số điện thoại và thông tin đăng nhập dùng cho việc nhận vé, nhận thông báo và khôi phục tài khoản.',
+      'Người dùng chịu trách nhiệm về tính chính xác của email, số điện thoại và thông tin đăng nhập dùng cho việc nhận vé, nhận xác nhận đơn và khôi phục tài khoản.',
       'Một đơn hàng chỉ được xác nhận khi hệ thống hoàn tất bước checkout và phát hành vé điện tử; việc chọn ghế hoặc thêm vé vào giỏ chưa đồng nghĩa với giữ chỗ thành công.',
       'Trong các đợt mở bán tải cao, quyền truy cập seat map có thể được điều phối bằng hàng chờ ảo để giảm nghẽn và hạn chế bot.',
       'Mỗi vé gắn với một sự kiện, buổi diễn, khu vực ghế và mã định danh riêng; người dùng cần kiểm tra kỹ trước khi xác nhận thanh toán.',
@@ -108,7 +108,7 @@ const INFO_SECTIONS: InfoSection[] = [
       'Hoàn tiền và hủy vé: trong thực tế, đa số đơn hàng hoàn tất thường không thể đổi ghế hoặc đổi sự kiện. Trường hợp hủy hoặc hoàn phụ thuộc trạng thái sự kiện và điều kiện của ban tổ chức.',
       'Sự kiện dời lịch: thông lệ phổ biến là vé vẫn giữ hiệu lực cho lịch mới; nếu không thể tham dự, người dùng cần theo thông báo chính thức hoặc liên hệ hỗ trợ.',
       'Vé điện tử: người dùng nên kiểm tra kỹ email, tài khoản và mã vé trước ngày diễn; không chia sẻ ảnh vé cho bên thứ ba nếu sự kiện dùng cơ chế quét mã động.',
-      'Hỗ trợ: nếu có lỗi thanh toán, thiếu vé, sai thông tin show hoặc cần xác minh đơn hàng, hãy gửi yêu cầu trong Trung tâm hỗ trợ để admin tra cứu theo tài khoản.',
+      'Hỗ trợ: nếu có lỗi thanh toán, thiếu vé, sai thông tin show hoặc cần xác minh đơn hàng, hãy dùng thông tin liên hệ chính thức trên trang sự kiện hoặc kênh công bố của ban tổ chức.',
     ],
     links: [
       {

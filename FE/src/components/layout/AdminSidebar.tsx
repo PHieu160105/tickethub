@@ -1,18 +1,18 @@
-import { cn } from '@/lib/utils'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Building2, LayoutDashboard, CalendarDays, Users, BarChart3, Settings, LogOut, Ticket, MessageCircle } from 'lucide-react'
-import { useAuth } from '../../context/AuthContext'
+import { BarChart3, Building2, CalendarDays, LayoutDashboard, LogOut, Settings, Ticket, Users } from 'lucide-react'
+
 import LogoSVG from '@/assets/logo.svg'
+import { cn } from '@/lib/utils'
+import { useAuth } from '../../context/AuthContext'
 
 const adminLinks = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, exact: true },
-  { label: 'Sự kiện', href: '/admin/events', icon: CalendarDays, exact: false },
+  { label: 'Su kien', href: '/admin/events', icon: CalendarDays, exact: false },
   { label: 'Venue Studio', href: '/admin/venues', icon: Building2, exact: false },
-  { label: 'Vé & Doanh thu', href: '/admin/tickets', icon: Ticket, exact: false },
-  { label: 'Thống kê', href: '/admin/analytics', icon: BarChart3, exact: false },
-  { label: 'Người dùng', href: '/admin/users', icon: Users, exact: false },
-  { label: 'Help', href: '/admin/help', icon: MessageCircle, exact: false },
-  { label: 'Cài đặt', href: '/admin/settings', icon: Settings, exact: false },
+  { label: 'Ve va doanh thu', href: '/admin/tickets', icon: Ticket, exact: false },
+  { label: 'Thong ke', href: '/admin/analytics', icon: BarChart3, exact: false },
+  { label: 'Nguoi dung', href: '/admin/users', icon: Users, exact: false },
+  { label: 'Cai dat', href: '/admin/settings', icon: Settings, exact: false },
 ]
 
 export function Logo() {
@@ -52,7 +52,7 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
             className={() =>
               cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
-                isActiveLink(href, exact ?? false)
+                isActiveLink(href, exact)
                   ? 'bg-[var(--admin-bg-opt)] text-brand-red border border-secondary/20'
                   : 'admin-text-body hover:bg-[var(--admin-btn-ghost-bg-hover)] hover:text-[var(--admin-text-header)]',
               )
@@ -70,7 +70,7 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium admin-text-muted hover:bg-[var(--admin-btn-ghost-bg-hover)] hover:text-red-400 transition-colors"
         >
           <LogOut className="h-5 w-5" />
-          Đăng xuất
+          Dang xuat
         </button>
       </div>
     </aside>

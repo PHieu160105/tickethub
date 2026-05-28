@@ -1,4 +1,4 @@
-"""Khai báo các mô hình ORM cho sự kiện, show và vùng ghế."""
+"""ORM models for events, shows, and seating zones."""
 
 from datetime import UTC, date, datetime, time
 
@@ -54,7 +54,6 @@ class Event(TimestampMixin, Base):
     venue_obj = relationship("Venue", back_populates="events")
     venue_layout = relationship("VenueLayout", back_populates="events")
     shows = relationship("Show", back_populates="event", cascade="all,delete")
-    reviews = relationship("EventReview", back_populates="event", cascade="all,delete")
 
     @property
     def start_at(self) -> datetime:

@@ -3,7 +3,7 @@
  */
 
 import { api, withRetry } from '../../../lib/api'
-import type { EventCard, EventDetail, EventReview, EventReviewCreatePayload, SeatMatrixResponse, ShowDetail } from '../../../types'
+import type { EventCard, EventDetail, SeatMatrixResponse, ShowDetail } from '../../../types'
 
 export interface EventListParams {
   search?: string
@@ -43,13 +43,5 @@ export const eventsApi = {
       headers: queueToken ? { 'X-Queue-Token': queueToken } : undefined,
     }))
     return response as SeatMatrixResponse
-  },
-  async reviews(eventKey: string, params?: { limit?: number; offset?: number }): Promise<EventReview[]> {
-    const response = await withRetry(() => api.get<EventReview[]>(`/events/${eventKey}/reviews`, { params }))
-    return response as EventReview[]
-  },
-  async createReview(eventKey: string, payload: EventReviewCreatePayload): Promise<EventReview> {
-    const response = await api.post<EventReview>(`/events/${eventKey}/reviews`, payload)
-    return response.data
   },
 }

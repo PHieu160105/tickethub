@@ -106,7 +106,7 @@ async def _ensure_template_seat_columns_are_nullable() -> None:
 
 
 async def _ensure_user_auth_columns() -> None:
-    """Bổ sung các cột social login mới cho bảng người dùng nếu DB cũ còn thiếu."""
+    """Bổ sung các cột social login hiện còn dùng cho bảng người dùng."""
 
     async with engine.begin() as conn:
         await conn.execute(
@@ -114,8 +114,7 @@ async def _ensure_user_auth_columns() -> None:
                 """
                 ALTER TABLE IF EXISTS ticket_rush.users
                 ADD COLUMN IF NOT EXISTS google_id VARCHAR(255),
-                ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255),
-                ADD COLUMN IF NOT EXISTS facebook_id VARCHAR(255)
+                ADD COLUMN IF NOT EXISTS zalo_id VARCHAR(255)
                 """
             )
         )
@@ -131,18 +130,9 @@ async def _ensure_user_auth_columns() -> None:
         await conn.execute(
             text(
                 """
-                CREATE UNIQUE INDEX IF NOT EXISTS ix_users_discord_id
-                ON ticket_rush.users (discord_id)
-                WHERE discord_id IS NOT NULL
-                """
-            )
-        )
-        await conn.execute(
-            text(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS ix_users_facebook_id
-                ON ticket_rush.users (facebook_id)
-                WHERE facebook_id IS NOT NULL
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_users_zalo_id
+                ON ticket_rush.users (zalo_id)
+                WHERE zalo_id IS NOT NULL
                 """
             )
         )

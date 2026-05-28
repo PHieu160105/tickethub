@@ -74,9 +74,9 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
     frontend_app_url: str = "http://localhost:5173"
-    discord_client_id: str = ""
-    discord_client_secret: str = ""
-    discord_redirect_uri: str = "http://localhost:8000/api/auth/discord/callback"
+    zalo_client_id: str = ""
+    zalo_client_secret: str = ""
+    zalo_redirect_uri: str = "http://localhost:8000/api/auth/zalo/callback"
 
     @property
     def allowed_origins(self) -> list[str]:

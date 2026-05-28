@@ -277,23 +277,6 @@ export interface SeatMapResponse {
   seat_count: number
 }
 
-export interface EventReview {
-  id: number
-  event_id: number
-  user_id: number
-  reviewer_name: string
-  rating: number
-  content: string
-  image_url: string | null
-  created_at: string
-}
-
-export interface EventReviewCreatePayload {
-  rating: number
-  content: string
-  image_url?: string | null
-}
-
 export interface QueueJoinResponse {
   token: string
   status: QueueStatus
@@ -443,31 +426,6 @@ export interface EventDetailStats {
 
 export interface ApiMessage {
   detail: string
-}
-
-export interface HelpThread {
-  id: number
-  customer_id: number
-  customer_name: string
-  customer_email: string
-  last_message_at: string
-  last_message_preview: string
-  status: string
-  unread_admin: number
-  unread_customer: number
-  created_at: string
-  updated_at: string
-}
-
-export interface HelpMessage {
-  id: number
-  thread_id: number
-  sender_id: number
-  sender_role: string
-  content: string
-  message_type: string
-  read_at: string | null
-  created_at: string
 }
 
 export interface SearchSuggestionItem {

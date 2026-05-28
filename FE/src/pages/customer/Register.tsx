@@ -5,7 +5,6 @@ import { ArrowLeft, Eye, EyeOff, Mail, Lock, User, Phone, Calendar, Users, Rocke
 import { useAuth } from '@/context/AuthContext'
 import LogoSVG from '@/assets/logo.svg'
 import { FcGoogle } from 'react-icons/fc'
-import { SiDiscord } from 'react-icons/si'
 
 export function Logo() {
   return (
@@ -28,7 +27,7 @@ export default function Register() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const { register, loginWithGoogle, startDiscordLogin } = useAuth()
+  const { register, loginWithGoogle } = useAuth()
   const navigate = useNavigate()
 
   const calculateAge = (dateOfBirth: string) => {
@@ -336,7 +335,7 @@ export default function Register() {
               </div>
 
               {/* Nút đăng nhập/đăng ký bằng mạng xã hội. */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <button
                   className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc disabled:cursor-not-allowed disabled:opacity-60"
                   type="button"
@@ -357,16 +356,6 @@ export default function Register() {
                   <FcGoogle className="w-5 h-5" />
                   <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-slate-500">
                     Google
-                  </span>
-                </button>
-                <button
-                  className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc"
-                  type="button"
-                  onClick={() => startDiscordLogin()}
-                >
-                  <SiDiscord className="w-5 h-5 text-[#5865F2]" />
-                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-slate-800">
-                    Discord
                   </span>
                 </button>
               </div>

@@ -1,4 +1,4 @@
-"""Khai báo mô hình ORM cho tài khoản người dùng của hệ thống."""
+"""ORM model for application users."""
 
 from sqlalchemy import Enum, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -28,8 +28,7 @@ class User(TimestampMixin, Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     google_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
-    discord_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
-    facebook_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
+    zalo_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole, native_enum=False), default=UserRole.CUSTOMER, nullable=False)
     gender: Mapped[Gender] = mapped_column(Enum(Gender, native_enum=False), default=Gender.OTHER, nullable=False)
     age: Mapped[int] = mapped_column(Integer, default=18, nullable=False)
@@ -40,4 +39,3 @@ class User(TimestampMixin, Base):
     locked_seats = relationship("Seat", back_populates="locked_by_user", foreign_keys="Seat.locked_by_user_id")
     orders = relationship("Order", back_populates="user", cascade="all,delete")
     queue_entries = relationship("QueueEntry", back_populates="user", cascade="all,delete")
-    event_reviews = relationship("EventReview", back_populates="user", cascade="all,delete")

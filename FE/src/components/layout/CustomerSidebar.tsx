@@ -1,16 +1,8 @@
 import React from 'react'
-import {
-  Heart,
-  HelpCircle,
-  LogOut,
-  Settings,
-  Star,
-  Ticket,
-  User,
-} from 'lucide-react'
+import { LogOut, Settings, Star, Ticket, User } from 'lucide-react'
 
 interface CustomerSidebarProps {
-  activeTab: 'tickets' | 'profile' | 'favourites' | 'settings' | 'help'
+  activeTab: 'tickets' | 'profile' | 'settings'
   userName?: string
   membershipLevel?: string
   onNavigate?: (tab: string) => void
@@ -24,15 +16,13 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
   className,
 }) => {
   const menuItems = [
-    { id: 'tickets', icon: Ticket, label: 'Vé của tôi' },
-    { id: 'profile', icon: User, label: 'Hồ sơ' },
-    { id: 'favourites', icon: Heart, label: 'Yêu thích' },
+    { id: 'tickets', icon: Ticket, label: 'Ve cua toi' },
+    { id: 'profile', icon: User, label: 'Ho so' },
   ]
 
   const supportItems = [
-    { id: 'settings', icon: Settings, label: 'Cài đặt' },
-    { id: 'help', icon: HelpCircle, label: 'Trung tâm hỗ trợ' },
-    { id: 'logout', icon: LogOut, label: 'Đăng xuất' },
+    { id: 'settings', icon: Settings, label: 'Cai dat' },
+    { id: 'logout', icon: LogOut, label: 'Dang xuat' },
   ]
 
   const isActive = (id: string) => activeTab === id
@@ -50,12 +40,12 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
         </div>
 
         <h3 className="customer-text-header font-bold text-lg font-headline">{userName}</h3>
-        <p className="text-amber-400 text-xs font-bold uppercase tracking-widest mt-1">Khách hàng</p>
+        <p className="text-amber-400 text-xs font-bold uppercase tracking-widest mt-1">Khach hang</p>
       </div>
 
       <div className="space-y-2">
         <p className="text-[10px] font-bold customer-text-muted uppercase tracking-[0.2em] mb-3 px-2">
-          Tài khoản
+          Tai khoan
         </p>
         {menuItems.map((item) => (
           <button
@@ -85,7 +75,7 @@ export const CustomerSidebar: React.FC<CustomerSidebarProps> = ({
 
       <div className="space-y-2 pt-2">
         <p className="text-[10px] font-bold customer-text-muted uppercase tracking-[0.2em] mb-3 px-2">
-          Hỗ trợ
+          Tien ich
         </p>
         {supportItems.map((item) => (
           <button
