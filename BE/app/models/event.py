@@ -130,6 +130,7 @@ class Show(TimestampMixin, Base):
     polygons = relationship("ShowPolygon", back_populates="show", cascade="all,delete")
     orders = relationship("Order", back_populates="show", cascade="all,delete")
     queue_entries = relationship("QueueEntry", back_populates="show", cascade="all,delete")
+    show_performers = relationship("ShowPerformer", back_populates="show", cascade="all,delete-orphan")
 
 
 class SeatZone(TimestampMixin, Base):

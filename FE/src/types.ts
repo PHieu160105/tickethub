@@ -3,6 +3,7 @@ export type Gender = 'male' | 'female' | 'other'
 export type EventStatus = 'draft' | 'live' | 'closed'
 export type SeatStatus = 'available' | 'locked' | 'sold'
 export type QueueStatus = 'waiting' | 'admitted' | 'expired' | 'completed'
+export type PerformerRole = 'main' | 'guest' | 'backup'
 
 export interface User {
   id: number
@@ -55,8 +56,40 @@ export interface ShowSummary {
   end_at: string
   status: EventStatus
   queue_enabled: boolean
+  queue_release_batch?: number
+  max_active_queue_tokens?: number
+  performers: ShowPerformer[]
   venue_id?: number | null
   venue_layout_id?: number | null
+}
+
+export interface ShowPerformer {
+  performer_id: number
+  stage_name: string
+  artist_type: string | null
+  image_url: string | null
+  role: PerformerRole
+  sort_order: number
+}
+
+export interface AdminShowPerformer extends ShowPerformer {
+  show_performer_id: number
+  show_id: number
+}
+
+export interface PerformerSuggestionItem {
+  id: number
+  stage_name: string
+  artist_type: string | null
+  show_count: number
+  has_image: boolean
+}
+
+export interface PerformerDetail {
+  id: number
+  stage_name: string
+  artist_type: string | null
+  image_url: string | null
 }
 
 export interface VenueSummary {

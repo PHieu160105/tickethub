@@ -4,7 +4,6 @@ import { SearchAutocompleteInput } from '@/components/ui/SearchAutocompleteInput
 import { Menu, X, Bell, LogOut } from 'lucide-react'
 import { NavLink, Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useMemo, useRef } from 'react'
-import LogoSVG from '@/assets/logo.svg'
 import { useAuth } from '@/context/AuthContext'
 import { helpApi } from '@/lib/api'
 import type { HelpThread } from '@/types'

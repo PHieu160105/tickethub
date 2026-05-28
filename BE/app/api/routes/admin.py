@@ -16,6 +16,7 @@ from app.core.search import build_ilike_pattern, sanitize_search_query
 from app.models.enums import EventStatus, OrderStatus, QueueStatus, SeatStatus
 from app.models.event import Event, SeatZone, Show, ShowPolygon
 from app.models.order import Order, OrderItem, Ticket
+from app.models.performer import Performer
 from app.models.queue import QueueEntry
 from app.models.seat import Seat
 from app.models.user import User
@@ -59,6 +60,12 @@ from app.schemas.event import (
     ShowSummaryResponse,
     ShowUpdateRequest,
 )
+from app.schemas.performer import (
+    AdminShowPerformerResponse,
+    PerformerDetailResponse,
+    PerformerSuggestionResponse,
+    ShowPerformerBulkUpdateRequest,
+)
 from app.services.dashboard_service import (
     broadcast_dashboard_update,
     get_audience_distribution,
@@ -70,6 +77,7 @@ from app.services.event_service import (
     build_event_card_response,
     build_event_detail_response,
     build_show_detail_response,
+    build_show_summary_response,
     combine_show_datetime,
     create_event,
     create_initial_show_zone,
@@ -84,6 +92,11 @@ from app.services.event_service import (
     list_shows_for_event_ids,
     list_show_zones,
     update_show_zone,
+)
+from app.services.performer_service import (
+    list_admin_show_performers,
+    suggest_performers,
+    update_show_performer_lineup,
 )
 from app.ws.connection_manager import seat_ws_manager
 
@@ -181,6 +194,24 @@ def _validate_unique_labels(values: list[str], detail: str) -> None:
     normalized = [value.strip() for value in values]
     if len(normalized) != len(set(normalized)):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+
+async def _encode_uploaded_image(file: UploadFile, max_bytes: int) -> str:
+    """Mã hóa file ảnh upload thành data URL để lưu DB."""
+
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chỉ cho phép upload file ảnh")
+
+    extension = Path(file.filename or "").suffix.lower()
+    if extension not in {".jpg", ".jpeg", ".png", ".webp"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Định dạng được hỗ trợ: jpg, jpeg, png, webp")
+
+    content = await file.read()
+    if len(content) > max_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Ảnh phải có dung lượng không quá {max_bytes // (1024 * 1024)}MB")
+
+    base64_content = b64encode(content).decode("ascii")
+    return f"data:{file.content_type};base64,{base64_content}"
 
 
 def _show_polygon_response_from_model(polygon: ShowPolygon, zone_name: str | None = None) -> ShowPolygonResponse:
@@ -446,7 +477,7 @@ async def list_admin_event_shows(
 
     event = await get_event_by_slug_or_id(session, event_key)
     shows = await list_event_shows(session, event.id)
-    return [ShowSummaryResponse.model_validate(show) for show in shows]
+    return [await build_show_summary_response(session, show) for show in shows]
 
 
 @router.post("/events/{event_key}/shows", response_model=ShowDetailResponse)
@@ -483,6 +514,43 @@ async def get_admin_show(
 
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     return ShowDetailResponse(**(await build_show_detail_response(session, show)))
+
+
+@router.get("/shows/{show_id}/performers", response_model=list[AdminShowPerformerResponse])
+async def get_admin_show_performers(
+    show_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    _: User = Depends(get_current_active_admin),
+) -> list[AdminShowPerformerResponse]:
+    """Lấy lineup đầy đủ của show cho popup performer admin."""
+
+    show = await get_show_by_id(session, show_id)
+    return await list_admin_show_performers(session, show.id)
+
+
+@router.put("/shows/{show_id}/performers", response_model=list[AdminShowPerformerResponse])
+async def put_admin_show_performers(
+    show_id: int,
+    payload: ShowPerformerBulkUpdateRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _: User = Depends(get_current_active_admin),
+) -> list[AdminShowPerformerResponse]:
+    """Thay thế snapshot lineup của show với rule main/guest/backup."""
+
+    show = await get_show_by_id(session, show_id)
+    if show.status != EventStatus.DRAFT:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chỉ có thể chỉnh lineup khi show ở trạng thái draft")
+
+    try:
+        lineup = await update_show_performer_lineup(session, show, payload.performers)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+    await _invalidate_show_cache(show.id)
+    await broadcast_dashboard_update()
+    return lineup
 
 
 @router.patch("/events/{event_key}/shows/{show_id}", response_model=ShowDetailResponse)
@@ -1226,6 +1294,43 @@ async def upload_event_image(
     base64_content = b64encode(content).decode("ascii")
     image_url = f"data:{file.content_type};base64,{base64_content}"
     return UploadImageResponse(image_url=image_url)
+
+
+@router.post("/performers/upload-image", response_model=UploadImageResponse)
+async def upload_performer_image(
+    file: UploadFile = File(...),
+    _: User = Depends(get_current_active_admin),
+) -> UploadImageResponse:
+    """Mã hóa ảnh performer thành data URL với giới hạn gọn hơn ảnh cover event."""
+
+    image_url = await _encode_uploaded_image(file, max_bytes=2 * 1024 * 1024)
+    return UploadImageResponse(image_url=image_url)
+
+
+@router.get("/performers/suggest", response_model=list[PerformerSuggestionResponse])
+async def suggest_admin_performers(
+    q: str = Query(min_length=1, max_length=120),
+    limit: int = Query(default=8, ge=1, le=20),
+    session: AsyncSession = Depends(get_db_session),
+    _: User = Depends(get_current_active_admin),
+) -> list[PerformerSuggestionResponse]:
+    """Autocomplete performer dành riêng cho popup lineup admin."""
+
+    return await suggest_performers(session, q, limit=limit)
+
+
+@router.get("/performers/{performer_id}", response_model=PerformerDetailResponse)
+async def get_admin_performer_detail(
+    performer_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    _: User = Depends(get_current_active_admin),
+) -> PerformerDetailResponse:
+    """Lấy chi tiết performer để autofill ảnh và metadata khi admin chọn gợi ý."""
+
+    performer = await session.get(Performer, performer_id)
+    if performer is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy performer")
+    return PerformerDetailResponse.model_validate(performer)
 
 
 @router.get("/users", response_model=PaginatedAdminUsersResponse)

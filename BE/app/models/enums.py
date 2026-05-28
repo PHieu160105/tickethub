@@ -37,3 +37,9 @@ class QueueStatus(StrEnum):
     ADMITTED = "admitted"
     EXPIRED = "expired"
     COMPLETED = "completed"
+
+
+class PerformerRole(StrEnum):
+    MAIN = "main"
+    GUEST = "guest"
+    BACKUP = "backup"

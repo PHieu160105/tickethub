@@ -6,6 +6,7 @@ import { authStorage } from './storage'
 import type {
   ApiMessage,
   AdminEventUpdatePayload,
+  AdminShowPerformer,
   AdminEventRevenueItem,
   AudienceDistribution,
   AuthResponse,
@@ -14,10 +15,12 @@ import type {
   EventCard,
   EventDetailStats,
   EventDetail,
+  PerformerDetail,
   ShowDetail,
   ShowSummary,
   LockSeatResponse,
   OccupancyItem,
+  PerformerSuggestionItem,
   PaginatedAdminTicketSalesResponse,
   PaginatedAdminUsersResponse,
   QueueJoinResponse,
@@ -408,6 +411,25 @@ export const adminApi = {
     const formData = new FormData()
     formData.append('file', file)
     const response = await api.post<{ image_url: string }>('/admin/events/upload-image', formData)
+    return response.data
+  },
+  async getShowPerformers(showId: number) {
+    return withRetry(() => api.get<AdminShowPerformer[]>(`/admin/shows/${showId}/performers`))
+  },
+  async updateShowPerformers(showId: number, payload: { performers: unknown[] }) {
+    const response = await api.put<AdminShowPerformer[]>(`/admin/shows/${showId}/performers`, payload)
+    return response.data
+  },
+  async suggestPerformers(q: string, limit = 8) {
+    return withRetry(() => api.get<PerformerSuggestionItem[]>('/admin/performers/suggest', { params: { q, limit } }))
+  },
+  async getPerformerDetail(performerId: number) {
+    return withRetry(() => api.get<PerformerDetail>(`/admin/performers/${performerId}`))
+  },
+  async uploadPerformerImage(file: File) {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await api.post<{ image_url: string }>('/admin/performers/upload-image', formData)
     return response.data
   },
   async summary() {

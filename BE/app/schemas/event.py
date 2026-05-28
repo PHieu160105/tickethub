@@ -6,6 +6,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import EventStatus, Gender, SeatStatus
+from app.schemas.performer import PublicShowPerformerResponse
 
 
 class SeatZoneCreate(BaseModel):
@@ -123,6 +124,7 @@ class ShowSummaryResponse(BaseModel):
     queue_enabled: bool
     queue_release_batch: int
     max_active_queue_tokens: int
+    performers: list[PublicShowPerformerResponse] = Field(default_factory=list)
     venue_id: int | None = None
     venue_layout_id: int | None = None
 

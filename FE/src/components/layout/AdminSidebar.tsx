@@ -2,7 +2,6 @@ import { cn } from '@/lib/utils'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { Building2, LayoutDashboard, CalendarDays, Users, BarChart3, Settings, LogOut, Ticket, MessageCircle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
-import LogoSVG from '@/assets/logo.svg'
 
 const adminLinks = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, exact: true },
