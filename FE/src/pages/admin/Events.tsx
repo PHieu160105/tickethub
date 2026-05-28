@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Calendar, Edit, MapPin, Plus, Search, Ticket, Trash2 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
+import { ShowPerformersModal } from '@/components/admin/ShowPerformersModal'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
@@ -159,10 +160,12 @@ export default function AdminEvents() {
   const [eventModalOpen, setEventModalOpen] = useState(false)
   const [detailModalOpen, setDetailModalOpen] = useState(false)
   const [showModalOpen, setShowModalOpen] = useState(false)
+  const [performerModalOpen, setPerformerModalOpen] = useState(false)
 
   const [editingEvent, setEditingEvent] = useState<EventCard | null>(null)
   const [activeEvent, setActiveEvent] = useState<EventDetail | null>(null)
   const [editingShow, setEditingShow] = useState<ShowSummary | null>(null)
+  const [performerShow, setPerformerShow] = useState<ShowSummary | null>(null)
   const [eventForm, setEventForm] = useState<EventFormState>(INITIAL_EVENT_FORM)
   const [showForm, setShowForm] = useState<ShowFormState>(INITIAL_SHOW_FORM)
 
@@ -427,6 +430,11 @@ export default function AdminEvents() {
     }
 
     navigate(`/admin/events/${activeEvent.slug}/shows/${show.id}/seating`)
+  }
+
+  function openPerformerModal(show: ShowSummary) {
+    setPerformerShow(show)
+    setPerformerModalOpen(true)
   }
 
   async function handleDeleteShow(show: ShowSummary) {
@@ -747,11 +755,14 @@ export default function AdminEvents() {
                           <p className="text-sm text-gray-500">{show.description}</p>
                           <div className="space-y-1 text-sm text-gray-400">
                             <p>{formatDateTime(show.start_at)} - {formatDateTime(show.end_at)}</p>
-                            <p>{show.venue}</p>n
+                            <p>{show.venue}</p>
                           </div>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => openPerformerModal(show)}>
+                            Nghệ sĩ
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => void openSeatPlanner(show)}>
                             Sơ đồ ghế
                           </Button>
@@ -959,6 +970,21 @@ export default function AdminEvents() {
           </div>
         </div>
       </Modal>
+
+      <ShowPerformersModal
+        isOpen={performerModalOpen}
+        show={performerShow}
+        onClose={() => {
+          setPerformerModalOpen(false)
+          setPerformerShow(null)
+        }}
+        onSaved={async () => {
+          if (activeEvent) {
+            await loadEventDetail(activeEvent.slug)
+          }
+          await loadEvents()
+        }}
+      />
     </div>
   )
 }

@@ -78,7 +78,7 @@ export default function CustomerProfile() {
           <CustomerSidebar
             activeTab="profile"
             userName={user?.full_name ?? 'Khách hàng'}
-            membershipLevel="Thành viên TicketRush"
+            membershipLevel="Thành viên TicketHUb"
             onNavigate={onSidebarNavigate}
           />
         </div>
@@ -88,7 +88,7 @@ export default function CustomerProfile() {
             <CustomerSidebar
               activeTab="profile"
               userName={user?.full_name ?? 'Khách hàng'}
-              membershipLevel="Thành viên TicketRush"
+              membershipLevel="Thành viên TicketHub"
               onNavigate={onSidebarNavigate}
               className="relative"
             />

@@ -35,7 +35,7 @@ export default function CustomerSettings() {
           <CustomerSidebar
             activeTab="settings"
             userName={user?.full_name ?? 'Khách hàng'}
-            membershipLevel="Thành viên TicketRush"
+            membershipLevel="Thành viên TicketHub"
             onNavigate={onSidebarNavigate}
           />
         </div>
@@ -45,7 +45,7 @@ export default function CustomerSettings() {
             <CustomerSidebar
               activeTab="settings"
               userName={user?.full_name ?? 'Khách hàng'}
-              membershipLevel="Thành viên TicketRush"
+              membershipLevel="Thành viên TicketHub"
               onNavigate={onSidebarNavigate}
               className="relative"
             />
@@ -65,7 +65,7 @@ export default function CustomerSettings() {
           <div className="rounded-2xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6 space-y-6">
             <div>
               <h2 className="text-2xl font-bold text-on-background font-headline">Hiển thị</h2>
-              <p className="text-slate-500 mt-1">Chỉnh sửa TicketRush hợp mắt bạn nhé!</p>
+              <p className="text-slate-500 mt-1">Chỉnh sửa TicketHub hợp mắt bạn nhé!</p>
             </div>
 
             <div className="space-y-4">

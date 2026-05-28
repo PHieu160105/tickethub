@@ -16,8 +16,8 @@ const navLinks = [
 
 export function Logo() {
   return (
-    <Link to="/" aria-label="Ve trang chu TicketRush" className="flex items-center gap-2">
-      <img src={LogoSVG} alt="Logo TicketRush" className="h-12 w-auto" />
+    <Link to="/" aria-label="Về trang chủ" className="flex items-center gap-2 margin-r-6">
+      <p className='text-lg font-bold'>TICKETHUB</p>
     </Link>
   )
 }

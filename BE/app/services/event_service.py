@@ -92,6 +92,7 @@ from app.schemas.event import (
     ShowCreateRequest,          # lược đồ Pydantic: yêu cầu tạo buổi diễn
     ShowSummaryResponse,        # lược đồ Pydantic: phản hồi tóm tắt buổi diễn
 )
+from app.services.performer_service import list_visible_show_performers, list_visible_show_performers_for_show_ids
 
 settings = get_settings()
 
@@ -1465,7 +1466,11 @@ async def get_event_by_slug_or_id(
 # HÀM BUILD RESPONSE (chuyển ORM → lược đồ Pydantic)
 # ============================================================
 
-async def build_show_summary_response(show: Show) -> ShowSummaryResponse:
+async def build_show_summary_response(
+    session: AsyncSession,
+    show: Show,
+    performers: list | None = None,
+) -> ShowSummaryResponse:
     """Chuyển một buổi diễn sang schema response ngắn gọn.
     
     MỤC ĐÍCH: Chuyển đối tượng ORM → lược đồ Pydantic để trả JSON cho client.
@@ -1478,7 +1483,25 @@ async def build_show_summary_response(show: Show) -> ShowSummaryResponse:
     """
 
     # .model_validate(): Pydantic method - tự động map các field trùng tên
-    return ShowSummaryResponse.model_validate(show)
+    if performers is None:
+        performers = await list_visible_show_performers(session, show.id)
+
+    return ShowSummaryResponse(
+        id=show.id,
+        event_id=show.event_id,
+        title=show.title,
+        description=show.description,
+        venue=show.venue,
+        start_at=show.start_at,
+        end_at=show.end_at,
+        status=show.status,
+        queue_enabled=show.queue_enabled,
+        queue_release_batch=show.queue_release_batch,
+        max_active_queue_tokens=show.max_active_queue_tokens,
+        performers=performers,
+        venue_id=show.venue_id,
+        venue_layout_id=show.venue_layout_id,
+    )
 
 
 async def build_event_card_response(
@@ -1577,9 +1600,14 @@ async def build_event_detail_response(
     # **card.model_dump(): Python unpacking - giải nén toàn bộ field của card
     #   vào EventDetailResponse, rồi thêm field shows
     # List comprehension: chuyển mỗi show → ShowSummaryResponse
+    performers_by_show_id = await list_visible_show_performers_for_show_ids(session, [show.id for show in shows])
+
     return EventDetailResponse(
         **card.model_dump(),
-        shows=[await build_show_summary_response(show) for show in shows],
+        shows=[
+            await build_show_summary_response(session, show, performers=performers_by_show_id.get(show.id, []))
+            for show in shows
+        ],
     )
 
 
@@ -1604,6 +1632,7 @@ async def build_show_detail_response(
     
     # Gọi hàm tự viết: lấy danh sách zones
     zones, _ = await get_show_seat_matrix(session, show.id)
+    performers = await list_visible_show_performers(session, show.id)
     
     # Python dict: tạo response thủ công
     return {
@@ -1616,6 +1645,9 @@ async def build_show_detail_response(
         "end_at": show.end_at,
         "status": show.status,
         "queue_enabled": show.queue_enabled,
+        "queue_release_batch": show.queue_release_batch,
+        "max_active_queue_tokens": show.max_active_queue_tokens,
+        "performers": performers,
         "venue_id": show.venue_id,
         "venue_layout_id": show.venue_layout_id,
         # Python or: nếu event None → dùng giá trị rỗng

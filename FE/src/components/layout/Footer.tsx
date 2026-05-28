@@ -54,10 +54,10 @@ export function Footer() {
           <div className="space-y-3">
             <p className="font-headline text-2xl font-black tracking-tight">
               <span className="text-brand-red">Ticket</span>
-              <span className="text-brand-yellow">Rush</span>
+              <span className="text-brand-yellow">Hub</span>
             </p>
             <p className="text-sm leading-7 customer-text-muted">
-              TicketRush là nền tảng hỗ trợ khám phá sự kiện, chọn buổi diễn và đặt vé trực tuyến theo trải nghiệm đơn giản, rõ ràng và thuận tiện.
+              TicketHub là nền tảng hỗ trợ khám phá sự kiện, chọn buổi diễn và đặt vé trực tuyến theo trải nghiệm đơn giản, rõ ràng và thuận tiện.
             </p>
           </div>
 
@@ -100,7 +100,7 @@ export function Footer() {
         </div>
 
         <div className="mt-10 border-t pt-6 customer-border">
-          <p className="text-sm customer-text-muted">© 2026 TicketRush. Bảo lưu mọi quyền.</p>
+          <p className="text-sm customer-text-muted">© 2026 TicketHub. Bảo lưu mọi quyền.</p>
         </div>
       </Container>
     </footer>

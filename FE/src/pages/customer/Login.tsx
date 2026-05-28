@@ -3,14 +3,14 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { ArrowLeft, Eye, EyeOff, Mail, Lock, Rocket } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import LogoSVG from '@/assets/logo.svg'
+//import LogoSVG from '@/assets/logo.svg'
 import { FcGoogle } from 'react-icons/fc'
 import type { User as ApiUser } from '@/types'
 
 export function Logo() {
   return (
-    <Link to="/" aria-label="Về trang chủ TicketRush" className="flex items-center gap-2 mx-auto mb-8">
-      <img src={LogoSVG} alt="Logo TicketRush" className="h-15 w-auto mx-auto" />
+    <Link to="/" aria-label="Về trang chủ" className="flex items-center gap-2 mx-auto mb-8">
+      <p className='text-lg'>TICKETHUB</p>
     </Link>
   )
 }
@@ -211,7 +211,7 @@ export default function Login() {
       <footer className="relative z-10 py-8 px-6 text-center">
         <div className="max-w-screen-2xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-[10px] font-label tracking-widest uppercase text-slate-500/50">
-            © 2024 TicketRush. Nền tảng đặt vé sự kiện.
+            © 2024 TicketHub. Nền tảng đặt vé sự kiện.
           </p>
           <div className="flex gap-6">
             <a className="text-[10px] font-label tracking-widest uppercase text-slate-500/50 hover:text-secondary transition-colors" href="#">Hỗ trợ</a>
