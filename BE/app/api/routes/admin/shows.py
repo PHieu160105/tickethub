@@ -11,7 +11,9 @@ from app.schemas.admin import EventDetailStatsResponse
 from app.schemas.common import APIMessage
 from app.schemas.event import ShowCreateRequest, ShowDetailResponse, ShowSummaryResponse, ShowUpdateRequest
 from app.services.dashboard_service import broadcast_dashboard_update
-from app.services.event_service import build_show_detail_response, combine_show_datetime, create_show_with_inventory, get_event_by_slug_or_id, list_event_shows
+from app.services.event_lifecycle_service import create_show_with_inventory
+from app.services.event_query_service import build_show_detail_response, get_event_by_slug_or_id, list_event_shows
+from app.services.event_utils import combine_show_datetime
 from app.ws.connection_manager import seat_ws_manager
 
 from ._shared import _build_event_or_404_show, _build_show_stats_response, _interrupt_active_show_sessions, _invalidate_show_cache
@@ -72,8 +74,6 @@ async def update_admin_show(
 ) -> ShowDetailResponse:
     event, show = await _build_event_or_404_show(session, event_key, show_id)
     updates = payload.model_dump(exclude_unset=True)
-    for queue_field in ("queue_enabled", "queue_release_batch", "max_active_queue_tokens"):
-        updates.pop(queue_field, None)
     if not updates:
         return ShowDetailResponse(**(await build_show_detail_response(session, show)))
 
@@ -97,7 +97,7 @@ async def update_admin_show(
         if next_end_at <= next_start_at:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gio ket thuc phai sau gio bat dau")
 
-    if ("venue_id" in updates and updates["venue_id"] != show.venue_id) or ("venue_layout_id" in updates and updates["venue_layout_id"] != show.venue_layout_id):
+    if "venue_layout_id" in updates and updates["venue_layout_id"] != show.venue_layout_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Khong ho tro doi dia diem hoac bo cuc sau khi da tao buoi dien")
 
     for field_name, field_value in updates.items():

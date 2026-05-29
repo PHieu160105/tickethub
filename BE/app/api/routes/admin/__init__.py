@@ -1,10 +1,11 @@
 from fastapi import APIRouter
 
-from . import dashboard, events, settings, show_planner, shows, tickets, users, venue_layouts, venue_polygons, venue_sections, venue_seats, venues
+from . import dashboard, events, performers, settings, show_planner, shows, tickets, users, venue_layouts, venue_polygons, venue_sections, venue_seats, venues
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 router.include_router(events.router)
 router.include_router(shows.router)
+router.include_router(performers.router)
 router.include_router(show_planner.router)
 router.include_router(venues.router)
 router.include_router(venue_layouts.router)

@@ -13,13 +13,13 @@ import { Listbox } from '@headlessui/react';
 const PAGE_SIZE = 10
 
 function roleVariant(role: string): 'success' | 'warning' | 'info' {
-  if (role === 'admin') return 'success'
-  return role === 'customer' ? 'info' : 'warning'
+  if (role === 'ADMIN') return 'success'
+  return role === 'CUSTOMER' ? 'info' : 'warning'
 }
 
 function genderLabel(gender: string) {
-  if (gender === 'male') return 'Nam'
-  if (gender === 'female') return 'Nữ'
+  if (gender === 'MALE') return 'Nam'
+  if (gender === 'FEMALE') return 'Nữ'
   return 'Khác'
 }
 
@@ -36,8 +36,8 @@ interface RoleSelectProps {
 function RoleSelect({ roleFilter, setRoleFilter }: RoleSelectProps) {
   const roles: Role[] = [
     { value: 'all', label: 'Tất cả vai trò' },
-    { value: 'admin', label: 'Quản trị viên' },
-    { value: 'customer', label: 'Khách hàng' },
+    { value: 'ADMIN', label: 'Quản trị viên' },
+    { value: 'CUSTOMER', label: 'Khách hàng' },
   ];
 
   return (

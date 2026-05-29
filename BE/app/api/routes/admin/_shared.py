@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import timezone, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import case, func, select
@@ -7,12 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.cache import EVENT_DETAIL_CACHE_NAMESPACE, EVENT_LIST_CACHE_NAMESPACE, SHOW_DETAIL_CACHE_NAMESPACE, public_api_cache, show_seat_cache_namespace
 from app.models.enums import OrderStatus, QueueStatus, SeatStatus, EventStatus
 from app.models.event import Event, SeatZone, Show, ShowPolygon
-from app.models.order import OrderItem, Ticket
+from app.models.order import Order, Ticket
 from app.models.queue import QueueEntry
 from app.models.seat import Seat
 from app.schemas.admin import EventDetailStatsResponse, EventZoneStatsResponse
 from app.schemas.event import ShowPolygonResponse
-from app.services.event_service import get_event_by_slug_or_id, get_show_by_id
+from app.services.event_query_service import get_event_by_slug_or_id, get_show_by_id
 
 
 def _apply_admin_lock_state(seat: Seat, is_admin_locked: bool) -> None:
@@ -39,7 +39,43 @@ async def _invalidate_show_cache(show_id: int) -> None:
 
 
 async def _interrupt_active_show_sessions(session: AsyncSession, show: Show) -> tuple[list[dict[str, int | str | None]], int]:
-    locked_seats = list(
+    locked_tickets = list(
+        await session.scalars(
+            select(Ticket)
+            .where(
+                Ticket.show_id == show.id,
+                Ticket.status == SeatStatus.LOCKED,
+                Ticket.locked_by_user_id.is_not(None),
+            )
+            .order_by(Ticket.id.asc())
+            .with_for_update()
+        )
+    )
+    changed_seats: list[dict[str, int | str | None]] = []
+    for ticket in locked_tickets:
+        ticket.status = SeatStatus.AVAILABLE
+        ticket.locked_by_user_id = None
+        ticket.lock_expires_at = None
+        changed_seats.append(
+            {
+                "id": ticket.id,
+                "status": SeatStatus.AVAILABLE.value,
+                "lock_expires_at": None,
+                "locked_by_user_id": None,
+            }
+        )
+
+    ticket_seat_ids = [ticket.seat_id for ticket in locked_tickets if ticket.seat_id is not None]
+    if ticket_seat_ids:
+        ticket_legacy_seats = list(
+            await session.scalars(select(Seat).where(Seat.id.in_(ticket_seat_ids)).with_for_update())
+        )
+        for seat in ticket_legacy_seats:
+            seat.status = SeatStatus.AVAILABLE
+            seat.locked_by_user_id = None
+            seat.lock_expires_at = None
+
+    locked_legacy_seats = list(
         await session.scalars(
             select(Seat)
             .where(
@@ -51,19 +87,20 @@ async def _interrupt_active_show_sessions(session: AsyncSession, show: Show) -> 
             .with_for_update()
         )
     )
-    changed_seats: list[dict[str, int | str | None]] = []
-    for seat in locked_seats:
+    existing_payload_ids = {int(item["id"]) for item in changed_seats}
+    for seat in locked_legacy_seats:
         seat.status = SeatStatus.AVAILABLE
         seat.locked_by_user_id = None
         seat.lock_expires_at = None
-        changed_seats.append(
-            {
-                "id": seat.id,
-                "status": SeatStatus.AVAILABLE.value,
-                "lock_expires_at": None,
-                "locked_by_user_id": None,
-            }
-        )
+        if seat.id not in existing_payload_ids:
+            changed_seats.append(
+                {
+                    "id": seat.id,
+                    "status": SeatStatus.AVAILABLE.value,
+                    "lock_expires_at": None,
+                    "locked_by_user_id": None,
+                }
+            )
 
     active_entries = list(
         await session.scalars(
@@ -76,7 +113,7 @@ async def _interrupt_active_show_sessions(session: AsyncSession, show: Show) -> 
             .with_for_update()
         )
     )
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     for entry in active_entries:
         entry.status = QueueStatus.EXPIRED
         entry.expires_at = now
@@ -126,10 +163,10 @@ async def _build_show_stats_response(session: AsyncSession, show: Show, event: E
     totals_row = (
         await session.execute(
             select(
-                func.count(Seat.id).label("total_seats"),
-                func.sum(case((Seat.status == SeatStatus.SOLD, 1), else_=0)).label("sold_seats"),
-                func.sum(case((Seat.status == SeatStatus.LOCKED, 1), else_=0)).label("locked_seats"),
-            ).where(Seat.show_id == show.id)
+                func.count(Ticket.id).label("total_seats"),
+                func.sum(case((Ticket.status == SeatStatus.SOLD, 1), else_=0)).label("sold_seats"),
+                func.sum(case((Ticket.status == SeatStatus.LOCKED, 1), else_=0)).label("locked_seats"),
+            ).where(Ticket.show_id == show.id)
         )
     ).one()
 
@@ -142,10 +179,10 @@ async def _build_show_stats_response(session: AsyncSession, show: Show, event: E
     ticket_count = int(
         (
             await session.scalar(
-                select(func.count(Ticket.id))
-                .join(OrderItem, Ticket.order_item_id == OrderItem.id)
-                .join(Seat, OrderItem.seat_id == Seat.id)
-                .where(Seat.show_id == show.id)
+                select(func.count(Ticket.id)).where(
+                    Ticket.show_id == show.id,
+                    Ticket.status == SeatStatus.SOLD,
+                )
             )
         )
         or 0
@@ -154,12 +191,11 @@ async def _build_show_stats_response(session: AsyncSession, show: Show, event: E
     total_revenue = float(
         (
             await session.scalar(
-                select(func.sum(OrderItem.price))
-                .join(Ticket, Ticket.order_item_id == OrderItem.id)
-                .join(Seat, OrderItem.seat_id == Seat.id)
+                select(func.sum(Ticket.price))
+                .join(Order, Ticket.order_id == Order.id)
                 .where(
-                    Seat.show_id == show.id,
-                    OrderItem.order.has(status=OrderStatus.PAID),
+                    Ticket.show_id == show.id,
+                    Order.status == OrderStatus.PAID,
                 )
             )
         )
@@ -170,29 +206,34 @@ async def _build_show_stats_response(session: AsyncSession, show: Show, event: E
         await session.execute(
             select(
                 SeatZone.id,
+                SeatZone.code,
                 SeatZone.name,
-                func.count(Seat.id).label("total_seats"),
-                func.sum(case((Seat.status == SeatStatus.SOLD, 1), else_=0)).label("sold_seats"),
-                func.sum(case((Seat.status == SeatStatus.LOCKED, 1), else_=0)).label("locked_seats"),
-                func.min(Seat.price).label("price_min"),
-                func.max(Seat.price).label("price_max"),
+                SeatZone.color,
+                func.count(Ticket.id).label("total_seats"),
+                func.sum(case((Ticket.status == SeatStatus.SOLD, 1), else_=0)).label("sold_seats"),
+                func.sum(case((Ticket.status == SeatStatus.LOCKED, 1), else_=0)).label("locked_seats"),
+                func.min(Ticket.price).label("price_min"),
+                func.max(Ticket.price).label("price_max"),
             )
-            .join(Seat, Seat.zone_id == SeatZone.id)
+            .outerjoin(Ticket, Ticket.ticket_tier_id == SeatZone.id)
             .where(SeatZone.show_id == show.id)
-            .group_by(SeatZone.id, SeatZone.name)
+            .group_by(SeatZone.id, SeatZone.code, SeatZone.name, SeatZone.color)
             .order_by(SeatZone.id.asc())
         )
     ).all()
     zone_stats = [
         EventZoneStatsResponse(
             zone_id=row.id,
+            zone_code=row.code,
             zone_name=row.name,
+            color=row.color,
             total_seats=int(row.total_seats or 0),
             sold_seats=int(row.sold_seats or 0),
             locked_seats=int(row.locked_seats or 0),
             available_seats=max(int(row.total_seats or 0) - int(row.sold_seats or 0) - int(row.locked_seats or 0), 0),
-            price_min=float(row.price_min or 0),
-            price_max=float(row.price_max or 0),
+            occupancy_rate=round((int(row.sold_seats or 0) / int(row.total_seats or 0)) * 100, 2) if int(row.total_seats or 0) else 0,
+            min_price=float(row.price_min or 0),
+            max_price=float(row.price_max or 0),
         )
         for row in zone_rows
     ]

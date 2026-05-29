@@ -1,6 +1,6 @@
 """Khai báo lớp ORM gốc và các mixin dùng chung cho toàn bộ mô hình dữ liệu."""
 
-from datetime import UTC, datetime
+from datetime import timezone, datetime
 
 from sqlalchemy import DateTime, MetaData
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -35,10 +35,10 @@ class TimestampMixin:
     - `updated_at` được gán khi tạo mới và tự cập nhật lại mỗi lần bản ghi thay đổi.
     """
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )

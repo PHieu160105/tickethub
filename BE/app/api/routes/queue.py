@@ -20,7 +20,7 @@ from app.models.event import Event
 from app.models.user import User
 from app.schemas.common import APIMessage
 from app.schemas.queue import QueueHeartbeatResponse, QueueJoinResponse, QueueRequirementResponse, QueueStatusResponse
-from app.services.event_service import get_show_by_id
+from app.services.event_query_service import get_show_by_id
 from app.services.queue_service import (
     get_queue_requirement_details,
     get_queue_status,

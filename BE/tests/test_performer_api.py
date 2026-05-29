@@ -37,10 +37,10 @@ async def test_admin_can_put_and_get_show_performers(db_session, admin_user, sam
                 f"/api/admin/shows/{sample_show.id}/performers",
                 json={
                     "performers": [
-                        {"stage_name": "Main One", "artist_type": "Singer", "role": "main", "sort_order": 0},
-                        {"stage_name": "Guest One", "artist_type": "Rapper", "role": "guest", "sort_order": 1},
-                        {"stage_name": "Backup One", "artist_type": "Dancer", "role": "backup", "sort_order": 2},
-                        {"stage_name": "Backup Two", "artist_type": "Dancer", "role": "backup", "sort_order": 3},
+                            {"stage_name": "Main One", "artist_type": "Singer", "role": "MAIN", "sort_order": 0},
+                            {"stage_name": "Guest One", "artist_type": "Rapper", "role": "GUEST", "sort_order": 1},
+                            {"stage_name": "Backup One", "artist_type": "Dancer", "role": "BACKUP", "sort_order": 2},
+                            {"stage_name": "Backup Two", "artist_type": "Dancer", "role": "BACKUP", "sort_order": 3},
                     ]
                 },
             )
@@ -52,8 +52,8 @@ async def test_admin_can_put_and_get_show_performers(db_session, admin_user, sam
     assert get_response.status_code == status.HTTP_200_OK
     data = get_response.json()
     assert len(data) == 4
-    assert any(item["role"] == "main" and item["stage_name"] == "Main One" for item in data)
-    assert sum(1 for item in data if item["role"] == "backup") == 2
+    assert any(item["role"] == "MAIN" and item["stage_name"] == "Main One" for item in data)
+    assert sum(1 for item in data if item["role"] == "BACKUP") == 2
 
 
 @pytest.mark.asyncio
@@ -69,8 +69,8 @@ async def test_admin_show_performer_update_allows_guest_without_backup(db_sessio
                 f"/api/admin/shows/{sample_show.id}/performers",
                 json={
                     "performers": [
-                        {"stage_name": "Main One", "artist_type": "Singer", "role": "main", "sort_order": 0},
-                        {"stage_name": "Guest One", "artist_type": "Host", "role": "guest", "sort_order": 1},
+                            {"stage_name": "Main One", "artist_type": "Singer", "role": "MAIN", "sort_order": 0},
+                            {"stage_name": "Guest One", "artist_type": "Host", "role": "GUEST", "sort_order": 1},
                     ]
                 },
             )
@@ -93,7 +93,7 @@ async def test_admin_show_performer_update_allows_no_backup_when_no_guest(db_ses
                 f"/api/admin/shows/{sample_show.id}/performers",
                 json={
                     "performers": [
-                        {"stage_name": "Main One", "artist_type": "Singer", "role": "main", "sort_order": 0},
+                            {"stage_name": "Main One", "artist_type": "Singer", "role": "MAIN", "sort_order": 0},
                     ]
                 },
             )
@@ -116,7 +116,7 @@ async def test_admin_show_performer_update_rejects_when_lineup_has_no_main(db_se
                 f"/api/admin/shows/{sample_show.id}/performers",
                 json={
                     "performers": [
-                        {"stage_name": "Guest One", "artist_type": "Host", "role": "guest", "sort_order": 0},
+                            {"stage_name": "Guest One", "artist_type": "Host", "role": "GUEST", "sort_order": 0},
                     ]
                 },
             )
@@ -146,14 +146,14 @@ async def test_admin_cannot_change_existing_main_role(db_session, admin_user, sa
     async with await _override_admin_client(db_session, admin_user) as client:
         try:
             lineup_response = await client.get(f"/api/admin/shows/{sample_show.id}/performers")
-            main_row = next(item for item in lineup_response.json() if item["role"] == "main")
+            main_row = next(item for item in lineup_response.json() if item["role"] == "MAIN")
             response = await client.put(
                 f"/api/admin/shows/{sample_show.id}/performers",
                 json={
                     "performers": [
-                        {**main_row, "role": "guest"},
-                        {"stage_name": "Backup One", "artist_type": "Dancer", "role": "backup", "sort_order": 1},
-                        {"stage_name": "Backup Two", "artist_type": "Dancer", "role": "backup", "sort_order": 2},
+                        {**main_row, "role": "GUEST"},
+                        {"stage_name": "Backup One", "artist_type": "Dancer", "role": "BACKUP", "sort_order": 1},
+                        {"stage_name": "Backup Two", "artist_type": "Dancer", "role": "BACKUP", "sort_order": 2},
                     ]
                 },
             )
@@ -182,12 +182,12 @@ async def test_admin_can_remove_existing_main_if_snapshot_still_has_another_main
     async with await _override_admin_client(db_session, admin_user) as client:
         try:
             lineup_response = await client.get(f"/api/admin/shows/{sample_show.id}/performers")
-            guest_row = next(item for item in lineup_response.json() if item["role"] == "guest")
+            guest_row = next(item for item in lineup_response.json() if item["role"] == "GUEST")
             response = await client.put(
                 f"/api/admin/shows/{sample_show.id}/performers",
                 json={
                     "performers": [
-                        {"stage_name": "Replacement Main", "artist_type": "Singer", "role": "main", "sort_order": 0},
+                        {"stage_name": "Replacement Main", "artist_type": "Singer", "role": "MAIN", "sort_order": 0},
                         guest_row,
                     ]
                 },
@@ -197,7 +197,7 @@ async def test_admin_can_remove_existing_main_if_snapshot_still_has_another_main
 
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
-    assert any(item["role"] == "main" and item["stage_name"] == "Replacement Main" for item in data)
+    assert any(item["role"] == "MAIN" and item["stage_name"] == "Replacement Main" for item in data)
     assert all(item["stage_name"] != "Main One" for item in data)
 
 
@@ -218,7 +218,7 @@ async def test_admin_can_readd_same_performer_after_removing_old_show_link(db_se
     async with await _override_admin_client(db_session, admin_user) as client:
         try:
             lineup_response = await client.get(f"/api/admin/shows/{sample_show.id}/performers")
-            original_main = next(item for item in lineup_response.json() if item["role"] == "main")
+            original_main = next(item for item in lineup_response.json() if item["role"] == "MAIN")
             response = await client.put(
                 f"/api/admin/shows/{sample_show.id}/performers",
                 json={
@@ -228,7 +228,7 @@ async def test_admin_can_readd_same_performer_after_removing_old_show_link(db_se
                             "stage_name": original_main["stage_name"],
                             "artist_type": original_main["artist_type"],
                             "image_url": original_main["image_url"],
-                            "role": "main",
+                            "role": "MAIN",
                             "sort_order": 0,
                         },
                     ]
@@ -278,14 +278,14 @@ async def test_public_show_and_event_detail_hide_backup_performers(db_session, s
     assert event_response.status_code == status.HTTP_200_OK
     event_data = event_response.json()
     assert len(event_data["shows"][0]["performers"]) == 2
-    assert {item["role"] for item in event_data["shows"][0]["performers"]} == {"main", "guest"}
-    assert [item["role"] for item in event_data["shows"][0]["performers"]] == ["main", "guest"]
+    assert {item["role"] for item in event_data["shows"][0]["performers"]} == {"MAIN", "GUEST"}
+    assert [item["role"] for item in event_data["shows"][0]["performers"]] == ["MAIN", "GUEST"]
 
     assert show_response.status_code == status.HTTP_200_OK
     show_data = show_response.json()
     assert len(show_data["performers"]) == 2
-    assert {item["role"] for item in show_data["performers"]} == {"main", "guest"}
-    assert [item["role"] for item in show_data["performers"]] == ["main", "guest"]
+    assert {item["role"] for item in show_data["performers"]} == {"MAIN", "GUEST"}
+    assert [item["role"] for item in show_data["performers"]] == ["MAIN", "GUEST"]
 
 
 @pytest.mark.asyncio

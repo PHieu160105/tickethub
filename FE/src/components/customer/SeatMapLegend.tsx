@@ -9,7 +9,7 @@ interface SeatMapLegendProps {
 
 const stateItems = [
   {
-    key: 'available',
+    key: 'AVAILABLE',
     label: 'Còn trống',
     description: 'Màu theo khu vực',
     className: 'border-slate-300 bg-slate-100 text-slate-900',
@@ -23,14 +23,14 @@ const stateItems = [
     icon: Clock3,
   },
   {
-    key: 'locked',
+    key: 'LOCKED',
     label: 'Đang giữ',
     description: 'Khách khác đang giữ',
     className: 'border-amber-300/70 bg-amber-900 text-amber-100',
     icon: Lock,
   },
   {
-    key: 'sold',
+    key: 'SOLD',
     label: 'Đã bán',
     description: 'Không thể mua tiếp',
     className: 'border-slate-500 bg-slate-700 text-slate-100',

@@ -1,10 +1,10 @@
 """ORM model for application users."""
 
-from sqlalchemy import Enum, Integer, String
+from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import Gender, UserRole
+from app.models.enums import Gender, UserRole, sa_enum
 
 
 class User(TimestampMixin, Base):
@@ -29,8 +29,8 @@ class User(TimestampMixin, Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     google_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
     zalo_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
-    role: Mapped[UserRole] = mapped_column(Enum(UserRole, native_enum=False), default=UserRole.CUSTOMER, nullable=False)
-    gender: Mapped[Gender] = mapped_column(Enum(Gender, native_enum=False), default=Gender.OTHER, nullable=False)
+    role: Mapped[UserRole] = mapped_column(sa_enum(UserRole), default=UserRole.CUSTOMER, nullable=False)
+    gender: Mapped[Gender] = mapped_column(sa_enum(Gender), default=Gender.OTHER, nullable=False)
     age: Mapped[int] = mapped_column(Integer, default=18, nullable=False)
 
     events_created = relationship("Event", back_populates="created_by", cascade="all,delete")

@@ -2,6 +2,9 @@
 
 import base64
 import math
+import re
+import struct
+import xml.etree.ElementTree as ET
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -40,9 +43,9 @@ from app.schemas.venue import (
 )
 from app.services.map_processor import process_venue_svg
 
-router = APIRouter(prefix="/admin/venues", tags=["admin-venues"])
-seat_router = APIRouter(prefix="/admin/seats", tags=["admin-seats"])
-polygon_router = APIRouter(prefix="/admin/polygons", tags=["admin-polygons"])
+router = APIRouter(prefix="/venues", tags=["admin-venues"])
+seat_router = APIRouter(prefix="/seats", tags=["admin-seats"])
+polygon_router = APIRouter(prefix="/polygons", tags=["admin-polygons"])
 
 
 async def _get_venue_or_404(session: AsyncSession, venue_id: int) -> Venue:
@@ -94,6 +97,30 @@ async def _ensure_unique_layout_seat_label(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nhãn ghế đã tồn tại trong bố cục này")
 
 
+def _derive_template_seat_identity(
+    label: str,
+    row_label: str | None = None,
+    seat_number: int | None = None,
+    row_index: int | None = None,
+) -> tuple[str, int, int]:
+    normalized_label = label.strip()
+    if row_label and seat_number is not None:
+        normalized_row_label = row_label.strip()
+        return normalized_row_label, seat_number, row_index or 0
+
+    match = re.match(r"^\s*([A-Za-z]+(?:\d+)?)\s*[- ]?\s*(\d+)\s*$", normalized_label)
+    if match:
+        derived_row_label = match.group(1)
+        derived_seat_number = int(match.group(2))
+        row_match = re.search(r"(\d+)$", derived_row_label)
+        derived_row_index = row_index or (int(row_match.group(1)) if row_match else 0)
+        return derived_row_label, derived_seat_number, derived_row_index
+
+    fallback_row_label = row_label.strip() if row_label else normalized_label
+    fallback_seat_number = seat_number if seat_number is not None else 0
+    return fallback_row_label, fallback_seat_number, row_index or 0
+
+
 def _seat_response_from_model(seat: Seat, section_name: str | None = None) -> VenueSeatResponse:
     return VenueSeatResponse(
         id=seat.id,
@@ -101,6 +128,8 @@ def _seat_response_from_model(seat: Seat, section_name: str | None = None) -> Ve
         section_id=seat.section_id,
         section_name=section_name,
         label=seat.seat_label,
+        row_label=seat.row_label,
+        seat_number=seat.seat_number,
         x=float(seat.x_coord) if seat.x_coord is not None else None,
         y=float(seat.y_coord) if seat.y_coord is not None else None,
         rotation=float(seat.rotation) if seat.rotation is not None else 0.0,
@@ -122,17 +151,11 @@ def _polygon_response_from_model(polygon: Polygon, section_name: str | None = No
     )
 
 
-def _apply_admin_lock_state(seat: Seat, is_admin_locked: bool) -> None:
+def _apply_template_seat_flags(seat: Seat, is_admin_locked: bool) -> None:
     seat.is_admin_locked = is_admin_locked
-    if is_admin_locked:
-        seat.status = SeatStatus.LOCKED
-        seat.locked_by_user_id = None
-        seat.lock_expires_at = None
-        return
-
-    if seat.status == SeatStatus.LOCKED and seat.locked_by_user_id is None:
-        seat.status = SeatStatus.AVAILABLE
-        seat.lock_expires_at = None
+    seat.status = SeatStatus.AVAILABLE
+    seat.locked_by_user_id = None
+    seat.lock_expires_at = None
 
 
 def _validate_unique_ids(values: list[int], detail: str) -> None:
@@ -168,7 +191,7 @@ def _generate_bulk_layout_seats(
                         event_id=None,
                         zone_id=None,
                         row_index=row + 1,
-                        row_label="",
+                        row_label=f"{payload.label_prefix}{row + 1}",
                         seat_number=col + 1,
                         seat_label=label,
                         price=0,
@@ -198,7 +221,7 @@ def _generate_bulk_layout_seats(
                         event_id=None,
                         zone_id=None,
                         row_index=row + 1,
-                        row_label="",
+                        row_label=f"{payload.label_prefix}{row + 1}",
                         seat_number=col + 1,
                         seat_label=label,
                         price=0,
@@ -235,7 +258,7 @@ def _generate_bulk_layout_seats(
                         event_id=None,
                         zone_id=None,
                         row_index=row + 1,
-                        row_label="",
+                        row_label=f"{payload.label_prefix}{row + 1}",
                         seat_number=col + 1,
                         seat_label=label,
                         price=0,
@@ -268,9 +291,6 @@ async def create_venue(
         address=payload.address,
         city=payload.city,
         venue_type=payload.venue_type,
-        capacity=payload.capacity,
-        width=payload.width or 1000,
-        height=payload.height or 600,
         created_by_user_id=admin_user.id,
     )
     session.add(venue)
@@ -361,6 +381,79 @@ def _is_svg_markup(value: str | None) -> bool:
     return bool(value and "<svg" in value[:500].lower())
 
 
+def _parse_dimension_value(value: str | None) -> int | None:
+    if not value:
+        return None
+    match = re.match(r"^\s*([0-9]+(?:\.[0-9]+)?)", value)
+    if not match:
+        return None
+    return int(float(match.group(1)))
+
+
+def _extract_svg_dimensions(content: bytes) -> tuple[int, int] | None:
+    try:
+        root = ET.fromstring(content.decode("utf-8"))
+    except (UnicodeDecodeError, ET.ParseError):
+        return None
+
+    viewbox = re.split(r"[\s,]+", root.get("viewBox", "").strip())
+    if len(viewbox) == 4:
+        try:
+            return int(float(viewbox[2])), int(float(viewbox[3]))
+        except ValueError:
+            return None
+
+    width = _parse_dimension_value(root.get("width"))
+    height = _parse_dimension_value(root.get("height"))
+    if width and height:
+        return width, height
+    return None
+
+
+def _extract_raster_dimensions(content: bytes, content_type: str) -> tuple[int, int] | None:
+    if content_type == "image/png" and content.startswith(b"\x89PNG\r\n\x1a\n") and len(content) >= 24:
+        return struct.unpack(">II", content[16:24])
+
+    if content_type == "image/webp" and content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        chunk = content[12:16]
+        if chunk == b"VP8X" and len(content) >= 30:
+            width = 1 + int.from_bytes(content[24:27], "little")
+            height = 1 + int.from_bytes(content[27:30], "little")
+            return width, height
+        if chunk == b"VP8 " and len(content) >= 30:
+            width = struct.unpack("<H", content[26:28])[0] & 0x3FFF
+            height = struct.unpack("<H", content[28:30])[0] & 0x3FFF
+            return width, height
+        if chunk == b"VP8L" and len(content) >= 25:
+            bits = int.from_bytes(content[21:25], "little")
+            width = (bits & 0x3FFF) + 1
+            height = ((bits >> 14) & 0x3FFF) + 1
+            return width, height
+
+    if content_type == "image/jpeg" and content.startswith(b"\xff\xd8"):
+        index = 2
+        while index + 9 < len(content):
+            if content[index] != 0xFF:
+                index += 1
+                continue
+            marker = content[index + 1]
+            index += 2
+            if marker in {0xD8, 0xD9}:
+                continue
+            if index + 2 > len(content):
+                break
+            segment_length = struct.unpack(">H", content[index:index + 2])[0]
+            if marker in {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}:
+                if index + 7 <= len(content):
+                    height = struct.unpack(">H", content[index + 3:index + 5])[0]
+                    width = struct.unpack(">H", content[index + 5:index + 7])[0]
+                    return width, height
+                break
+            index += segment_length
+
+    return None
+
+
 async def _store_venue_background(venue: Venue, file: UploadFile) -> tuple[str, str]:
     if not file.content_type or file.content_type not in BACKGROUND_CONTENT_TYPES:
         raise HTTPException(
@@ -375,10 +468,15 @@ async def _store_venue_background(venue: Venue, file: UploadFile) -> tuple[str, 
     if file.content_type in SVG_CONTENT_TYPES:
         venue.svg_source = content.decode("utf-8")
         background_type = "svg"
+        dimensions = _extract_svg_dimensions(content)
     else:
         encoded = base64.b64encode(content).decode("ascii")
         venue.svg_source = f"data:{file.content_type};base64,{encoded}"
         background_type = "raster"
+        dimensions = _extract_raster_dimensions(content, file.content_type)
+
+    if dimensions:
+        venue.width, venue.height = dimensions
 
     # Kết quả SVG đã xử lý gắn với file nguồn hiện tại nên phải xóa khi upload nền mới.
     venue.svg_processed = None
@@ -417,6 +515,8 @@ async def upload_venue_background(
         "venue_id": venue_id,
         "background_type": background_type,
         "content_type": content_type,
+        "width": venue.width,
+        "height": venue.height,
     }
 
 
@@ -508,7 +608,7 @@ async def list_layouts(
 
 # ── Chi tiết/cập nhật/xóa bố cục dùng prefix /admin/layouts ──
 
-layout_router = APIRouter(prefix="/admin/layouts", tags=["admin-layouts"])
+layout_router = APIRouter(prefix="/layouts", tags=["admin-layouts"])
 
 
 @layout_router.get("/{layout_id}", response_model=LayoutDetailResponse)
@@ -608,7 +708,7 @@ async def create_section(
     return SectionDetailResponse.model_validate(section)
 
 
-section_router = APIRouter(prefix="/admin/sections", tags=["admin-sections"])
+section_router = APIRouter(prefix="/sections", tags=["admin-sections"])
 
 
 @section_router.patch("/{section_id}", response_model=SectionDetailResponse)
@@ -698,13 +798,18 @@ async def create_venue_seat_single(
     layout = await _resolve_layout_for_venue(session, venue_id, payload.layout_id)
     section = await _resolve_section_for_layout(session, layout.id, payload.section_id)
     await _ensure_unique_layout_seat_label(session, layout.id, payload.label)
+    row_label, seat_number, row_index = _derive_template_seat_identity(
+        payload.label,
+        payload.row_label,
+        payload.seat_number,
+    )
 
     seat = Seat(
         event_id=None,
         zone_id=None,
-        row_index=0,
-        row_label="",
-        seat_number=0,
+        row_index=row_index,
+        row_label=row_label,
+        seat_number=seat_number,
         seat_label=payload.label,
         price=0,
         x_coord=round(payload.x, 2),
@@ -712,9 +817,10 @@ async def create_venue_seat_single(
         rotation=round(payload.rotation, 2),
         section_id=section.id if section else None,
         venue_layout_id=layout.id,
-        status=SeatStatus.LOCKED if payload.is_admin_locked else SeatStatus.AVAILABLE,
+        status=SeatStatus.AVAILABLE,
         is_admin_locked=payload.is_admin_locked,
     )
+    _apply_template_seat_flags(seat, payload.is_admin_locked)
     session.add(seat)
     await session.commit()
     await session.refresh(seat)
@@ -840,23 +946,37 @@ async def sync_venue_seats(
     try:
         for item in payload.update:
             seat = seat_map[item.id]
+            row_label, seat_number, row_index = _derive_template_seat_identity(
+                item.label,
+                item.row_label,
+                item.seat_number,
+                seat.row_index,
+            )
             seat.seat_label = item.label
+            seat.row_label = row_label
+            seat.seat_number = seat_number
+            seat.row_index = row_index
             seat.x_coord = round(item.x, 2)
             seat.y_coord = round(item.y, 2)
             seat.rotation = round(item.rotation, 2)
             seat.section_id = item.section_id
-            _apply_admin_lock_state(seat, item.is_admin_locked)
+            _apply_template_seat_flags(seat, item.is_admin_locked)
 
         for item in payload.create:
+            row_label, seat_number, row_index = _derive_template_seat_identity(
+                item.label,
+                item.row_label,
+                item.seat_number,
+            )
             seat = Seat(
                 event_id=None,
                 zone_id=None,
-                row_index=0,
-                row_label="",
-                seat_number=0,
+                row_index=row_index,
+                row_label=row_label,
+                seat_number=seat_number,
                 seat_label=item.label,
                 price=0,
-                status=SeatStatus.LOCKED if item.is_admin_locked else SeatStatus.AVAILABLE,
+                status=SeatStatus.AVAILABLE,
                 x_coord=round(item.x, 2),
                 y_coord=round(item.y, 2),
                 rotation=round(item.rotation, 2),
@@ -864,6 +984,7 @@ async def sync_venue_seats(
                 venue_layout_id=layout.id,
                 is_admin_locked=item.is_admin_locked,
             )
+            _apply_template_seat_flags(seat, item.is_admin_locked)
             session.add(seat)
             created_pairs.append((item.client_id, seat))
 
@@ -877,6 +998,8 @@ async def sync_venue_seats(
                     client_id=client_id,
                     id=seat.id,
                     label=seat.seat_label,
+                    row_label=seat.row_label,
+                    seat_number=seat.seat_number,
                     x=float(seat.x_coord) if seat.x_coord is not None else None,
                     y=float(seat.y_coord) if seat.y_coord is not None else None,
                 )
@@ -1014,6 +1137,16 @@ async def update_venue_seat(
     if payload.label is not None:
         await _ensure_unique_layout_seat_label(session, seat.venue_layout_id, payload.label, exclude_seat_id=seat.id)
         seat.seat_label = payload.label
+    if payload.label is not None or payload.row_label is not None or payload.seat_number is not None:
+        row_label, seat_number, row_index = _derive_template_seat_identity(
+            seat.seat_label,
+            payload.row_label if payload.row_label is not None else seat.row_label,
+            payload.seat_number if payload.seat_number is not None else seat.seat_number,
+            seat.row_index,
+        )
+        seat.row_label = row_label
+        seat.seat_number = seat_number
+        seat.row_index = row_index
     if payload.x is not None:
         seat.x_coord = round(payload.x, 2)
     if payload.y is not None:
@@ -1021,7 +1154,7 @@ async def update_venue_seat(
     if payload.rotation is not None:
         seat.rotation = round(payload.rotation, 2)
     if payload.is_admin_locked is not None:
-        _apply_admin_lock_state(seat, payload.is_admin_locked)
+        _apply_template_seat_flags(seat, payload.is_admin_locked)
 
     await session.commit()
     await session.refresh(seat)

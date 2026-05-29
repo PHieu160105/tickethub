@@ -8,6 +8,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.main import app
+from app.models.enums import EventCategory, EventStatus, SeatStatus
 from app.models.event import Event, Show
 from app.models.seat import Seat
 from app.models.venue import Polygon, Section, Venue, VenueLayout
@@ -21,7 +22,7 @@ async def _create_event_and_show(
     *,
     event_title: str,
     event_description: str,
-    category: str,
+    category: EventCategory | str,
     venue_name: str,
     show_date: datetime,
     venue_id: int | None = None,
@@ -42,7 +43,7 @@ async def _create_event_and_show(
             start_date=normalized_show_date,
             end_date=normalized_show_date,
             cover_image_url="",
-            status="live",
+            status=EventStatus.LIVE,
         ),
     )
     show = await create_show_with_inventory(
@@ -52,13 +53,12 @@ async def _create_event_and_show(
         ShowCreateRequest(
             title=f"{event_title} Show",
             description=event_description,
-            venue=venue_name,
+            location=venue_name,
             show_date=normalized_show_date,
             start_time=show_date.time().replace(hour=18, minute=0, second=0, microsecond=0),
             end_time=show_date.time().replace(hour=20, minute=0, second=0, microsecond=0),
-            status="live",
+            status=EventStatus.LIVE,
             hold_minutes=10,
-            queue_enabled=queue_enabled,
             venue_id=venue_id,
             venue_layout_id=venue_layout_id,
             zones=zones or [],
@@ -98,9 +98,6 @@ async def test_create_venue(db_session, admin_user):
                     "address": "123 Main St",
                     "city": "New York",
                     "venue_type": "arena",
-                    "capacity": 5000,
-                    "width": 1200,
-                    "height": 800,
                 },
             )
 
@@ -109,7 +106,6 @@ async def test_create_venue(db_session, admin_user):
         assert data["name"] == "Test Arena"
         assert data["city"] == "New York"
         assert data["venue_type"] == "arena"
-        assert data["capacity"] == 5000
     finally:
         app.dependency_overrides.clear()
 
@@ -240,6 +236,8 @@ async def test_upload_raster_background_and_block_svg_parse(db_session, admin_us
 
         assert upload_response.status_code == status.HTTP_200_OK
         assert upload_response.json()["background_type"] == "raster"
+        assert upload_response.json()["width"] == 1
+        assert upload_response.json()["height"] == 1
         assert process_response.status_code == status.HTTP_400_BAD_REQUEST
         assert "Chỉ có thể phân tích SVG" in process_response.json()["detail"]
         assert detail_response.status_code == status.HTTP_200_OK
@@ -247,6 +245,8 @@ async def test_upload_raster_background_and_block_svg_parse(db_session, admin_us
         assert detail["background_type"] == "raster"
         assert detail["can_parse_background"] is False
         assert detail["background_source"].startswith("data:image/png;base64,")
+        assert detail["width"] == 1
+        assert detail["height"] == 1
     finally:
         app.dependency_overrides.clear()
 
@@ -291,11 +291,15 @@ async def test_upload_svg_background_clears_processed_state(db_session, admin_us
 
         assert upload_response.status_code == status.HTTP_200_OK
         assert upload_response.json()["background_type"] == "svg"
+        assert upload_response.json()["width"] == 200
+        assert upload_response.json()["height"] == 200
         detail = detail_response.json()
         assert detail["background_type"] == "svg"
         assert detail["can_parse_background"] is True
         assert detail["background_processed"] is None
         assert "<rect" in detail["background_source"]
+        assert detail["width"] == 200
+        assert detail["height"] == 200
     finally:
         app.dependency_overrides.clear()
 
@@ -365,12 +369,11 @@ async def test_event_seatmap_includes_background_and_polygons(db_session, admin_
         admin_user.id,
         event_title="Seatmap Arena Live",
         event_description="Seat map payload test event",
-        category="concert",
+        category=EventCategory.MUSIC,
         venue_name=venue.name,
         show_date=datetime.now(UTC) + timedelta(days=2),
         venue_id=venue.id,
         venue_layout_id=layout.id,
-        queue_enabled=True,
     )
 
     async def override_get_db():
@@ -388,7 +391,6 @@ async def test_event_seatmap_includes_background_and_polygons(db_session, admin_
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["event_slug"] == event.slug
-        assert data["queue_enabled"] is True
         assert data["background"]["type"] == "svg"
         assert data["background"]["width"] == 1000
         assert data["background"]["height"] == 600
@@ -608,7 +610,7 @@ async def test_create_event_from_venue_layout_clones_template_seats(db_session, 
         admin_user.id,
         event_title="Venue Seatmap Event",
         event_description="Event that uses a venue layout template",
-        category="Concert",
+        category=EventCategory.MUSIC,
         venue_name=venue.name,
         show_date=datetime.now(UTC) + timedelta(days=1),
         venue_id=venue.id,
@@ -631,9 +633,9 @@ async def test_create_event_from_venue_layout_clones_template_seats(db_session, 
     assert all(seat.venue_layout_id == layout.id for seat in event_seats)
     assert all(float(seat.price) == 750.0 for seat in event_seats)
     assert event_seats[0].is_admin_locked is True
-    assert event_seats[0].status.value == "locked"
+    assert event_seats[0].status == SeatStatus.LOCKED
     assert event_seats[1].is_admin_locked is False
-    assert event_seats[1].status.value == "available"
+    assert event_seats[1].status == SeatStatus.AVAILABLE
 
 
 @pytest.mark.asyncio
@@ -654,7 +656,7 @@ async def test_create_event_with_venue_id_only_uses_venue(db_session, admin_user
         admin_user.id,
         event_title="Venue Only Event",
         event_description="Event created with venue_id but without a venue layout",
-        category="Concert",
+        category=EventCategory.MUSIC,
         venue_name=venue.name,
         show_date=datetime.now(UTC) + timedelta(days=1),
         venue_id=venue.id,
@@ -683,11 +685,11 @@ async def test_create_event_with_invalid_venue_id_fails(db_session, admin_user):
         EventCreateRequest(
             title="Invalid Venue Event",
             description="Event with a non-existing venue_id should fail",
-            category="Concert",
+            category=EventCategory.MUSIC,
             start_date=(datetime.now(UTC) + timedelta(days=1)).date(),
             end_date=(datetime.now(UTC) + timedelta(days=1)).date(),
             cover_image_url="",
-            status="live",
+            status=EventStatus.LIVE,
         ),
     )
 
@@ -699,13 +701,12 @@ async def test_create_event_with_invalid_venue_id_fails(db_session, admin_user):
             ShowCreateRequest(
                 title="Invalid Venue Event Show",
                 description="Show with a non-existing venue_id should fail",
-                venue="Ghost Venue",
+                location="Ghost Venue",
                 show_date=(datetime.now(UTC) + timedelta(days=1)).date(),
                 start_time=datetime.now(UTC).time().replace(hour=18, minute=0, second=0, microsecond=0),
                 end_time=datetime.now(UTC).time().replace(hour=20, minute=0, second=0, microsecond=0),
-                status="live",
+                status=EventStatus.LIVE,
                 hold_minutes=10,
-                queue_enabled=False,
                 venue_id=999999,
                 zones=[SeatZoneCreate(code="GEN", name="General", row_count=1, seats_per_row=1, price=10, color="#000000")],
             ),

@@ -6,12 +6,12 @@ import { formatCurrencyVnd } from '@/lib/utils'
 import type { SeatMapPolygon, SeatMapResponse, SeatMapSeat } from '@/types'
 
 function isSeatBlocked(seat: SeatMapSeat) {
-  return seat.status !== 'available'
+  return seat.status !== 'AVAILABLE'
 }
 
 function seatClassName(seat: SeatMapSeat, isSelected: boolean) {
-  if (seat.status === 'sold') return 'bg-slate-700 border-slate-500'
-  if (seat.status === 'locked' && !seat.is_locked_by_me) return 'bg-amber-900/70 border-amber-500'
+  if (seat.status === 'SOLD') return 'bg-slate-700 border-slate-500'
+  if (seat.status === 'LOCKED' && !seat.is_locked_by_me) return 'bg-amber-900/70 border-amber-500'
   if (seat.is_locked_by_me) return 'bg-emerald-700 border-emerald-400'
   if (isSelected) return 'bg-slate-800 border-white/20'
   return 'bg-slate-800 border-white/20'
@@ -22,7 +22,7 @@ function seatInlineStyle(seat: SeatMapSeat, zoneColor?: string, isSelected = fal
     boxShadow: isSelected ? '0 0 0 3px rgba(59,130,246,0.35)' : undefined,
   }
 
-  if (seat.status === 'sold') {
+  if (seat.status === 'SOLD') {
     return {
       ...baseStyle,
       backgroundColor: '#334155',
@@ -30,7 +30,7 @@ function seatInlineStyle(seat: SeatMapSeat, zoneColor?: string, isSelected = fal
     }
   }
 
-  if (seat.status === 'locked' && !seat.is_locked_by_me) {
+  if (seat.status === 'LOCKED' && !seat.is_locked_by_me) {
     return {
       ...baseStyle,
       backgroundColor: '#78350f',
@@ -60,8 +60,8 @@ function polygonPoints(points: SeatMapPolygon['points']) {
 function computeCentroid(points: SeatMapPolygon['points']) {
   if (points.length === 0) return { x: 50, y: 50 }
   return {
-    x: points.reduce((s, p) => s + p.x, 0) / points.length,
-    y: points.reduce((s, p) => s + p.y, 0) / points.length,
+    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
   }
 }
 
@@ -140,12 +140,7 @@ export function CustomerSeatMap({
           Kéo để di chuyển sơ đồ
         </div>
 
-        <div
-          className="relative w-full"
-          style={{
-            aspectRatio,
-          }}
-        >
+        <div className="relative w-full" style={{ aspectRatio }}>
           <div
             className="absolute inset-0 origin-top-left"
             style={{
@@ -156,25 +151,24 @@ export function CustomerSeatMap({
             <div
               className="absolute inset-0"
               style={{
-                backgroundImage: 'linear-gradient(to right, rgba(148,163,184,0.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(148,163,184,0.18) 1px, transparent 1px)',
+                backgroundImage:
+                  'linear-gradient(to right, rgba(148,163,184,0.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(148,163,184,0.18) 1px, transparent 1px)',
                 backgroundSize: '10% 10%',
               }}
             />
             <div className="pointer-events-none absolute inset-0 border-2 border-dashed border-slate-400/70" />
 
-            {backgroundSource && (
-              isInlineSvg ? (
+            {backgroundSource &&
+              (isInlineSvg ? (
                 <div className="absolute inset-0 opacity-70 [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: backgroundSource }} />
               ) : (
                 <img src={backgroundSource} alt={`${seatMap.venue_name} layout`} className="absolute inset-0 h-full w-full object-contain opacity-80 pointer-events-none" />
-              )
-            )}
+              ))}
 
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full pointer-events-none">
               {seatMap.polygons.map((polygon) => {
                 const zone = seatMap.zones.find((item) => item.id === polygon.zone_id)
-                const section = seatMap.sections.find((item) => item.id === polygon.section_id)
-                const stroke = zone?.color ?? section?.color ?? '#94a3b8'
+                const stroke = zone?.color ?? '#94a3b8'
                 return (
                   <polygon
                     key={polygon.id}
@@ -190,25 +184,29 @@ export function CustomerSeatMap({
 
             {seatMap.polygons.map((polygon) => {
               const zone = seatMap.zones.find((item) => item.id === polygon.zone_id)
-              const section = seatMap.sections.find((item) => item.id === polygon.section_id)
               const centroid = computeCentroid(polygon.points)
-              if (!polygon.zone_name && !polygon.section_name && !polygon.label) return null
+              if (!polygon.zone_name && !polygon.label) return null
               return (
                 <div
                   key={`clabel-${polygon.id}`}
                   className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded px-2 py-0.5 text-[9px] font-bold whitespace-nowrap"
-                  style={{ left: `${centroid.x}%`, top: `${centroid.y}%`, backgroundColor: zone?.color ? `${zone.color}cc` : section?.color ? `${section.color}cc` : 'rgba(0,0,0,0.6)', color: '#fff' }}
+                  style={{
+                    left: `${centroid.x}%`,
+                    top: `${centroid.y}%`,
+                    backgroundColor: zone?.color ? `${zone.color}cc` : 'rgba(0,0,0,0.6)',
+                    color: '#fff',
+                  }}
                 >
-                  {polygon.zone_name ?? polygon.section_name ?? polygon.label}
+                  {polygon.zone_name ?? polygon.label}
                 </div>
               )
             })}
 
             {visibleSeats.map((seat) => {
               const isSelected = selectedSeatIds.includes(seat.id)
-              const zoneColor = seatColorMap?.get(seat.id) ?? seatMap.zones.find((item) => item.id === seat.zone_id)?.color ?? seatMap.sections.find((item) => item.id === seat.section_id)?.color
+              const zoneColor = seatColorMap?.get(seat.id) ?? seatMap.zones.find((item) => item.id === seat.zone_id)?.color
               const priceLabel = formatCurrencyVnd(seat.price)
-              const tooltipContent = `${seat.label} · ${seat.zone_name ?? seat.section_name ?? 'Khu vực chung'} · ${priceLabel}`
+              const tooltipContent = `${seat.label} · ${seat.zone_name ?? 'Khu vực chung'} · ${priceLabel}`
               return (
                 <button
                   key={seat.id}
@@ -220,7 +218,7 @@ export function CustomerSeatMap({
                   }}
                   onMouseDown={(event) => event.stopPropagation()}
                   onMouseEnter={(event) => setTooltip({ x: event.clientX, y: event.clientY, content: tooltipContent })}
-                  onMouseMove={(event) => setTooltip((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current)}
+                  onMouseMove={(event) => setTooltip((current) => (current ? { ...current, x: event.clientX, y: event.clientY } : current))}
                   onMouseLeave={() => setTooltip(null)}
                   disabled={isSeatBlocked(seat)}
                   className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border transition ${seatClassName(seat, isSelected)}`}
@@ -235,7 +233,6 @@ export function CustomerSeatMap({
                 />
               )
             })}
-
           </div>
         </div>
 
@@ -249,7 +246,10 @@ export function CustomerSeatMap({
         )}
 
         <div className="absolute bottom-4 left-4 right-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white/90 px-4 py-3 text-xs text-slate-700 shadow-lg">
-          <span>{visibleSeats.length} ghế có tọa độ{hiddenSeatCount > 0 ? ` · ${hiddenSeatCount} ghế chưa có tọa độ` : ''}</span>
+          <span>
+            {visibleSeats.length} ghế có tọa độ
+            {hiddenSeatCount > 0 ? ` · ${hiddenSeatCount} ghế chưa có tọa độ` : ''}
+          </span>
           <span>Độ phóng {viewport.scale.toFixed(2)}x</span>
           {footer ? <span>{footer}</span> : null}
         </div>

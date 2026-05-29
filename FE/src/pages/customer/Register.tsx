@@ -42,9 +42,9 @@ export default function Register() {
     return Math.min(100, Math.max(10, age))
   }
 
-  const normalizeGender = (gender: string): 'male' | 'female' | 'other' => {
-    if (gender === 'male' || gender === 'female' || gender === 'other') return gender
-    return 'other'
+  const normalizeGender = (gender: string): 'MALE' | 'FEMALE' | 'OTHER' => {
+    if (gender === 'MALE' || gender === 'FEMALE' || gender === 'OTHER') return gender
+    return 'OTHER'
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -208,9 +208,9 @@ export default function Register() {
                         required
                       >
                         <option value="">Chọn giới tính</option>
-                        <option value="male">Nam</option>
-                        <option value="female">Nữ</option>
-                        <option value="other">Khác</option>
+                        <option value="MALE">Nam</option>
+                        <option value="FEMALE">Nữ</option>
+                        <option value="OTHER">Khác</option>
                         <option value="prefer-not">Không muốn trả lời</option>
                       </select>
                       <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -344,7 +344,7 @@ export default function Register() {
                     setErrorMessage('')
                     try {
                       const user = await loginWithGoogle()
-                      navigate(user.role === 'admin' ? '/admin' : '/', { replace: true })
+                      navigate(user.role === 'ADMIN' ? '/admin' : '/', { replace: true })
                     } catch (error) {
                       setErrorMessage(error instanceof Error ? error.message : 'Đăng nhập Google thất bại. Vui lòng thử lại.')
                     } finally {

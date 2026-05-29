@@ -10,9 +10,9 @@ function inferBirthYear(age: number) {
   return new Date().getFullYear() - age
 }
 
-function formatGenderLabel(gender: 'male' | 'female' | 'other') {
-  if (gender === 'male') return 'Nam'
-  if (gender === 'female') return 'Nữ'
+function formatGenderLabel(gender: 'MALE' | 'FEMALE' | 'OTHER') {
+  if (gender === 'MALE') return 'Nam'
+  if (gender === 'FEMALE') return 'Nữ'
   return 'Khác'
 }
 
@@ -21,7 +21,7 @@ export default function CustomerProfile() {
   const { user, updateProfile, logout } = useAuth()
 
   const [fullName, setFullName] = useState(user?.full_name ?? '')
-  const [gender, setGender] = useState<'male' | 'female' | 'other'>(user?.gender ?? 'other')
+  const [gender, setGender] = useState<'MALE' | 'FEMALE' | 'OTHER'>(user?.gender ?? 'OTHER')
   const [age, setAge] = useState<number>(user?.age ?? 18)
   const [isSaving, setIsSaving] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -138,12 +138,12 @@ export default function CustomerProfile() {
                   <VenusAndMars className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                   <select
                     value={gender}
-                    onChange={(event) => setGender(event.target.value as 'male' | 'female' | 'other')}
+                    onChange={(event) => setGender(event.target.value as 'MALE' | 'FEMALE' | 'OTHER')}
                     className="admin-bg-listbox w-full main-bg-page border border-gray-500 rounded-xl py-3 pl-12 pr-4 customer-text-body outline-none focus:border-[var(--customer-bg-opt)] appearance-none"
                   >
-                    <option value="male">Nam</option>
-                    <option value="female">Nữ</option>
-                    <option value="other">Khác</option>
+                    <option value="MALE">Nam</option>
+                    <option value="FEMALE">Nữ</option>
+                    <option value="OTHER">Khác</option>
                   </select>
                   <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3">
                     <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">

@@ -21,7 +21,7 @@ from app.schemas.booking import (
 from app.schemas.common import APIMessage
 from app.services.booking_service import checkout_locked_seats, fetch_my_tickets, lock_seats, release_seats
 from app.services.admission_service import ensure_admission_for_show, read_queue_token
-from app.services.event_service import get_show_by_id
+from app.services.event_query_service import get_show_by_id
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 

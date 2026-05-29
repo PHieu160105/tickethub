@@ -71,9 +71,9 @@ function zoneFormFromZone(zone: SeatZone) {
 }
 
 function seatColor(seat: Pick<SeatMapSeat, 'status' | 'is_locked_by_me' | 'is_admin_locked'> | Pick<Seat, 'status' | 'is_locked_by_me' | 'is_admin_locked'>) {
-    if (seat.status === 'sold') return 'bg-slate-700 border-slate-500 text-slate-500'
+    if (seat.status === 'SOLD') return 'bg-slate-700 border-slate-500 text-slate-500'
     if (seat.is_admin_locked) return 'bg-rose-700 border-rose-400 customer-text-body'
-    if (seat.status === 'locked' && !seat.is_locked_by_me) return 'bg-amber-900/70 border-amber-500 text-amber-200'
+    if (seat.status === 'LOCKED' && !seat.is_locked_by_me) return 'bg-amber-900/70 border-amber-500 text-amber-200'
     if (seat.is_locked_by_me) return 'bg-emerald-700 border-emerald-400 customer-text-body'
     return 'bg-slate-800 border-white/20 customer-text-body'
 }
@@ -151,7 +151,7 @@ export default function AdminSeatPlanner() {
     const zoneSectionMap = useMemo(() => {
         const next = new Map<number, number>()
         seatMap?.seats.forEach((seat) => {
-            if (seat.zone_id !== null && seat.section_id !== null && !next.has(seat.zone_id)) {
+            if (seat.zone_id !== null && seat.section_id != null && !next.has(seat.zone_id)) {
                 next.set(seat.zone_id, seat.section_id)
             }
         })
@@ -406,16 +406,7 @@ export default function AdminSeatPlanner() {
                 eventApi.seats(showId),
                 seatmapApi.get(showId),
             ])
-            if (detail.venue_id) {
-                try {
-                    const venueDetail = await adminApi.getVenue(detail.venue_id)
-                    setPlannerBackground(venueDetail.background_source ?? venueDetail.svg_source ?? null)
-                } catch {
-                    setPlannerBackground(null)
-                }
-            } else {
-                setPlannerBackground(null)
-            }
+            setPlannerBackground(seatMapResponse.background?.source ?? null)
             setShowDetail(detail)
             setMatrix(matrixResponse)
             setSeatMap(seatMapResponse)
@@ -595,7 +586,7 @@ export default function AdminSeatPlanner() {
         const zone = zones.find((item) => item.id === Number(singleForm.zone_id))
         if (!zone) return
         const nextSectionId = zoneSectionMap.get(zone.id) ?? null
-        const nextSectionName = nextSectionId ? seatMap?.sections.find((section) => section.id === nextSectionId)?.name ?? null : null
+        const nextSectionName = nextSectionId ? (seatMap?.sections ?? []).find((section) => section.id === nextSectionId)?.name ?? null : null
         setSeatMap((previous) =>
             previous
                 ? {
@@ -614,7 +605,7 @@ export default function AdminSeatPlanner() {
                             section_id: nextSectionId,
                             section_name: nextSectionName,
                             price: singleForm.price ? Number(singleForm.price) : zone.price,
-                            status: singleForm.is_admin_locked ? 'locked' : 'available',
+                            status: singleForm.is_admin_locked ? 'LOCKED' : 'AVAILABLE',
                             lock_expires_at: null,
                             is_locked_by_me: false,
                             is_admin_locked: singleForm.is_admin_locked,
@@ -637,7 +628,7 @@ export default function AdminSeatPlanner() {
                             seat_number: 0,
                             seat_label: created.seat_label,
                             price: singleForm.price ? Number(singleForm.price) : zone.price,
-                            status: singleForm.is_admin_locked ? 'locked' : 'available',
+                            status: singleForm.is_admin_locked ? 'LOCKED' : 'AVAILABLE',
                             lock_expires_at: null,
                             is_locked_by_me: false,
                             is_admin_locked: singleForm.is_admin_locked,
@@ -652,7 +643,7 @@ export default function AdminSeatPlanner() {
         const zone = zones.find((item) => item.id === Number(bulkForm.zone_id))
         if (!zone || createdSeats.length === 0) return
         const nextSectionId = zoneSectionMap.get(zone.id) ?? null
-        const nextSectionName = nextSectionId ? seatMap?.sections.find((section) => section.id === nextSectionId)?.name ?? null : null
+        const nextSectionName = nextSectionId ? (seatMap?.sections ?? []).find((section) => section.id === nextSectionId)?.name ?? null : null
         setSeatMap((previous) =>
             previous
                 ? {
@@ -671,7 +662,7 @@ export default function AdminSeatPlanner() {
                             section_id: nextSectionId,
                             section_name: nextSectionName,
                             price: zone.price,
-                            status: 'available' as const,
+                            status: 'AVAILABLE' as const,
                             lock_expires_at: null,
                             is_locked_by_me: false,
                             is_admin_locked: false,
@@ -694,7 +685,7 @@ export default function AdminSeatPlanner() {
                             seat_number: 0,
                             seat_label: seat.seat_label,
                             price: zone.price,
-                            status: 'available' as const,
+                            status: 'AVAILABLE' as const,
                             lock_expires_at: null,
                             is_locked_by_me: false,
                             is_admin_locked: false,
@@ -710,9 +701,9 @@ export default function AdminSeatPlanner() {
         if (editingSeatId) {
             const zone = zones.find((item) => item.id === Number(singleForm.zone_id))
             if (!zone) return
-            const nextStatus = selectedSeat?.status === 'sold' ? 'sold' : (singleForm.is_admin_locked ? 'locked' : 'available')
+            const nextStatus = selectedSeat?.status === 'SOLD' ? 'SOLD' : (singleForm.is_admin_locked ? 'LOCKED' : 'AVAILABLE')
             const nextSectionId = zoneSectionMap.get(zone.id) ?? null
-            const nextSectionName = nextSectionId ? seatMap?.sections.find((section) => section.id === nextSectionId)?.name ?? null : null
+            const nextSectionName = nextSectionId ? (seatMap?.sections ?? []).find((section) => section.id === nextSectionId)?.name ?? null : null
             pushHistorySnapshot()
             setSeatMap((previous) =>
                 previous
@@ -1044,7 +1035,7 @@ export default function AdminSeatPlanner() {
         const nextZoneId = singleForm.zone_id ? Number(singleForm.zone_id) : null
         const zone = nextZoneId ? zoneMap.get(nextZoneId) : null
         const nextSectionId = nextZoneId ? zoneSectionMap.get(nextZoneId) ?? null : null
-        const nextSectionName = nextSectionId ? seatMap?.sections.find((section) => section.id === nextSectionId)?.name ?? null : null
+        const nextSectionName = nextSectionId ? (seatMap?.sections ?? []).find((section) => section.id === nextSectionId)?.name ?? null : null
         pushHistorySnapshot()
         setSeatMap((previous) =>
             previous
@@ -1061,7 +1052,7 @@ export default function AdminSeatPlanner() {
                                 rotation: Number.isNaN(nextRotation) ? seat.rotation : nextRotation,
                                 price: zone ? zone.price : seat.price,
                                 is_admin_locked: singleForm.is_admin_locked,
-                                status: seat.status === 'sold' ? 'sold' : (singleForm.is_admin_locked ? 'locked' : 'available'),
+                                status: seat.status === 'SOLD' ? 'SOLD' : (singleForm.is_admin_locked ? 'LOCKED' : 'AVAILABLE'),
                                 lock_expires_at: singleForm.is_admin_locked ? null : seat.lock_expires_at,
                             }
                             : seat,
@@ -1080,7 +1071,7 @@ export default function AdminSeatPlanner() {
                                 zone_id: zone?.id ?? seat.zone_id,
                                 price: zone ? zone.price : seat.price,
                                 is_admin_locked: singleForm.is_admin_locked,
-                                status: seat.status === 'sold' ? 'sold' : (singleForm.is_admin_locked ? 'locked' : 'available'),
+                                status: seat.status === 'SOLD' ? 'SOLD' : (singleForm.is_admin_locked ? 'LOCKED' : 'AVAILABLE'),
                                 lock_expires_at: singleForm.is_admin_locked ? null : seat.lock_expires_at,
                             }
                             : seat,
@@ -1103,7 +1094,7 @@ export default function AdminSeatPlanner() {
         const nextZoneId = polygonForm.zone_id ? Number(polygonForm.zone_id) : null
         const nextZoneName = zones.find((zone) => zone.id === nextZoneId)?.name ?? null
         const nextSectionId = nextZoneId ? zoneSectionMap.get(nextZoneId) ?? null : null
-        const nextSectionName = nextSectionId ? seatMap.sections.find((section) => section.id === nextSectionId)?.name ?? null : null
+        const nextSectionName = nextSectionId ? (seatMap.sections ?? []).find((section) => section.id === nextSectionId)?.name ?? null : null
         const nextPolygon: SeatMapPolygon = {
             id: editingPolygonId ?? nextTempPolygonId(),
             zone_id: nextZoneId,
@@ -1205,7 +1196,7 @@ export default function AdminSeatPlanner() {
                             y: seat.y ?? 0,
                             rotation: seat.rotation,
                             zone_id: matrixSeat?.zone_id ?? null,
-                            section_id: seat.section_id,
+                            section_id: seat.section_id ?? null,
                             price: matrixSeat?.price ?? seat.price,
                             is_admin_locked: seat.is_admin_locked,
                         }
@@ -1366,7 +1357,7 @@ export default function AdminSeatPlanner() {
                     <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Trình đặt ghế sự kiện</p>
                     <h1 className="text-3xl font-black customer-text-body">{showDetail.title}</h1>
                     <p className="mt-1 text-slate-400">
-                        {showDetail.event_title} · {showDetail.venue}
+                        {showDetail.event_title} · {showDetail.location}
                     </p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => {
@@ -1486,7 +1477,7 @@ export default function AdminSeatPlanner() {
                                 )}
                             {seatMap.polygons.map((polygon) => {
                                 const polyZone = zones.find((zone) => zone.id === polygon.zone_id)
-                                const polySection = seatMap.sections.find((section) => section.id === polygon.section_id)
+                                const polySection = (seatMap.sections ?? []).find((section) => section.id === polygon.section_id)
                                 const polyColor = polyZone?.color ?? polySection?.color ?? '#fbbf24'
                                 const polyPts = editingPolygonId === polygon.id ? draftPolygonPoints : polygon.points
                                 const centroid = computeCentroid(polyPts)

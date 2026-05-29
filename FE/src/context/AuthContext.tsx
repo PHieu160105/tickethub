@@ -23,9 +23,9 @@ interface AuthContextType {
     email: string,
     password: string,
     fullName: string,
-    options?: { gender?: 'male' | 'female' | 'other'; age?: number },
+    options?: { gender?: 'MALE' | 'FEMALE' | 'OTHER'; age?: number },
   ) => Promise<User>
-  updateProfile: (payload: { full_name: string; gender: 'male' | 'female' | 'other'; age: number }) => Promise<User>
+  updateProfile: (payload: { full_name: string; gender: 'MALE' | 'FEMALE' | 'OTHER'; age: number }) => Promise<User>
   logout: () => void
 }
 
@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
 
   const isAuthenticated = Boolean(user && authStorage.getToken())
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'ADMIN'
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -92,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(enrichedUser)
       return enrichedUser
     } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Dang nhap that bai. Vui long thu lai.'))
+      throw new Error(extractApiErrorMessage(error, 'Đăng nhập thất bại. Vui lòng thử lại.'))
     } finally {
       setIsLoading(false)
     }
@@ -110,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(enrichedUser)
       return enrichedUser
     } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Dang nhap Google that bai. Vui long thu lai.'))
+      throw new Error(extractApiErrorMessage(error, 'Đăng nhập Google thất bại. Vui lòng thử lại.'))
     } finally {
       setIsLoading(false)
     }
@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string,
     password: string,
     fullName: string,
-    options?: { gender?: 'male' | 'female' | 'other'; age?: number },
+    options?: { gender?: 'MALE' | 'FEMALE' | 'OTHER'; age?: number },
   ) => {
     setIsLoading(true)
     try {
@@ -137,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         full_name: fullName,
         email,
         password,
-        gender: options?.gender ?? 'other',
+        gender: options?.gender ?? 'OTHER',
         age: options?.age ?? 18,
       })
       authStorage.setToken(response.access_token)
@@ -147,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(enrichedUser)
       return enrichedUser
     } catch (error) {
-      throw new Error(extractApiErrorMessage(error, 'Dang ky that bai. Vui long thu lai.'))
+      throw new Error(extractApiErrorMessage(error, 'Đăng ký thất bại. Vui lòng thử lại.'))
     } finally {
       setIsLoading(false)
     }
@@ -158,7 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
-  const updateProfile = useCallback(async (payload: { full_name: string; gender: 'male' | 'female' | 'other'; age: number }) => {
+  const updateProfile = useCallback(async (payload: { full_name: string; gender: 'MALE' | 'FEMALE' | 'OTHER'; age: number }) => {
     const profile = await authApi.updateMe(payload)
     const enrichedUser = enrichUser(profile)
     authStorage.setUser(profile)
@@ -188,7 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
-    throw new Error('useAuth phai duoc dung ben trong AuthProvider')
+    throw new Error('useAuth phải được dùng bên trong AuthProvider')
   }
   return context
 }

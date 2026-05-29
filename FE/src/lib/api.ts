@@ -66,7 +66,7 @@ type ApiErrorBody = {
   message?: string
 }
 type VenueSeatSyncResponse = {
-  created: Array<{ client_id: number; id: number; label: string; x: number | null; y: number | null }>
+  created: Array<{ client_id: number; id: number; label: string; row_label: string; seat_number: number; x: number | null; y: number | null }>
   updated_ids: number[]
   deleted_ids: number[]
 }
@@ -248,7 +248,7 @@ export const authApi = {
     full_name: string
     email: string
     password: string
-    gender: 'male' | 'female' | 'other'
+    gender: 'MALE' | 'FEMALE' | 'OTHER'
     age: number
   }) {
     const response = await api.post<AuthResponse>('/auth/register', payload, { skipAuthRefresh: true } as RetryableAuthRequestConfig)
@@ -273,7 +273,7 @@ export const authApi = {
   async me() {
     return withRetry(() => api.get<AuthResponse['user']>('/auth/me', { timeout: 8000 }), 2)
   },
-  async updateMe(payload: { full_name: string; gender: 'male' | 'female' | 'other'; age: number }) {
+  async updateMe(payload: { full_name: string; gender: 'MALE' | 'FEMALE' | 'OTHER'; age: number }) {
     const response = await api.patch<AuthResponse['user']>('/auth/me', payload)
     return response.data
   },
@@ -381,9 +381,6 @@ export const adminApi = {
     const response = await api.delete<ApiMessage>(`/admin/events/${eventKey}`)
     return response.data
   },
-  async eventStats(eventKey: string | number) {
-    return withRetry(() => api.get<EventDetailStats>(`/admin/events/${eventKey}/stats`))
-  },
   async listShows(eventKey: string | number) {
     return withRetry(() => api.get<ShowSummary[]>(`/admin/events/${eventKey}/shows`))
   },
@@ -462,9 +459,6 @@ export const adminApi = {
     address?: string | null
     city?: string | null
     venue_type?: string
-    capacity?: number | null
-    width?: number
-    height?: number
   }) {
     const response = await api.post<VenueDetail>('/admin/venues', payload)
     return response.data
@@ -476,9 +470,6 @@ export const adminApi = {
       address: string | null
       city: string | null
       venue_type: string
-      capacity: number | null
-      width: number
-      height: number
       is_active: boolean
     }>,
   ) {
@@ -492,7 +483,7 @@ export const adminApi = {
   async uploadVenueBackground(venueId: number, file: File) {
     const formData = new FormData()
     formData.append('file', file)
-    const response = await api.post<{ detail: string; venue_id: number; background_type: string; content_type: string }>(
+    const response = await api.post<{ detail: string; venue_id: number; background_type: string; content_type: string; width: number; height: number }>(
       `/admin/venues/${venueId}/upload-background`,
       formData,
     )
@@ -591,8 +582,8 @@ export const adminApi = {
     venueId: number,
     payload: {
       layout_id?: number | null
-      create: Array<{ client_id: number; label: string; x: number; y: number; rotation: number; section_id: number | null; is_admin_locked: boolean }>
-      update: Array<{ id: number; label: string; x: number; y: number; rotation: number; section_id: number | null; is_admin_locked: boolean }>
+      create: Array<{ client_id: number; label: string; row_label: string; seat_number: number; x: number; y: number; rotation: number; section_id: number | null; is_admin_locked: boolean }>
+      update: Array<{ id: number; label: string; row_label: string; seat_number: number; x: number; y: number; rotation: number; section_id: number | null; is_admin_locked: boolean }>
       delete_ids: number[]
     },
   ) {

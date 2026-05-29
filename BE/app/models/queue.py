@@ -2,11 +2,11 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import QueueStatus
+from app.models.enums import QueueStatus, sa_enum
 
 
 class QueueEntry(TimestampMixin, Base):
@@ -32,7 +32,7 @@ class QueueEntry(TimestampMixin, Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     token: Mapped[str] = mapped_column(String(120), unique=True, nullable=False, index=True)
-    status: Mapped[QueueStatus] = mapped_column(Enum(QueueStatus, native_enum=False), default=QueueStatus.WAITING, nullable=False, index=True)
+    status: Mapped[QueueStatus] = mapped_column(sa_enum(QueueStatus), default=QueueStatus.WAITING, nullable=False, index=True)
     position_hint: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     admitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

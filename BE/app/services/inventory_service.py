@@ -1,6 +1,6 @@
-"""Dịch vụ dựng sơ đồ ghế có tọa độ cho màn chọn ghế của khách hàng."""
+"""Public seatmap service backed by show ticket inventory."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 import math
 from typing import Any
 
@@ -9,34 +9,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import SeatStatus
-from app.models.event import Event, SeatZone, Show, ShowPolygon
+from app.models.event import Event, SeatZone, Show
+from app.models.order import Ticket
 from app.models.seat import Seat
-from app.models.venue import Polygon, Section, Venue
+from app.models.venue import Polygon, Section, Venue, VenueLayout
+from app.services.event_inventory_service import sync_show_ticket_inventory
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
-    """Chuẩn hóa thời gian từ DB về UTC-aware để so sánh hạn giữ ghế an toàn."""
-
     if value is None:
         return None
-    return value if value.tzinfo else value.replace(tzinfo=UTC)
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 async def _get_show_or_404(session: AsyncSession, show_id: int) -> Show:
-    """Lấy show còn hiệu lực hoặc trả lỗi 404.
-
-    Đầu vào:
-    - `session`: phiên DB async.
-    - `show_id`: ID buổi diễn cần lấy sơ đồ ghế.
-
-    Đầu ra:
-    - Bản ghi `Show` nếu tồn tại và chưa bị xóa mềm.
-
-    Cách hoạt động:
-    - Truy vấn theo `show_id` và `is_deleted = false`.
-    - Nếu không có dữ liệu thì ném `HTTPException 404` để endpoint trả lỗi rõ ràng cho giao diện người dùng.
-    """
-
     show = await session.scalar(select(Show).where(Show.id == show_id, Show.is_deleted.is_(False)))
     if not show:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy buổi diễn")
@@ -44,19 +30,6 @@ async def _get_show_or_404(session: AsyncSession, show_id: int) -> Show:
 
 
 def _zone_block_map(zones: list[SeatZone]) -> dict[int, dict[str, float]]:
-    """Chia canvas phần trăm thành các khối mặc định khi ghế chưa có tọa độ.
-
-    Đầu vào:
-    - `zones`: danh sách khu vực vé của một buổi diễn.
-
-    Đầu ra:
-    - Bảng ánh xạ `zone_id -> {left, top, width, height}` theo hệ tọa độ phần trăm 0-100.
-
-    Cách hoạt động:
-    - Một khu vực thì chiếm một khối lớn.
-    - Nhiều khu vực thì xếp thành lưới 2 cột, có lề và khoảng cách cố định để giao diện người dùng vẫn vẽ được sơ đồ.
-    """
-
     if not zones:
         return {}
 
@@ -82,37 +55,20 @@ def _zone_block_map(zones: list[SeatZone]) -> dict[int, dict[str, float]]:
     return blocks
 
 
-def _generated_xy(seat: Seat, zone: SeatZone | None, block: dict[str, float] | None) -> tuple[float | None, float | None]:
-    """Tạo tọa độ tạm cho ghế chưa có `x_coord/y_coord`.
-
-    Đầu vào:
-    - `seat`: ghế cần hiển thị.
-    - `zone`: khu vực chứa ghế nếu có.
-    - `block`: khối phần trăm của khu vực trên canvas.
-
-    Đầu ra:
-    - Cặp tọa độ `(x, y)` theo phần trăm hoặc `(None, None)` nếu không đủ dữ liệu.
-
-    Cách hoạt động:
-    - Ưu tiên tọa độ thật do admin tạo.
-    - Nếu thiếu tọa độ, nội suy vị trí theo hàng và cột trong khối khu vực.
-    """
-
-    if seat.x_coord is not None and seat.y_coord is not None:
-        return float(seat.x_coord), float(seat.y_coord)
+def _generated_xy(ticket: Ticket, zone: SeatZone | None, block: dict[str, float] | None) -> tuple[float | None, float | None]:
+    if ticket.x_coord is not None and ticket.y_coord is not None:
+        return float(ticket.x_coord), float(ticket.y_coord)
     if block is None:
         return None, None
 
-    row_count = max(int(zone.row_count if zone else seat.row_index or 1), int(seat.row_index or 1), 1)
-    seats_per_row = max(int(zone.seats_per_row if zone else seat.seat_number or 1), int(seat.seat_number or 1), 1)
-    row_index = max(int(seat.row_index or 1), 1)
-    seat_number = max(int(seat.seat_number or 1), 1)
+    seats_per_row = max(int(zone.seats_per_row if zone else ticket.seat_number or 1), int(ticket.seat_number or 1), 1)
+    seat_number = max(int(ticket.seat_number or 1), 1)
     usable_width = block["width"] * 0.82
     usable_height = block["height"] * 0.74
     left = block["left"] + (block["width"] - usable_width) / 2
     top = block["top"] + (block["height"] - usable_height) / 2
     x = left + ((seat_number - 0.5) / seats_per_row) * usable_width
-    y = top + ((row_index - 0.5) / row_count) * usable_height
+    y = top + (0.5 * usable_height)
     return round(max(0.0, min(100.0, x)), 2), round(max(0.0, min(100.0, y)), 2)
 
 
@@ -121,25 +77,17 @@ async def get_seatmap(
     show_id: int,
     current_user_id: int | None = None,
 ) -> dict[str, Any]:
-    """Trả toàn bộ sơ đồ ghế có tọa độ để giao diện người dùng hiển thị.
-
-    Đầu vào:
-    - `show_id`: buổi diễn cần xem sơ đồ.
-    - `current_user_id`: có thể rỗng khi khách chưa đăng nhập xem trước.
-
-    Đầu ra:
-    - Từ điển gồm thông tin show/event, nền venue, khu vực, polygon và danh sách ghế có giá cùng trạng thái.
-
-    Cách hoạt động:
-    - Lấy show, event, venue, zones, sections và polygon overlay.
-    - Chuẩn hóa trạng thái ghế đang giữ nhưng đã hết hạn về `available` trên dữ liệu công khai.
-    - Không đánh dấu `is_locked_by_me` cho khách để tránh lỗi so sánh `NULL = NULL`.
-    """
-
     show = await _get_show_or_404(session, show_id)
+    await sync_show_ticket_inventory(session, show)
+
     event = await session.get(Event, show.event_id)
-    venue: Venue | None = await session.get(Venue, show.venue_id) if show.venue_id else None
-    # Lấy toàn bộ khu giá vé trước để dựng bảng tra cứu nhanh theo `zone_id`.
+    venue: Venue | None = None
+    layout: VenueLayout | None = None
+    if show.venue_layout_id:
+        layout = await session.get(VenueLayout, show.venue_layout_id)
+        if layout:
+            venue = await session.get(Venue, layout.venue_id)
+
     zones = list(await session.scalars(select(SeatZone).where(SeatZone.show_id == show.id).order_by(SeatZone.id.asc())))
     zone_map = {
         zone.id: {
@@ -154,122 +102,92 @@ async def get_seatmap(
     zone_lookup = {zone.id: zone for zone in zones}
     zone_blocks = _zone_block_map(zones)
 
-    # Khu vực mẫu chỉ tồn tại khi show được nhân bản từ bố cục venue.
-    sections: list[Section] = []
+    tickets = list(
+        await session.scalars(
+            select(Ticket)
+            .where(Ticket.show_id == show_id)
+            .order_by(Ticket.ticket_tier_id.asc(), Ticket.seat_label.asc(), Ticket.id.asc())
+        )
+    )
+    seat_ids = [ticket.seat_id for ticket in tickets if ticket.seat_id is not None]
+    seat_map = {
+        seat.id: seat
+        for seat in (
+            list(await session.scalars(select(Seat).where(Seat.id.in_(seat_ids))))
+            if seat_ids
+            else []
+        )
+    }
+    now = datetime.now(timezone.utc)
+    section_map: dict[int, Section] = {}
     if show.venue_layout_id:
-        sections = list(
-            await session.scalars(
-                select(Section)
-                .where(Section.venue_layout_id == show.venue_layout_id)
-                .order_by(Section.sort_order.asc())
-            )
+        sections = list(await session.scalars(select(Section).where(Section.venue_layout_id == show.venue_layout_id)))
+        section_map = {section.id: section for section in sections}
+
+    seat_responses = []
+    for ticket in tickets:
+        normalized_status = SeatStatus.LOCKED if ticket.is_admin_locked and ticket.status != SeatStatus.SOLD else ticket.status
+        lock_expires = _as_utc(ticket.lock_expires_at)
+        if ticket.status == SeatStatus.LOCKED and lock_expires and lock_expires < now:
+            normalized_status = SeatStatus.AVAILABLE
+
+        seat = seat_map.get(ticket.seat_id) if ticket.seat_id is not None else None
+
+        zone_info = zone_map.get(ticket.ticket_tier_id or -1)
+        generated_x, generated_y = _generated_xy(
+            ticket,
+            zone_lookup.get(ticket.ticket_tier_id or -1),
+            zone_blocks.get(ticket.ticket_tier_id or -1),
+        )
+        seat_responses.append(
+            {
+                "id": ticket.id,
+                "label": ticket.seat_label or (seat.seat_label if seat else None),
+                "x": generated_x,
+                "y": generated_y,
+                "rotation": float(seat.rotation) if seat and seat.rotation is not None else 0,
+                "zone_id": ticket.ticket_tier_id,
+                "zone_name": zone_info.get("name") if zone_info else None,
+                "section_id": seat.section_id if seat else None,
+                "section_name": section_map.get(seat.section_id).name if seat and seat.section_id in section_map else None,
+                "price": float(ticket.price),
+                "status": normalized_status.value,
+                "lock_expires_at": ticket.lock_expires_at.isoformat() if ticket.lock_expires_at else None,
+                "is_locked_by_me": current_user_id is not None and ticket.locked_by_user_id == current_user_id,
+                "is_admin_locked": ticket.is_admin_locked,
+            }
         )
 
-    # Ưu tiên polygon cấp show; nếu chưa có thì fallback polygon từ venue layout.
-    venue_polygons: list[Polygon] = []
-    if show.venue_layout_id:
-        venue_polygons = list(
+    polygon_responses = []
+    if venue and show.venue_layout_id:
+        polygons = list(
             await session.scalars(
                 select(Polygon)
-                .where(Polygon.venue_layout_id == show.venue_layout_id)
+                .where(Polygon.venue_id == venue.id, Polygon.venue_layout_id == show.venue_layout_id)
                 .order_by(Polygon.id.asc())
             )
         )
-    show_polygons = list(
-        await session.scalars(
-            select(ShowPolygon).where(ShowPolygon.show_id == show.id).order_by(ShowPolygon.id.asc())
-        )
-    )
+        for polygon in polygons:
+            section = section_map.get(polygon.section_id or -1)
+            polygon_responses.append(
+                {
+                    "id": polygon.id,
+                    "zone_id": None,
+                    "zone_name": section.name if section else None,
+                    "section_id": polygon.section_id,
+                    "section_name": section.name if section else None,
+                    "label": polygon.label,
+                    "points": polygon.points,
+                }
+            )
 
-    # Danh sách ghế là dữ liệu chính để giao diện người dùng hiển thị từng nút ghế trên canvas.
-    seats = list(await session.scalars(select(Seat).where(Seat.show_id == show_id).order_by(Seat.section_id, Seat.seat_label)))
-    now = datetime.now(UTC)
-
-    section_map = {
-        s.id: {
-            "id": s.id,
-            "name": s.name,
-            "code": s.code,
-            "color": s.color,
-            "price_base": float(s.price_base),
-        }
-        for s in sections
-    }
-
-    seat_responses = []
-    section_to_zone: dict[int, int] = {}
-    for seat in seats:
-        # Admin lock được hiển thị như trạng thái locked để khách không thể chọn.
-        normalized_status = SeatStatus.LOCKED if seat.is_admin_locked and seat.status != SeatStatus.SOLD else seat.status
-        lock_expires = _as_utc(seat.lock_expires_at)
-        if seat.status == SeatStatus.LOCKED and lock_expires and lock_expires < now:
-            normalized_status = SeatStatus.AVAILABLE
-
-        # Ghi nhớ section thuộc zone nào để polygon venue vẫn có màu/tên zone khi fallback.
-        if seat.section_id is not None and seat.zone_id is not None and seat.section_id not in section_to_zone:
-            section_to_zone[seat.section_id] = seat.zone_id
-
-        zone_info = zone_map.get(seat.zone_id or -1)
-        generated_x, generated_y = _generated_xy(
-            seat,
-            zone_lookup.get(seat.zone_id or -1),
-            zone_blocks.get(seat.zone_id or -1),
-        )
-
-        seat_responses.append(
-            {
-                "id": seat.id,
-                "label": seat.seat_label,
-                "x": generated_x,
-                "y": generated_y,
-                "rotation": float(seat.rotation) if seat.rotation is not None else 0,
-                "zone_id": seat.zone_id,
-                "zone_name": zone_info.get("name") if zone_info else None,
-                "section_id": seat.section_id,
-                "section_name": section_map.get(seat.section_id, {}).get("name"),
-                "price": float(seat.price),
-                "status": normalized_status.value,
-                "lock_expires_at": seat.lock_expires_at.isoformat() if seat.lock_expires_at else None,
-                "is_locked_by_me": current_user_id is not None and seat.locked_by_user_id == current_user_id,
-                "is_admin_locked": seat.is_admin_locked,
-            }
-        )
-
-    polygon_responses: list[dict[str, Any]] = []
-    if show_polygons:
-        polygon_responses = [
-            {
-                "id": polygon.id,
-                "zone_id": polygon.zone_id,
-                "zone_name": zone_map.get(polygon.zone_id or -1, {}).get("name"),
-                "section_id": None,
-                "section_name": None,
-                "label": polygon.label,
-                "points": polygon.points,
-            }
-            for polygon in show_polygons
-        ]
-    elif venue_polygons:
-        polygon_responses = [
-            {
-                "id": -polygon.id,
-                "zone_id": section_to_zone.get(polygon.section_id) if polygon.section_id is not None else None,
-                "zone_name": zone_map.get(section_to_zone.get(polygon.section_id, -1), {}).get("name") if polygon.section_id is not None else None,
-                "section_id": polygon.section_id,
-                "section_name": section_map.get(polygon.section_id, {}).get("name"),
-                "label": polygon.label,
-                "points": polygon.points,
-            }
-            for polygon in venue_polygons
-        ]
     return {
         "show_id": show.id,
         "show_title": show.title,
         "event_id": show.event_id,
         "event_slug": event.slug if event else "",
         "event_title": event.title if event else show.title,
-        "venue_name": show.venue,
-        "queue_enabled": show.queue_enabled,
+        "venue_name": show.location,
         "background": {
             "source": venue.background_source if venue else None,
             "type": venue.background_type if venue else None,
@@ -279,8 +197,7 @@ async def get_seatmap(
         if venue
         else None,
         "zones": [zone_map[zone.id] for zone in zones],
-        "sections": [section_map[s.id] for s in sections],
         "polygons": polygon_responses,
         "seats": seat_responses,
-        "seat_count": len(seats),
+        "seat_count": len(tickets),
     }

@@ -9,7 +9,7 @@ from app.core.cache import EVENT_DETAIL_CACHE_NAMESPACE, EVENT_LIST_CACHE_NAMESP
 from app.core.db import get_db_session
 from app.models.enums import EventStatus
 from app.schemas.event import EventCardResponse, EventDetailResponse, ShowDetailResponse
-from app.services.event_service import (
+from app.services.event_query_service import (
     build_event_card_response,
     build_event_detail_response,
     build_show_detail_response,

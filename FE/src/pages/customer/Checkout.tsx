@@ -344,7 +344,7 @@ export default function Checkout() {
       const latestMatrix = await eventApi.seats(showId, queueToken)
       const lockedSeatIdSet = new Set(lockedSeatIds)
       const validLockedSeatCount = latestMatrix.seats.filter((seat) => {
-        return lockedSeatIdSet.has(seat.id) && seat.status === 'locked' && seat.is_locked_by_me
+        return lockedSeatIdSet.has(seat.id) && seat.status === 'LOCKED' && seat.is_locked_by_me
       }).length
 
       if (validLockedSeatCount !== lockedSeatIds.length) {

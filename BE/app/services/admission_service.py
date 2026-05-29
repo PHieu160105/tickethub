@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import timezone, datetime, timedelta
 from time import perf_counter
 from typing import Literal
 
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.redis_client import get_redis_client
-from app.models.enums import QueueStatus
+from app.models.enums import QueueStatus, UserRole
 from app.models.event import Show
 from app.models.queue import QueueEntry
 from app.models.user import User
@@ -31,7 +31,7 @@ QUEUE_URL_TEMPLATE = "/queue?showId={show_id}"
 
 
 def _now_ts() -> int:
-    return int(datetime.now(UTC).timestamp())
+    return int(datetime.now(timezone.utc).timestamp())
 
 
 async def get_waiting_room_state() -> WaitingRoomState:
@@ -111,7 +111,7 @@ async def _has_admitted_queue_token(session: AsyncSession, show_id: int, user_id
             QueueEntry.token == token,
             QueueEntry.status == QueueStatus.ADMITTED,
             QueueEntry.expires_at.is_not(None),
-            QueueEntry.expires_at > datetime.now(UTC),
+            QueueEntry.expires_at > datetime.now(timezone.utc),
         )
     )
     return entry is not None
@@ -137,7 +137,7 @@ async def ensure_admission_for_show(
 
     if not current_user:
         raise _waiting_room_required(show.id)
-    if getattr(current_user.role, "value", str(current_user.role)) == "admin":
+    if current_user.role == UserRole.ADMIN:
         return
 
     if not await _has_admitted_queue_token(session, show.id, current_user.id, queue_token):
@@ -161,7 +161,7 @@ async def reject_before_show_lookup_if_waiting_room(
 
     if not current_user:
         raise _waiting_room_required(show_id)
-    if getattr(current_user.role, "value", str(current_user.role)) == "admin":
+    if current_user.role == UserRole.ADMIN:
         return
     if not queue_token:
         raise _waiting_room_required(show_id)
@@ -224,7 +224,7 @@ async def evaluate_waiting_room_health(session: AsyncSession) -> WaitingRoomStat
 async def expire_inactive_admitted_tokens(session: AsyncSession) -> int:
     """Thu hồi token admitted đã hết TTL hoặc mất heartbeat quá lâu."""
 
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     inactive_cutoff = now - timedelta(seconds=settings.queue_inactive_grace_seconds)
     result = await session.execute(
         update(QueueEntry)

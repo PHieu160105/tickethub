@@ -6,7 +6,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.main import app
-from app.models.enums import EventStatus
+from app.models.enums import EventStatus, SeatStatus
 from app.models.seat import Seat
 
 
@@ -195,7 +195,7 @@ async def test_update_event_seat_admin_lock(db_session, admin_user, sample_event
         refreshed = await db_session.get(Seat, seat.id)
         assert refreshed is not None
         assert refreshed.is_admin_locked is True
-        assert refreshed.status.value == "locked"
+        assert refreshed.status == SeatStatus.LOCKED
         assert refreshed.locked_by_user_id is None
     finally:
         app.dependency_overrides.clear()

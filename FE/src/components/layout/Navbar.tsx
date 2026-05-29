@@ -4,20 +4,19 @@ import { LogOut, Menu, X } from 'lucide-react'
 
 import { SearchAutocompleteInput } from '@/components/ui/SearchAutocompleteInput'
 import { Button } from '@/components/ui/Button'
-import LogoSVG from '@/assets/logo.svg'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
 
 const navLinks = [
-  { label: 'Su kien', href: '/search' },
-  { label: 'Ve cua toi', href: '/tickets' },
-  { label: 'Thong tin', href: '/info' },
+  { label: 'Sự kiện', href: '/search' },
+  { label: 'Vé của tôi', href: '/tickets' },
+  { label: 'Thông tin', href: '/info' },
 ]
 
 export function Logo() {
   return (
     <Link to="/" aria-label="Về trang chủ" className="flex items-center gap-2 margin-r-6">
-      <p className='text-lg font-bold'>TICKETHUB</p>
+      <p className="text-lg font-bold">TICKETHUB</p>
     </Link>
   )
 }
@@ -76,7 +75,7 @@ export function Navbar() {
               value={searchValue}
               onChange={setSearchValue}
               onSelect={(item) => navigate(`/event/${item.value}`)}
-              placeholder="Tim kiem su kien..."
+              placeholder="Tìm kiếm sự kiện..."
               scope="events"
             />
           </div>
@@ -96,16 +95,16 @@ export function Navbar() {
 
               <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2 customer-text-muted hover:customer-text-header">
                 <LogOut className="h-4 w-4" />
-                Dang xuat
+                Đăng xuất
               </Button>
             </div>
           ) : (
             <>
               <Button variant="ghost" size="sm" className="hidden sm:inline-flex" onClick={() => navigate('/login')}>
-                Dang nhap
+                Đăng nhập
               </Button>
               <Button variant="ghost" size="sm" onClick={() => navigate('/register')}>
-                Dang ky
+                Đăng ký
               </Button>
             </>
           )}
@@ -113,7 +112,7 @@ export function Navbar() {
           <button
             className="md:hidden p-2 rounded-lg hover:customer-bg-soft transition-colors"
             onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label="Mo hoac dong menu"
+            aria-label="Mở hoặc đóng menu"
           >
             {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
@@ -147,7 +146,7 @@ export function Navbar() {
                   navigate(`/event/${item.value}`)
                   setMobileOpen(false)
                 }}
-                placeholder="Tim kiem..."
+                placeholder="Tìm kiếm..."
                 scope="events"
                 className="w-full"
               />
@@ -156,10 +155,10 @@ export function Navbar() {
             {!isAuthenticated && (
               <div className="pt-3 border-t customer-border flex flex-col gap-2">
                 <Button variant="ghost" onClick={() => { navigate('/login'); setMobileOpen(false) }} className="justify-center">
-                  Dang nhap
+                  Đăng nhập
                 </Button>
                 <Button variant="primary" onClick={() => { navigate('/register'); setMobileOpen(false) }} className="justify-center">
-                  Dang ky
+                  Đăng ký
                 </Button>
               </div>
             )}
@@ -179,7 +178,7 @@ export function Navbar() {
                 </Link>
                 <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-2 customer-text-muted hover:customer-text-header">
                   <LogOut className="h-4 w-4" />
-                  Dang xuat
+                  Đăng xuất
                 </Button>
               </div>
             )}

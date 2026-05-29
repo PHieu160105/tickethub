@@ -3,18 +3,6 @@
 from pydantic import BaseModel, ConfigDict
 
 
-class SeatMapSectionResponse(BaseModel):
-    """Metadata khu vực lấy từ venue layout."""
-
-    id: int
-    name: str
-    code: str
-    color: str
-    price_base: float
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class SeatMapZoneResponse(BaseModel):
     """Metadata khu giá vé của một buổi diễn."""
 
@@ -37,8 +25,8 @@ class SeatMapSeatResponse(BaseModel):
     rotation: float
     zone_id: int | None = None
     zone_name: str | None = None
-    section_id: int | None
-    section_name: str | None
+    section_id: int | None = None
+    section_name: str | None = None
     price: float
     status: str
     lock_expires_at: str | None
@@ -61,8 +49,8 @@ class SeatMapPolygonResponse(BaseModel):
     id: int
     zone_id: int | None = None
     zone_name: str | None = None
-    section_id: int | None
-    section_name: str | None
+    section_id: int | None = None
+    section_name: str | None = None
     label: str | None
     points: list[SeatMapPolygonPointResponse]
 
@@ -89,11 +77,9 @@ class SeatMapResponse(BaseModel):
     event_slug: str
     event_title: str
     venue_name: str
-    queue_enabled: bool
     queue_required: bool = False
     background: SeatMapBackgroundResponse | None = None
     zones: list[SeatMapZoneResponse]
-    sections: list[SeatMapSectionResponse]
     polygons: list[SeatMapPolygonResponse]
     seats: list[SeatMapSeatResponse]
     seat_count: int

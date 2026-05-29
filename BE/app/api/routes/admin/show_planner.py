@@ -29,7 +29,9 @@ from app.schemas.event import (
     ShowPolygonUpdateRequest,
 )
 from app.services.dashboard_service import broadcast_dashboard_update
-from app.services.event_service import create_initial_show_zone, create_show_zone, delete_show_zone, get_show_by_id, list_show_zones, update_show_zone
+from app.services.event_inventory_service import sync_show_ticket_inventory
+from app.services.event_lifecycle_service import create_initial_show_zone, create_show_zone, delete_show_zone, update_show_zone
+from app.services.event_query_service import get_show_by_id, list_show_zones
 
 from ._shared import (
     _apply_admin_lock_state,
@@ -68,6 +70,7 @@ async def create_zone(
     _ensure_show_is_draft(show)
     try:
         zone = await create_show_zone(session, show, payload)
+        await sync_show_ticket_inventory(session, show)
         await session.commit()
     except Exception:
         await session.rollback()
@@ -89,6 +92,7 @@ async def create_initial_zone(
     _ensure_show_is_draft(show)
     try:
         zone = await create_initial_show_zone(session, show, payload)
+        await sync_show_ticket_inventory(session, show)
         await session.commit()
     except Exception:
         await session.rollback()
@@ -111,6 +115,7 @@ async def update_zone(
     _ensure_show_is_draft(show)
     try:
         zone = await update_show_zone(session, show, zone_id, payload)
+        await sync_show_ticket_inventory(session, show)
         await session.commit()
     except Exception:
         await session.rollback()
@@ -132,6 +137,7 @@ async def delete_zone(
     _ensure_show_is_draft(show)
     try:
         await delete_show_zone(session, show, zone_id)
+        await sync_show_ticket_inventory(session, show)
         await session.commit()
     except Exception:
         await session.rollback()
@@ -266,6 +272,8 @@ async def create_show_seat_single(
     )
     session.add(seat)
     try:
+        await session.flush()
+        await sync_show_ticket_inventory(session, show)
         await session.commit()
         await session.refresh(seat)
     except Exception:
@@ -375,6 +383,8 @@ async def create_show_seat_bulk(
     if seats_to_add:
         session.add_all(seats_to_add)
         try:
+            await session.flush()
+            await sync_show_ticket_inventory(session, show)
             await session.commit()
         except Exception:
             await session.rollback()
@@ -496,6 +506,7 @@ async def sync_show_seats(
             await session.delete(seat_map[seat_id])
 
         await session.flush()
+        await sync_show_ticket_inventory(session, show)
         response = SeatSyncResponse(
             created=[
                 SeatSyncCreatedItem(
@@ -569,6 +580,8 @@ async def update_show_seat(
         _apply_admin_lock_state(seat, payload.is_admin_locked)
 
     try:
+        await session.flush()
+        await sync_show_ticket_inventory(session, show)
         await session.commit()
         await session.refresh(seat)
     except Exception:
@@ -596,6 +609,8 @@ async def delete_show_seat(
 
     await session.delete(seat)
     try:
+        await session.flush()
+        await sync_show_ticket_inventory(session, show)
         await session.commit()
     except Exception:
         await session.rollback()

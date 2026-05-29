@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import timezone, datetime
 
 from app.core.cache import public_api_cache, show_seat_cache_namespace
 from app.core.db import AsyncSessionLocal

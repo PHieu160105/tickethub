@@ -6,7 +6,7 @@ Ghi chú cho người đọc chưa chuyên IT:
 - Backend giải mã JWT để biết request đang thuộc về user nào mà không cần lưu session trên server.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import timezone, datetime, timedelta
 from typing import Any
 
 from jose import JWTError, jwt
@@ -25,7 +25,7 @@ class TokenDecodeError(Exception):
 def _create_token(subject: str, expires_delta: timedelta, *, purpose: str) -> str:
     """Tạo JWT đã ký cho một mục đích xác định."""
 
-    expire_at = datetime.now(UTC) + expires_delta
+    expire_at = datetime.now(timezone.utc) + expires_delta
     payload: dict[str, Any] = {"sub": subject, "exp": expire_at, "purpose": purpose}
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 

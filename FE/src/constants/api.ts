@@ -81,7 +81,6 @@ export const ENDPOINTS = {
   ADMIN: {
     EVENTS: '/admin/events',
     EVENT_DETAIL: (eventKey: string | number) => `/admin/events/${eventKey}`,
-    EVENT_STATS: (eventKey: string | number) => `/admin/events/${eventKey}/stats`,
     UPLOAD_IMAGE: '/admin/events/upload-image',
     DASHBOARD_SUMMARY: '/admin/dashboard/summary',
     DASHBOARD_REVENUE: '/admin/dashboard/revenue',

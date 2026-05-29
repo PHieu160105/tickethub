@@ -25,6 +25,7 @@ import CustomerSettings from './pages/customer/Setting'
 import CustomerTicket from './pages/customer/CustomerTicket'
 import ErrorPage from './pages/customer/Error'
 import EventDetail from './pages/customer/EventDetail'
+import HelpPage from './pages/customer/Help'
 import Home from './pages/customer/Home'
 import InfoPage from './pages/customer/Info'
 import Login from './pages/customer/Login'
@@ -76,12 +77,13 @@ function AppRoutes() {
           <Route path="tickets" element={<RequireCustomerAuth><CustomerTicket /></RequireCustomerAuth>} />
           <Route path="profile" element={<RequireCustomerAuth><CustomerProfile /></RequireCustomerAuth>} />
           <Route path="settings" element={<RequireCustomerAuth><CustomerSettings /></RequireCustomerAuth>} />
+          <Route path="help" element={<HelpPage />} />
           <Route path="info" element={<InfoPage />} />
           <Route path="payments" element={<Navigate to="/settings" replace />} />
           <Route path="*" element={<ErrorPage />} />
         </Route>
 
-        <Route path="/admin" element={<RequireAdmin><AdminLayout title="Quan tri he thong" /></RequireAdmin>}>
+        <Route path="/admin" element={<RequireAdmin><AdminLayout title="Quản trị hệ thống" /></RequireAdmin>}>
           <Route index element={<AdminDashboard />} />
           <Route path="events" element={<AdminEvents />} />
           <Route path="events/:eventKey/shows/:showId/seating" element={<AdminSeatPlanner />} />

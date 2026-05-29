@@ -1,5 +1,5 @@
 from base64 import b64encode
-from datetime import UTC, datetime
+from datetime import timezone, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -14,10 +14,10 @@ from app.schemas.admin import UploadImageResponse
 from app.schemas.common import APIMessage
 from app.schemas.event import EventCardResponse, EventCreateRequest, EventDetailResponse, EventUpdateRequest
 from app.services.dashboard_service import broadcast_dashboard_update
-from app.services.event_service import (
+from app.services.event_lifecycle_service import create_event
+from app.services.event_query_service import (
     build_event_card_response,
     build_event_detail_response,
-    create_event,
     get_event_by_slug_or_id,
     list_event_max_prices_for_event_ids,
     list_event_shows,
@@ -101,8 +101,6 @@ async def update_event(
 ) -> EventDetailResponse:
     event = await get_event_by_slug_or_id(session, event_key)
     updates = payload.model_dump(exclude_unset=True)
-    for queue_field in ("queue_enabled", "queue_release_batch", "max_active_queue_tokens"):
-        updates.pop(queue_field, None)
     next_start = updates.get("start_date", event.start_date)
     next_end = updates.get("end_date", event.end_date)
     if next_end < next_start:
@@ -111,8 +109,8 @@ async def update_event(
     for field_name, field_value in updates.items():
         setattr(event, field_name, field_value)
 
-    event.start_at_legacy = datetime.combine(event.start_date, datetime.min.time(), tzinfo=UTC)
-    event.end_at_legacy = datetime.combine(event.end_date, datetime.max.time(), tzinfo=UTC)
+    event.start_at_legacy = datetime.combine(event.start_date, datetime.min.time(), tzinfo=timezone.utc)
+    event.end_at_legacy = datetime.combine(event.end_date, datetime.max.time(), tzinfo=timezone.utc)
 
     try:
         await session.commit()

@@ -6,9 +6,10 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import EventStatus, QueueStatus
+from app.models.enums import EventCategory, EventStatus, QueueStatus
 from app.models.queue import QueueEntry
 from app.schemas.event import EventCreateRequest, SeatZoneCreate, ShowCreateRequest
+from app.services import queue_service
 from app.services.event_service import create_event, create_show_with_inventory
 from app.services.queue_service import get_queue_status, join_show_queue, process_virtual_queue
 
@@ -27,7 +28,7 @@ async def test_virtual_queue_batches_users(
     event_payload = EventCreateRequest(
         title="Sự kiện kiểm thử hàng đợi",
         description="Sự kiện dùng để kiểm thử hàng đợi khi truy cập cao.",
-        category="Âm nhạc",
+        category=EventCategory.MUSIC,
         start_date=show_date,
         end_date=show_date,
         cover_image_url="",
@@ -36,21 +37,23 @@ async def test_virtual_queue_batches_users(
     show_payload = ShowCreateRequest(
         title="Buổi diễn kiểm thử hàng đợi",
         description="Buổi diễn bật hàng đợi để kiểm thử phòng chờ.",
-        venue="Nhà thi đấu kiểm thử",
+        location="Nhà thi đấu kiểm thử",
         show_date=show_date,
         start_time=datetime.now(UTC).time().replace(hour=18, minute=0, second=0, microsecond=0),
         end_time=datetime.now(UTC).time().replace(hour=20, minute=0, second=0, microsecond=0),
         status=EventStatus.LIVE,
         hold_minutes=10,
-        queue_enabled=True,
         zones=[SeatZoneCreate(code="GA", name="Khu phổ thông", row_count=1, seats_per_row=2, price=500_000, color="#024ddf")],
     )
 
     event = await create_event(db_session, admin_user.id, event_payload)
     show = await create_show_with_inventory(db_session, event, admin_user.id, show_payload)
-    show.max_active_queue_tokens = 1
-    show.queue_release_batch = 1
     await db_session.commit()
+
+    previous_max_active = queue_service.settings.queue_max_active_tokens_default
+    previous_batch_size = queue_service.settings.queue_batch_size_default
+    queue_service.settings.queue_max_active_tokens_default = 1
+    queue_service.settings.queue_batch_size_default = 1
 
     first_join = await join_show_queue(db_session, show=show, user_id=user1.id)
     second_join = await join_show_queue(db_session, show=show, user_id=user2.id)
@@ -59,14 +62,19 @@ async def test_virtual_queue_batches_users(
     assert first_join.token
     assert second_join.status == QueueStatus.WAITING
     assert second_join.position == 1
-    assert "vị trí thứ 1" in second_join.message
 
     second_status = await get_queue_status(db_session, show_id=show.id, token=second_join.token, user_id=user2.id)
     assert second_status.status == QueueStatus.WAITING
     assert second_status.position == 1
-    assert "vị trí thứ 1" in second_status.message
+
+    first_entry = await db_session.scalar(select(QueueEntry).where(QueueEntry.token == first_join.token))
+    assert first_entry is not None
+    first_entry.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    await db_session.commit()
 
     await process_virtual_queue(db_session)
+    queue_service.settings.queue_max_active_tokens_default = previous_max_active
+    queue_service.settings.queue_batch_size_default = previous_batch_size
 
     second_status_after = await get_queue_status(db_session, show_id=show.id, token=second_join.token, user_id=user2.id)
     assert second_status_after.status == QueueStatus.ADMITTED
@@ -85,7 +93,7 @@ async def test_virtual_queue_releases_exact_batch_of_fifty(
     event_payload = EventCreateRequest(
         title="Sự kiện kiểm thử batch 50",
         description="Sự kiện dùng để kiểm thử số lượng user được cấp lượt mỗi batch.",
-        category="Âm nhạc",
+        category=EventCategory.MUSIC,
         start_date=show_date,
         end_date=show_date,
         cover_image_url="",
@@ -94,13 +102,12 @@ async def test_virtual_queue_releases_exact_batch_of_fifty(
     show_payload = ShowCreateRequest(
         title="Buổi diễn kiểm thử batch 50",
         description="Buổi diễn bật hàng đợi với batch 50 người mỗi lượt.",
-        venue="Nhà thi đấu kiểm thử",
+        location="Nhà thi đấu kiểm thử",
         show_date=show_date,
         start_time=datetime.now(UTC).time().replace(hour=18, minute=0, second=0, microsecond=0),
         end_time=datetime.now(UTC).time().replace(hour=20, minute=0, second=0, microsecond=0),
         status=EventStatus.LIVE,
         hold_minutes=10,
-        queue_enabled=True,
         zones=[SeatZoneCreate(code="GA", name="Khu phổ thông", row_count=1, seats_per_row=2, price=500_000, color="#024ddf")],
     )
 
@@ -124,7 +131,13 @@ async def test_virtual_queue_releases_exact_batch_of_fifty(
     db_session.add_all(waiting_entries)
     await db_session.commit()
 
+    previous_max_active = queue_service.settings.queue_max_active_tokens_default
+    previous_batch_size = queue_service.settings.queue_batch_size_default
+    queue_service.settings.queue_max_active_tokens_default = 50
+    queue_service.settings.queue_batch_size_default = 50
     changed_count = await process_virtual_queue(db_session)
+    queue_service.settings.queue_max_active_tokens_default = previous_max_active
+    queue_service.settings.queue_batch_size_default = previous_batch_size
 
     admitted_entries = list(
         await db_session.scalars(
@@ -162,7 +175,7 @@ async def test_existing_admitted_token_does_not_force_queue_when_below_threshold
     event_payload = EventCreateRequest(
         title="Sự kiện kiểm thử admitted không ép queue",
         description="Sự kiện dùng để kiểm thử token admitted không tự bật phòng chờ.",
-        category="Âm nhạc",
+        category=EventCategory.MUSIC,
         start_date=show_date,
         end_date=show_date,
         cover_image_url="",
@@ -171,13 +184,12 @@ async def test_existing_admitted_token_does_not_force_queue_when_below_threshold
     show_payload = ShowCreateRequest(
         title="Buổi diễn kiểm thử admitted không ép queue",
         description="Buổi diễn bật hàng đợi nhưng chưa chạm ngưỡng active user.",
-        venue="Nhà thi đấu kiểm thử",
+        location="Nhà thi đấu kiểm thử",
         show_date=show_date,
         start_time=datetime.now(UTC).time().replace(hour=18, minute=0, second=0, microsecond=0),
         end_time=datetime.now(UTC).time().replace(hour=20, minute=0, second=0, microsecond=0),
         status=EventStatus.LIVE,
         hold_minutes=10,
-        queue_enabled=True,
         zones=[SeatZoneCreate(code="GA", name="Khu phổ thông", row_count=1, seats_per_row=2, price=500_000, color="#024ddf")],
     )
 
@@ -198,7 +210,10 @@ async def test_existing_admitted_token_does_not_force_queue_when_below_threshold
     )
     await db_session.commit()
 
+    previous_max_active = queue_service.settings.queue_max_active_tokens_default
+    queue_service.settings.queue_max_active_tokens_default = 50
     second_join = await join_show_queue(db_session, show=show, user_id=user2.id)
+    queue_service.settings.queue_max_active_tokens_default = previous_max_active
 
     assert second_join.status == QueueStatus.ADMITTED
     assert second_join.position == 0

@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.models.enums import EventStatus, Gender, SeatStatus
+from app.models.enums import EventCategory, EventStatus, Gender, SeatSource, SeatStatus
 from app.schemas.performer import PublicShowPerformerResponse
 
 
@@ -38,7 +38,7 @@ class EventCreateRequest(BaseModel):
 
     title: str = Field(min_length=3, max_length=255)
     description: str = Field(min_length=10)
-    category: str = Field(min_length=2, max_length=80)
+    category: EventCategory
     start_date: date
     end_date: date
     cover_image_url: str = ""
@@ -56,7 +56,7 @@ class EventUpdateRequest(BaseModel):
 
     title: str | None = Field(default=None, min_length=3, max_length=255)
     description: str | None = Field(default=None, min_length=10)
-    category: str | None = Field(default=None, min_length=2, max_length=80)
+    category: EventCategory | None = None
     start_date: date | None = None
     end_date: date | None = None
     cover_image_url: str | None = None
@@ -68,15 +68,13 @@ class ShowCreateRequest(BaseModel):
 
     title: str = Field(min_length=3, max_length=255)
     description: str = Field(min_length=10)
-    venue: str = Field(min_length=3, max_length=200)
+    location: str = Field(min_length=3, max_length=200)
     show_date: date
     start_time: time
     end_time: time
     status: EventStatus = EventStatus.LIVE
     hold_minutes: int = Field(default=10, ge=1, le=60)
-    queue_enabled: bool = True
-    queue_release_batch: int = Field(default=50, ge=1, le=500)
-    max_active_queue_tokens: int = Field(default=200, ge=1, le=5000)
+    seat_source: SeatSource = SeatSource.LAYOUT
     venue_id: int | None = Field(default=None, ge=1)
     venue_layout_id: int | None = Field(default=None, ge=1)
     zones: list[SeatZoneCreate] = Field(default_factory=list)
@@ -85,10 +83,6 @@ class ShowCreateRequest(BaseModel):
     def validate_show_source(self) -> "ShowCreateRequest":
         if self.end_time <= self.start_time:
             raise ValueError("Giờ kết thúc phải sau giờ bắt đầu")
-        if self.venue_layout_id is not None:
-            if self.venue_id is None:
-                raise ValueError("Phải truyền venue_id khi truyền venue_layout_id")
-            return self
         return self
 
 
@@ -97,16 +91,13 @@ class ShowUpdateRequest(BaseModel):
 
     title: str | None = Field(default=None, min_length=3, max_length=255)
     description: str | None = Field(default=None, min_length=10)
-    venue: str | None = Field(default=None, min_length=3, max_length=200)
+    location: str | None = Field(default=None, min_length=3, max_length=200)
     show_date: date | None = None
     start_time: time | None = None
     end_time: time | None = None
     status: EventStatus | None = None
     hold_minutes: int | None = Field(default=None, ge=1, le=60)
-    queue_enabled: bool | None = None
-    queue_release_batch: int | None = Field(default=None, ge=1, le=500)
-    max_active_queue_tokens: int | None = Field(default=None, ge=1, le=5000)
-    venue_id: int | None = Field(default=None, ge=1)
+    seat_source: SeatSource | None = None
     venue_layout_id: int | None = Field(default=None, ge=1)
 
 
@@ -117,15 +108,12 @@ class ShowSummaryResponse(BaseModel):
     event_id: int
     title: str
     description: str
-    venue: str
+    location: str
     start_at: datetime
     end_at: datetime
     status: EventStatus
-    queue_enabled: bool
-    queue_release_batch: int
-    max_active_queue_tokens: int
+    seat_source: SeatSource = SeatSource.LAYOUT
     performers: list[PublicShowPerformerResponse] = Field(default_factory=list)
-    venue_id: int | None = None
     venue_layout_id: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -138,14 +126,13 @@ class EventCardResponse(BaseModel):
     slug: str
     title: str
     description: str
-    category: str
+    category: EventCategory
     venue: str
     start_at: datetime
     end_at: datetime
     cover_image_url: str
     status: EventStatus
     created_at: datetime
-    queue_enabled: bool
     max_price: float
 
 
@@ -223,7 +210,6 @@ class SeatMatrixResponse(BaseModel):
     event_id: int
     event_slug: str
     event_title: str
-    queue_enabled: bool
     queue_required: bool = False
     zones: list[SeatZoneResponse]
     seats: list[SeatResponse]

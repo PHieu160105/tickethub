@@ -1,10 +1,10 @@
 """Khai báo các model ORM cho nghệ sĩ và lineup gắn với show."""
 
-from sqlalchemy import Enum, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import PerformerRole
+from app.models.enums import PerformerRole, sa_enum
 
 
 class Performer(TimestampMixin, Base):
@@ -33,7 +33,7 @@ class ShowPerformer(TimestampMixin, Base):
     show_id: Mapped[int] = mapped_column(ForeignKey("shows.id", ondelete="CASCADE"), nullable=False, index=True)
     performer_id: Mapped[int] = mapped_column(ForeignKey("performers.id", ondelete="CASCADE"), nullable=False, index=True)
     role: Mapped[PerformerRole] = mapped_column(
-        Enum(PerformerRole, native_enum=False),
+        sa_enum(PerformerRole),
         default=PerformerRole.BACKUP,
         nullable=False,
         index=True,

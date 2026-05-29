@@ -16,13 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_optional_current_user
 from app.core.cache import public_api_cache, show_seat_cache_namespace
 from app.core.db import get_db_session
-from app.models.enums import EventStatus
+from app.models.enums import EventStatus, UserRole
 from app.models.event import Event
 from app.models.user import User
-from app.models.venue import Section
 from app.schemas.event import SeatMatrixResponse
-from app.schemas.seatmap import SeatMapResponse, SeatMapSectionResponse
-from app.services.event_service import get_show_by_id, get_show_seat_matrix
+from app.schemas.seatmap import SeatMapResponse
+from app.services.event_inventory_service import get_show_seat_matrix
+from app.services.event_query_service import get_show_by_id
 from app.services.admission_service import ensure_admission_for_show, read_queue_token, reject_before_show_lookup_if_waiting_room
 from app.services.inventory_service import get_seatmap
 from app.services.queue_service import is_show_queue_required
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/shows", tags=["seatmap"])
 
 
 def _is_admin(user: User | None) -> bool:
-    return bool(user and getattr(user.role, "value", str(user.role)) == "admin")
+    return bool(user and user.role == UserRole.ADMIN)
 
 
 async def _ensure_show_visible_to_user(session: AsyncSession, show_id: int, current_user: User | None):
@@ -68,7 +68,7 @@ async def show_seat_matrix(
     queue_token = read_queue_token(request)
     await reject_before_show_lookup_if_waiting_room(show_id, current_user, queue_token)
 
-    # Lấy show trước để xác thực `show_id` tồn tại và lấy event_id/queue_enabled.
+    # Lấy show trước để xác thực `show_id` tồn tại và lấy event_id.
     show, event = await _ensure_show_visible_to_user(session, show_id, current_user)
     await ensure_admission_for_show(session, show, current_user, queue_token, record_hit=False)
     if current_user is None:
@@ -82,7 +82,7 @@ async def show_seat_matrix(
         session,
         show.id,
         current_user_id=current_user.id if current_user else None,
-        include_user_details=bool(current_user and getattr(current_user.role, "value", str(current_user.role)) == "admin"),
+        include_user_details=_is_admin(current_user),
     )
     queue_required = False
     if current_user is not None:
@@ -95,7 +95,6 @@ async def show_seat_matrix(
         event_id=show.event_id,
         event_slug=event.slug if event else "",
         event_title=event.title if event else show.title,
-        queue_enabled=show.queue_enabled,
         queue_required=queue_required,
         zones=zones,
         seats=seats,
@@ -156,45 +155,13 @@ async def show_seatmap(
     return response
 
 
-@router.get("/{show_id}/sections", response_model=list[SeatMapSectionResponse])
+@router.get("/{show_id}/sections", response_model=list[dict])
 async def show_sections(
     show_id: int,
     session: AsyncSession = Depends(get_db_session),
-) -> list[SeatMapSectionResponse]:
-    """Lấy danh sách section của venue layout kèm giá nền.
-
-    Input:
-    - `show_id`: id buổi diễn.
-
-    Output:
-    - Danh sách section để frontend dựng legend hoặc editor theo layout.
-
-    Cách hoạt động:
-    - Chỉ show clone từ venue layout mới có `venue_layout_id`.
-    - Show sinh ghế theo zone cổ điển trả danh sách rỗng.
-    """
+) -> list[dict]:
+    """Section của venue layout đã bị loại khỏi flow hiện tại."""
 
     show, _ = await _ensure_show_visible_to_user(session, show_id, None)
-    if not show.venue_layout_id:
-        return []
-
-    # Lấy section theo thứ tự admin đã cấu hình trong venue studio.
-    sections = list(
-        await session.scalars(
-            select(Section)
-            .where(Section.venue_layout_id == show.venue_layout_id)
-            .order_by(Section.sort_order.asc())
-        )
-    )
-
-    # Chuyển ORM model sang schema response, ép `price_base` về float để JSON ổn định.
-    return [
-        SeatMapSectionResponse(
-            id=s.id,
-            name=s.name,
-            code=s.code,
-            color=s.color,
-            price_base=float(s.price_base),
-        )
-        for s in sections
-    ]
+    _ = show
+    return []

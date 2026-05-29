@@ -1,17 +1,25 @@
-import { useEffect, useState, type ComponentProps } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Calendar, Clock, MapPin, Users } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type WheelEvent } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import {
+  Calendar,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  MapPin,
+  Ticket,
+  Users,
+} from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { Toast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { eventsApi } from '@/features/events/api/eventsApi'
 import { useEventDetail } from '@/features/events/hooks/useEvents'
-import { isFavourite, toggleFavourite } from '@/lib/favourites'
 import { queueApi } from '@/lib/api'
 import { flashNoticeStorage, queueStorage, type FlashNotice } from '@/lib/storage'
+import type { EventStatus, ShowSummary } from '@/types'
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80'
@@ -19,7 +27,7 @@ const FALLBACK_PERFORMER_IMAGE =
   'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=400&q=80'
 const PERFORMER_PANEL_MAX_WIDTH = 720
 
-type PerformerFilter = 'all' | 'main' | 'guest'
+type PerformerFilter = 'all' | 'MAIN' | 'GUEST'
 
 function formatDate(date: string) {
   return new Date(date).toLocaleString('vi-VN', {
@@ -34,29 +42,29 @@ function formatDate(date: string) {
 
 function statusBadge(status: EventStatus) {
   const variants: Record<EventStatus, { text: string; variant: ComponentProps<typeof Badge>['variant'] }> = {
-    draft: { text: 'Ban nhap', variant: 'default' },
-    live: { text: 'Dang mo ban', variant: 'success' },
-    closed: { text: 'Da dong', variant: 'danger' },
+    DRAFT: { text: 'Bản nháp', variant: 'default' },
+    LIVE: { text: 'Đang mở bán', variant: 'success' },
+    CLOSED: { text: 'Đã đóng', variant: 'danger' },
   }
 
   const variant = variants[status]
   return <Badge variant={variant.variant}>{variant.text}</Badge>
 }
 
-function showStatusBadge(show: { status: EventStatus; end_at: string }) {
+function showStatusBadge(show: Pick<ShowSummary, 'status' | 'end_at'>) {
   if (new Date(show.end_at).getTime() <= Date.now()) {
-    return <Badge variant="danger">Da ket thuc</Badge>
+    return <Badge variant="danger">Đã kết thúc</Badge>
   }
   return statusBadge(show.status)
 }
 
-function canBookShow(show: { status: EventStatus; end_at: string }) {
-  return show.status === 'live' && new Date(show.end_at).getTime() > Date.now()
+function canBookShow(show: Pick<ShowSummary, 'status' | 'end_at'>) {
+  return show.status === 'LIVE' && new Date(show.end_at).getTime() > Date.now()
 }
 
-function performerRoleLabel(role: 'main' | 'guest' | 'backup') {
-  if (role === 'main') return 'Main'
-  if (role === 'guest') return 'Guest'
+function performerRoleLabel(role: PerformerFilter | 'BACKUP') {
+  if (role === 'MAIN') return 'Main'
+  if (role === 'GUEST') return 'Guest'
   return 'Backup'
 }
 
@@ -65,11 +73,17 @@ export default function EventDetail() {
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
   const { event, isLoading, error } = useEventDetail(eventKey)
+
   const [flashNotice, setFlashNotice] = useState<FlashNotice | null>(null)
   const [checkingQueueShowId, setCheckingQueueShowId] = useState<number | null>(null)
   const [activePerformerShowId, setActivePerformerShowId] = useState<number | null>(null)
   const [activePerformerFilter, setActivePerformerFilter] = useState<PerformerFilter>('all')
-  const [performerPanelPosition, setPerformerPanelPosition] = useState({ top: 88, left: 12, width: PERFORMER_PANEL_MAX_WIDTH })
+  const [performerPanelPosition, setPerformerPanelPosition] = useState({
+    top: 88,
+    left: 12,
+    width: PERFORMER_PANEL_MAX_WIDTH,
+  })
+
   const showSectionRef = useRef<HTMLDivElement | null>(null)
   const showCardRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const showButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({})
@@ -81,55 +95,9 @@ export default function EventDetail() {
   }, [eventKey])
 
   useEffect(() => {
-    setReviews([])
-    setReviewOffset(0)
-    setReviewError(null)
-    setHasLoadedReviews(false)
-  }, [eventKey])
-
-  useEffect(() => {
     setActivePerformerShowId(null)
     setActivePerformerFilter('all')
   }, [eventKey])
-
-  const fetchReviews = useCallback(async (nextOffset = 0, append = false) => {
-    if (!eventKey) return
-    setReviewLoading(true)
-    setReviewError(null)
-    try {
-      const data = await eventsApi.reviews(eventKey, { limit: 10, offset: nextOffset })
-      setReviews((previous) => (append ? [...previous, ...data] : data))
-      setReviewOffset(nextOffset + data.length)
-    } catch (errorValue) {
-      setReviewError(errorValue instanceof Error ? errorValue.message : 'Không thể tải đánh giá')
-    } finally {
-      setReviewLoading(false)
-    }
-  }, [eventKey])
-
-  useEffect(() => {
-    if (activeTab === 'reviews' && eventKey && !hasLoadedReviews) {
-      void fetchReviews(0, false)
-      setHasLoadedReviews(true)
-    }
-  }, [activeTab, eventKey, fetchReviews, hasLoadedReviews])
-
-  useEffect(() => {
-    if (!event) return
-    const favouriteKey = event.slug || event.id
-    setFav(isFavourite(user?.id, favouriteKey))
-  }, [event, user?.id])
-
-  useEffect(() => {
-    if (activeTab !== 'info') {
-      setActivePerformerShowId(null)
-    }
-  }, [activeTab])
-
-  const averageRating = useMemo(() => {
-    if (reviews.length === 0) return 0
-    return reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
-  }, [reviews])
 
   const activePerformerShow = useMemo(
     () => event?.shows.find((show) => show.id === activePerformerShowId) ?? null,
@@ -211,49 +179,6 @@ export default function EventDetail() {
     }
   }, [activePerformerShowId, updatePerformerPanelPosition])
 
-  const handleImageFile = async (file: File | null) => {
-    if (!file) {
-      setImageUrl(null)
-      return
-    }
-
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(String(reader.result || ''))
-      reader.onerror = () => reject(new Error('Không thể đọc file ảnh'))
-      reader.readAsDataURL(file)
-    })
-    setImageUrl(dataUrl)
-  }
-
-  const submitReview = async () => {
-    if (!eventKey) return
-    if (!isAuthenticated) {
-      navigate('/login')
-      return
-    }
-    if (!content.trim()) return
-
-    setSubmitting(true)
-    setReviewError(null)
-    try {
-      await eventsApi.createReview(eventKey, {
-        rating,
-        content: content.trim(),
-        image_url: imageUrl,
-      })
-      setReviewFormOpen(false)
-      setContent('')
-      setImageUrl(null)
-      setRating(5)
-      await fetchReviews(0, false)
-    } catch (errorValue) {
-      setReviewError(errorValue instanceof Error ? errorValue.message : 'Không thể gửi đánh giá')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   const handleBookShow = async (showId: number) => {
     if (!isAuthenticated) {
       navigate('/login')
@@ -267,7 +192,7 @@ export default function EventDetail() {
         queueStorage.setToken(showId, queueEntry.token)
       }
 
-      if (queueEntry.status === 'waiting') {
+      if (queueEntry.status === 'WAITING') {
         navigate(`/queue?showId=${showId}&eventKey=${encodeURIComponent(String(event?.slug ?? eventKey ?? ''))}`)
         return
       }
@@ -311,6 +236,7 @@ export default function EventDetail() {
   return (
     <div className="min-h-screen text-white">
       {flashNoticeNode}
+
       <section className="relative h-[340px] overflow-hidden md:h-[420px]">
         <img src={event.cover_image_url || FALLBACK_IMAGE} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-black/40" />
@@ -320,268 +246,227 @@ export default function EventDetail() {
             <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-secondary">
               {event.category}
             </p>
-            <h1 className="text-4xl md:text-6xl font-black leading-tight">{event.title}</h1>
-            <p className="text-slate-300 mt-4 max-w-2xl line-clamp-3">{event.description}</p>
+            <h1 className="text-4xl font-black leading-tight md:text-6xl">{event.title}</h1>
+            <p className="mt-4 max-w-2xl line-clamp-3 text-slate-300">{event.description}</p>
           </div>
         </div>
       </section>
 
-      <main className="max-w-7xl mx-auto px-4 py-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <section className="lg:col-span-2 space-y-6">
+      <main className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 py-12 lg:grid-cols-3">
+        <section className="space-y-6 lg:col-span-2">
           <div className="rounded-xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6">
-            <h2 className="text-xl customer-text-body font-bold mb-4">Gioi thieu su kien</h2>
-            <p className="text-gray-500 leading-relaxed">{event.description}</p>
+            <h2 className="mb-4 text-xl font-bold customer-text-body">Giới thiệu sự kiện</h2>
+            <p className="leading-relaxed text-gray-500">{event.description}</p>
           </div>
 
-              <div
-                id="shows"
-                ref={showSectionRef}
-                className="relative overflow-visible rounded-xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6"
-              >
-                <h2 className="mb-4 text-xl font-bold customer-text-body">Show diễn</h2>
-                {event.shows.length === 0 ? (
-                  <p className="text-sm text-gray-500">Sự kiện này chưa có show mở bán.</p>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      {event.shows.map((show) => {
-                        const isBookable = canBookShow(show)
+          <div
+            id="shows"
+            ref={showSectionRef}
+            className="relative overflow-visible rounded-xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6"
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-xl font-bold customer-text-body">Show diễn</h2>
+              <Badge variant="outline">{event.shows.length} show</Badge>
+            </div>
 
-                        return (
-                          <div
-                            key={show.id}
-                            ref={(node) => {
-                              showCardRefs.current[show.id] = node
-                            }}
-                            className="rounded-lg border border-white/10 customer-bg-page p-4"
-                          >
-                            <div className="mb-2 flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="font-semibold customer-text-body">{show.title}</p>
-                                <p className="mt-1 text-xs text-gray-500">{show.description}</p>
-                              </div>
-                              <div className="flex shrink-0 flex-col items-end gap-3">
-                                {showStatusBadge(show)}
-                                {show.performers.length > 0 && (
-                                  <button
-                                    type="button"
-                                    ref={(node) => {
-                                      showButtonRefs.current[show.id] = node
-                                    }}
-                                    onClick={() => togglePerformerPanel(show.id)}
-                                    className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10"
-                                  >
-                                    <Users className="h-4 w-4" />
-                                    Nghệ sĩ
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                            <div className="space-y-1 text-sm text-gray-600">
-                              <p>{new Date(show.start_at).toLocaleString('vi-VN')}</p>
-                              <p>{show.venue}</p>
-                            </div>
-                            {isBookable && (
-                              <Button
-                                className="mt-4 bg-[var(--customer-bg-opt)] hover:bg-[var(--customer-bg-opt)]/50"
-                                isLoading={checkingQueueShowId === show.id}
-                                onClick={() => void handleBookShow(show.id)}
-                              >
-                                Đặt vé
-                              </Button>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
+            {event.shows.length === 0 ? (
+              <p className="text-sm text-gray-500">Sự kiện này chưa có show mở bán.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {event.shows.map((show) => {
+                    const isBookable = canBookShow(show)
 
-                    {activePerformerShow && (
-                        <div
-                          ref={performerPanelRef}
-                          className="absolute z-20 overflow-hidden rounded-2xl border border-white/12 bg-[color:color-mix(in_srgb,var(--customer-bg-surface-strong)_82%,black)] shadow-2xl backdrop-blur-xl"
-                          style={{
-                            top: performerPanelPosition.top,
-                            left: performerPanelPosition.left,
-                            width: performerPanelPosition.width,
-                            maxWidth: 'calc(100% - 24px)',
-                          }}
-                        >
-                          <div className="border-b border-white/10 px-4 py-4 sm:px-5">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div>
-                                <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Lineup công khai</p>
-                                <h3 className="mt-2 text-lg font-semibold text-white">{activePerformerShow.title}</h3>
-                              </div>
-                              <div className="relative min-w-[124px]">
-                                <select
-                                  value={activePerformerFilter}
-                                  onChange={(eventValue) => setActivePerformerFilter(eventValue.target.value as PerformerFilter)}
-                                  className="h-10 w-full appearance-none rounded-lg border border-white/10 bg-[var(--customer-bg-page)] px-3 pr-10 text-sm customer-text-body outline-none transition focus:border-[var(--customer-bg-opt)] focus:ring-1 focus:ring-[var(--customer-bg-opt)]"
-                                  aria-label="Lọc lineup nghệ sĩ"
-                                >
-                                  <option value="all">Tất cả</option>
-                                  <option value="main">Main</option>
-                                  <option value="guest">Guest</option>
-                                </select>
-                                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                              </div>
-                            </div>
+                    return (
+                      <div
+                        key={show.id}
+                        ref={(node) => {
+                          showCardRefs.current[show.id] = node
+                        }}
+                        className="rounded-lg border border-white/10 customer-bg-page p-4"
+                      >
+                        <div className="mb-2 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-semibold customer-text-body">{show.title}</p>
+                            <p className="mt-1 text-xs text-gray-500">{show.description}</p>
                           </div>
 
-                          <div className="relative px-12 py-5 sm:px-14">
-                            {filteredPerformers.length > 1 && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => scrollPerformerStrip('left')}
-                                  className="absolute left-3 top-1/2 z-10 inline-flex h-10 min-w-11 -translate-y-1/2 items-center justify-center px-3 text-slate-300 transition hover:text-white"
-                                  aria-label="Cuộn danh sách nghệ sĩ sang trái"
-                                >
-                                  <ChevronLeft className="h-5 w-5 stroke-[1.6]" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => scrollPerformerStrip('right')}
-                                  className="absolute right-3 top-1/2 z-10 inline-flex h-10 min-w-11 -translate-y-1/2 items-center justify-center px-3 text-slate-300 transition hover:text-white"
-                                  aria-label="Cuộn danh sách nghệ sĩ sang phải"
-                                >
-                                  <ChevronRight className="h-5 w-5 stroke-[1.6]" />
-                                </button>
-                              </>
-                            )}
-
-                            {filteredPerformers.length === 0 ? (
-                              <div className="rounded-xl border border-white/8 bg-white/5 px-4 py-8 text-center text-sm text-slate-400">
-                                Không có nghệ sĩ thuộc nhóm này trong lineup công khai.
-                              </div>
-                            ) : (
-                              <div
-                                ref={performerStripRef}
-                                onWheel={handlePerformerStripWheel}
-                                className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                          <div className="flex shrink-0 flex-col items-end gap-3">
+                            {showStatusBadge(show)}
+                            {show.performers.length > 0 ? (
+                              <button
+                                type="button"
+                                ref={(node) => {
+                                  showButtonRefs.current[show.id] = node
+                                }}
+                                onClick={() => togglePerformerPanel(show.id)}
+                                className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10"
                               >
-                                {filteredPerformers.map((performer) => (
-                                  <article
-                                    key={`${activePerformerShow.id}-${performer.performer_id}-${performer.role}`}
-                                    className="w-[158px] shrink-0 snap-start rounded-xl border border-white/10 bg-black/20 p-3"
-                                  >
-                                    <img
-                                      src={performer.image_url || FALLBACK_PERFORMER_IMAGE}
-                                      alt={performer.stage_name}
-                                      className="h-28 w-full rounded-lg object-cover"
-                                    />
-                                    <p className="mt-3 line-clamp-2 font-semibold text-white">{performer.stage_name}</p>
-                                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">
-                                      {performerRoleLabel(performer.role)}
-                                    </p>
-                                  </article>
-                                ))}
-                              </div>
-                            )}
+                                <Users className="h-4 w-4" />
+                                Nghệ sĩ
+                              </button>
+                            ) : null}
                           </div>
                         </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="space-y-4 rounded-xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold customer-text-body">Đánh giá của khách hàng</h2>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {reviews.length > 0 ? `Trung bình ${averageRating.toFixed(1)}/5 từ ${reviews.length} đánh giá` : 'Chưa có đánh giá'}
-                  </p>
+
+                        <div className="space-y-2 text-sm text-gray-600">
+                          <p className="inline-flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-secondary" />
+                            {formatDate(show.start_at)}
+                          </p>
+                          <p className="inline-flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-secondary" />
+                            {show.location}
+                          </p>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                          <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400">
+                            <Users className="h-4 w-4" />
+                            {show.performers.length} lineup công khai
+                          </div>
+                          {isBookable ? (
+                            <Button
+                              className="bg-[var(--customer-bg-opt)] hover:bg-[var(--customer-bg-opt)]/50"
+                              isLoading={checkingQueueShowId === show.id}
+                              onClick={() => void handleBookShow(show.id)}
+                            >
+                              <Ticket className="h-4 w-4" />
+                              Đặt vé
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-                <Button className="bg-[var(--customer-bg-opt)] hover:bg-[var(--customer-bg-opt)]/50" onClick={() => setReviewFormOpen((previous) => !previous)}>
-                  Thêm đánh giá
-                </Button>
-              </div>
 
-              {reviewFormOpen && (
-                <div className="space-y-3 rounded-lg customer-bg-page p-4">
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button key={star} type="button" onClick={() => setRating(star)} className="p-1">
-                        <Star className={`h-5 w-5 ${star <= rating ? 'fill-yellow-400 text-yellow-400' : 'text-slate-500'}`} />
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    className="w-full rounded-lg customer-bg-surface px-4 py-2.5 customer-text-body placeholder:text-gray-400 focus:outline-[var(--customer-bg-opt)] focus:ring-2 focus:ring-brand-red"
-                    rows={4}
-                    placeholder="Chia sẻ trải nghiệm của bạn..."
-                    value={content}
-                    onChange={(eventValue) => setContent(eventValue.target.value)}
-                  />
-                  <input type="file" accept="image/*" onChange={(eventValue) => void handleImageFile(eventValue.target.files?.[0] || null)} className="customer-text-body" />
-                  {imageUrl && <img src={imageUrl} alt="Ảnh xem trước của đánh giá" className="h-32 w-32 rounded border border-[var(--customer-bg-opp)] object-cover customer-text-body" />}
-                  <div className="flex justify-end">
-                    <Button onClick={submitReview} isLoading={submitting} disabled={!content.trim()} className="bg-[var(--customer-bg-opt)] hover:bg-[var(--customer-bg-opt)]/50">
-                      Gửi đánh giá
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {reviewError && <p className="text-sm text-red-300">{reviewError}</p>}
-
-              <div className="space-y-3">
-                {reviews.map((review) => (
-                  <div key={review.id} className="rounded-lg customer-bg-page p-4">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold customer-text-body">{review.reviewer_name}</p>
-                      <p className="text-xs text-gray-500">{new Date(review.created_at).toLocaleString('vi-VN')}</p>
+                {activePerformerShow ? (
+                  <div
+                    ref={performerPanelRef}
+                    className="absolute z-20 overflow-hidden rounded-2xl border border-white/12 bg-[color:color-mix(in_srgb,var(--customer-bg-surface-strong)_82%,black)] shadow-2xl backdrop-blur-xl"
+                    style={{
+                      top: performerPanelPosition.top,
+                      left: performerPanelPosition.left,
+                      width: performerPanelPosition.width,
+                      maxWidth: 'calc(100% - 24px)',
+                    }}
+                  >
+                    <div className="border-b border-white/10 px-4 py-4 sm:px-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Lineup công khai</p>
+                          <h3 className="mt-2 text-lg font-semibold text-white">{activePerformerShow.title}</h3>
+                        </div>
+                        <div className="relative min-w-[124px]">
+                          <select
+                            value={activePerformerFilter}
+                            onChange={(eventValue) => setActivePerformerFilter(eventValue.target.value as PerformerFilter)}
+                            className="h-10 w-full appearance-none rounded-lg border border-white/10 bg-[var(--customer-bg-page)] px-3 pr-10 text-sm customer-text-body outline-none transition focus:border-[var(--customer-bg-opt)] focus:ring-1 focus:ring-[var(--customer-bg-opt)]"
+                            aria-label="Lọc lineup nghệ sĩ"
+                          >
+                            <option value="all">Tất cả</option>
+                            <option value="MAIN">Main</option>
+                            <option value="GUEST">Guest</option>
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        </div>
+                      </div>
                     </div>
-                    <div className="mt-1 flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star key={star} className={`h-4 w-4 ${star <= review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-slate-500'}`} />
-                      ))}
-                    </div>
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-gray-500">{review.content}</p>
-                    {review.image_url && <img src={review.image_url} alt="Ảnh đánh giá" className="mt-3 h-44 w-44 rounded border border-white/20 object-cover" />}
-                  </div>
-                ))}
-              </div>
 
-              <div className="pt-2">
-                <Button variant="outline" onClick={() => void fetchReviews(reviewOffset, true)} disabled={reviewLoading}>
-                  {reviewLoading ? 'Đang tải...' : 'Hiện thêm'}
-                </Button>
-              </div>
-            </div>
-          )}
+                    <div className="relative px-12 py-5 sm:px-14">
+                      {filteredPerformers.length > 1 ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => scrollPerformerStrip('left')}
+                            className="absolute left-3 top-1/2 z-10 inline-flex h-10 min-w-11 -translate-y-1/2 items-center justify-center px-3 text-slate-300 transition hover:text-white"
+                            aria-label="Cuộn danh sách nghệ sĩ sang trái"
+                          >
+                            <ChevronLeft className="h-5 w-5 stroke-[1.6]" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => scrollPerformerStrip('right')}
+                            className="absolute right-3 top-1/2 z-10 inline-flex h-10 min-w-11 -translate-y-1/2 items-center justify-center px-3 text-slate-300 transition hover:text-white"
+                            aria-label="Cuộn danh sách nghệ sĩ sang phải"
+                          >
+                            <ChevronRight className="h-5 w-5 stroke-[1.6]" />
+                          </button>
+                        </>
+                      ) : null}
+
+                      {filteredPerformers.length === 0 ? (
+                        <div className="rounded-xl border border-white/8 bg-white/5 px-4 py-8 text-center text-sm text-slate-400">
+                          Không có nghệ sĩ thuộc nhóm này trong lineup công khai.
+                        </div>
+                      ) : (
+                        <div
+                          ref={performerStripRef}
+                          onWheel={handlePerformerStripWheel}
+                          className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                        >
+                          {filteredPerformers.map((performer) => (
+                            <article
+                              key={`${activePerformerShow.id}-${performer.performer_id}-${performer.role}`}
+                              className="w-[158px] shrink-0 snap-start rounded-xl border border-white/10 bg-black/20 p-3"
+                            >
+                              <img
+                                src={performer.image_url || FALLBACK_PERFORMER_IMAGE}
+                                alt={performer.stage_name}
+                                className="h-28 w-full rounded-lg object-cover"
+                              />
+                              <p className="mt-3 line-clamp-2 font-semibold text-white">{performer.stage_name}</p>
+                              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">
+                                {performerRoleLabel(performer.role)}
+                              </p>
+                              {performer.artist_type ? (
+                                <p className="mt-2 line-clamp-2 text-xs text-slate-500">{performer.artist_type}</p>
+                              ) : null}
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
         </section>
 
         <aside className="space-y-4">
-          <div className="rounded-xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6 space-y-4">
-            <h3 className="text-lg font-bold customer-text-body">Thong tin su kien</h3>
+          <div className="space-y-4 rounded-xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6">
+            <h3 className="text-lg font-bold customer-text-body">Thông tin sự kiện</h3>
+
             <div className="flex items-start gap-3 text-slate-500">
               <Calendar className="mt-0.5 h-5 w-5 text-secondary" />
               <div>
-                <p className="text-xs uppercase tracking-wider text-gray-500">Bat dau</p>
+                <p className="text-xs uppercase tracking-wider text-gray-500">Bắt đầu</p>
                 <p>{formatDate(event.start_at)}</p>
               </div>
             </div>
+
             <div className="flex items-start gap-3 text-slate-500">
               <Clock className="mt-0.5 h-5 w-5 text-secondary" />
               <div>
-                <p className="text-xs uppercase tracking-wider text-gray-500">Ket thuc</p>
+                <p className="text-xs uppercase tracking-wider text-gray-500">Kết thúc</p>
                 <p>{formatDate(event.end_at)}</p>
               </div>
             </div>
+
             <div className="flex items-start gap-3 text-slate-500">
               <MapPin className="mt-0.5 h-5 w-5 text-secondary" />
               <div>
-                <p className="text-xs uppercase tracking-wider text-gray-500">Dia diem</p>
+                <p className="text-xs uppercase tracking-wider text-gray-500">Địa điểm</p>
                 <p>{event.venue}</p>
               </div>
             </div>
+
             <div className="flex items-start gap-3 text-slate-500">
               <Users className="mt-0.5 h-5 w-5 text-secondary" />
               <div>
-                <p className="text-xs uppercase tracking-wider text-gray-500">So show</p>
+                <p className="text-xs uppercase tracking-wider text-gray-500">Số show</p>
                 <p>{event.shows.length}</p>
               </div>
             </div>

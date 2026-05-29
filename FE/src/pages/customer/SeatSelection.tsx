@@ -18,8 +18,8 @@ import type { Seat, SeatMapResponse, SeatMapSeat, SeatZone } from '@/types'
 import { AlertCircle, MapPin, Ticket } from 'lucide-react'
 
 function seatClass(seat: Seat, isSelected: boolean) {
-  if (seat.status === 'sold') return 'bg-slate-700 text-slate-300 border-slate-500 cursor-not-allowed'
-  if (seat.status === 'locked' && !seat.is_locked_by_me) return 'bg-amber-900/70 text-amber-100 border-amber-500 cursor-not-allowed'
+  if (seat.status === 'SOLD') return 'bg-slate-700 text-slate-300 border-slate-500 cursor-not-allowed'
+  if (seat.status === 'LOCKED' && !seat.is_locked_by_me) return 'bg-amber-900/70 text-amber-100 border-amber-500 cursor-not-allowed'
   if (seat.is_locked_by_me) return 'bg-emerald-700 customer-text-body border-emerald-500'
   if (isSelected) return 'bg-sky-700 customer-text-body border-sky-400'
   return 'bg-slate-800 text-slate-200 hover:bg-slate-700 border-white/10'
@@ -196,7 +196,7 @@ export default function SeatSelection() {
       const sourceSeatIds = shouldRestoreFromCheckout ? preselectedSeatIds : selectedSeatIds
       const nextSeatIds = sourceSeatIds.filter((seatId) => {
         const seat = matrix.seats.find((item) => item.id === seatId)
-        return Boolean(seat && (seat.status === 'available' || seat.is_locked_by_me))
+        return Boolean(seat && (seat.status === 'AVAILABLE' || seat.is_locked_by_me))
       })
 
       if (shouldRestoreFromCheckout) {
@@ -258,12 +258,6 @@ export default function SeatSelection() {
         .forEach((seat) => map.set(seat.id, zone.color))
     })
 
-    displaySeatMap.sections.forEach((section) => {
-      displaySeatMap.seats
-        .filter((seat) => seat.section_id === section.id && !map.has(seat.id))
-        .forEach((seat) => map.set(seat.id, section.color))
-    })
-
     return map
   }, [displaySeatMap])
 
@@ -274,13 +268,13 @@ export default function SeatSelection() {
   }, [])
 
   const handleSeatClick = useCallback((seat: Seat) => {
-    if (seat.status !== 'available') return
+    if (seat.status !== 'AVAILABLE') return
     setStatusMessage('')
     toggleSeatSelection(seat.id)
   }, [toggleSeatSelection])
 
   const handleCanvasSeatClick = useCallback((seat: SeatMapSeat) => {
-    if (seat.status !== 'available') return
+    if (seat.status !== 'AVAILABLE') return
     setStatusMessage('')
     toggleSeatSelection(seat.id)
   }, [toggleSeatSelection])
@@ -488,7 +482,7 @@ export default function SeatSelection() {
                             type="button"
                             onClick={() => handleSeatClick(seat)}
                             className={`rounded border px-2 py-1.5 text-xs transition-colors ${seatClass(seat, isSelected)}`}
-                            disabled={seat.status !== 'available'}
+                            disabled={seat.status !== 'AVAILABLE'}
                             title={`${seat.seat_label} - ${formatCurrencyVnd(seat.price)}`}
                           >
                             {seat.seat_label}

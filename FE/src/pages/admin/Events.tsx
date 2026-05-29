@@ -10,7 +10,7 @@ import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
-import type { EventCard, EventDetail, EventStatus, ShowSummary, VenueLayoutItem, VenueSummary } from '@/types'
+import type { EventCard, EventDetail, EventStatus, SeatSource, ShowSummary, VenueLayoutItem, VenueSummary } from '@/types'
 
 interface EventFormState {
   title: string
@@ -26,13 +26,13 @@ interface EventFormState {
 interface ShowFormState {
   title: string
   description: string
-  venue: string
+  location: string
   show_date: string
   start_time: string
   end_time: string
   status: EventStatus
   hold_minutes: string
-  seat_map_mode: 'free' | 'venue'
+  seat_source: SeatSource
   create_seed_zone: boolean
   venue_id: string
   venue_layout_id: string
@@ -44,13 +44,23 @@ interface ShowFormState {
   zone_color: string
 }
 
+const EVENT_CATEGORY_OPTIONS = [
+  { value: 'MUSIC', label: 'Âm nhạc' },
+  { value: 'THEATER', label: 'Kịch' },
+  { value: 'DANCE', label: 'Vũ đạo' },
+  { value: 'TRADITIONAL', label: 'Truyền thống' },
+  { value: 'COMEDY', label: 'Hài' },
+  { value: 'CIRCUS', label: 'Xiếc' },
+  { value: 'OTHER', label: 'Khác' },
+] as const
+
 const INITIAL_EVENT_FORM: EventFormState = {
   title: '',
   description: '',
   category: '',
   start_date: '',
   end_date: '',
-  status: 'live',
+  status: 'LIVE',
   cover_image_url: '',
   image_file: null,
 }
@@ -58,14 +68,14 @@ const INITIAL_EVENT_FORM: EventFormState = {
 const INITIAL_SHOW_FORM: ShowFormState = {
   title: '',
   description: '',
-  venue: '',
+  location: '',
   show_date: '',
   start_time: '19:00',
   end_time: '21:00',
-  status: 'draft',
+  status: 'DRAFT',
 
   hold_minutes: '10',
-  seat_map_mode: 'free',
+  seat_source: 'FREE_FORM',
   create_seed_zone: false,
   venue_id: '',
   venue_layout_id: '',
@@ -81,9 +91,9 @@ const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 
 function statusBadge(status: EventStatus) {
   const variants: Record<EventStatus, { text: string; className: string }> = {
-    draft: { text: 'Bản nháp', className: 'bg-gray-500/20 text-gray-300' },
-    live: { text: 'Đang mở bán', className: 'bg-green-700/20 text-green-300' },
-    closed: { text: 'Đã đóng', className: 'bg-red-500/20 text-red-300' },
+    DRAFT: { text: 'Bản nháp', className: 'bg-gray-500/20 text-gray-300' },
+    LIVE: { text: 'Đang mở bán', className: 'bg-green-700/20 text-green-300' },
+    CLOSED: { text: 'Đã đóng', className: 'bg-red-500/20 text-red-300' },
   }
 
   const variant = variants[status]
@@ -261,10 +271,10 @@ export default function AdminEvents() {
   }
 
   async function handleDeleteEvent(eventItem: EventCard) {
-    if (eventItem.status !== 'draft') {
+    if (eventItem.status !== 'DRAFT') {
       if (!window.confirm('Sự kiện phải ở trạng thái Draft trước khi xóa. Chuyển sự kiện này về Draft ngay?')) return
       try {
-        await adminApi.updateEvent(eventItem.slug, { status: 'draft' })
+        await adminApi.updateEvent(eventItem.slug, { status: 'DRAFT' })
         await loadEvents()
         if (activeEvent?.slug === eventItem.slug) {
           await loadEventDetail(eventItem.slug)
@@ -338,7 +348,7 @@ export default function AdminEvents() {
       ...previous,
       venue_id: venueId,
       venue_layout_id: '',
-      venue: venueId ? venues.find((item) => item.id === Number(venueId))?.name ?? previous.venue : previous.venue,
+      location: venueId ? venues.find((item) => item.id === Number(venueId))?.name ?? previous.location : previous.location,
     }))
 
     if (!venueId) {
@@ -363,10 +373,10 @@ export default function AdminEvents() {
   async function openEditShowModal(show: ShowSummary) {
     if (!activeEvent) return
 
-    if (show.status !== 'draft') {
+    if (show.status !== 'DRAFT') {
       if (!window.confirm('Show đang Live. Show sẽ được chuyển về Draft trước khi chỉnh sửa. Tiếp tục?')) return
       try {
-        await adminApi.updateShow(activeEvent.slug, show.id, { status: 'draft' })
+        await adminApi.updateShow(activeEvent.slug, show.id, { status: 'DRAFT' })
         await loadEventDetail(activeEvent.slug)
         await loadEvents()
       } catch (errorValue) {
@@ -383,14 +393,14 @@ export default function AdminEvents() {
       ...INITIAL_SHOW_FORM,
       title: detail.title,
       description: detail.description,
-      venue: detail.venue,
+      location: detail.location,
       show_date: formatVietnamDateInput(detail.start_at),
       start_time: formatVietnamTimeInput(detail.start_at),
       end_time: formatVietnamTimeInput(detail.end_at),
       status: detail.status,
-      seat_map_mode: detail.venue_layout_id ? 'venue' : 'free',
+      seat_source: detail.seat_source,
       create_seed_zone: false,
-      venue_id: detail.venue_id ? String(detail.venue_id) : '',
+      venue_id: '',
       venue_layout_id: detail.venue_layout_id ? String(detail.venue_layout_id) : '',
       hold_minutes: String(detail.hold_minutes),
       zone_code: 'A',
@@ -402,25 +412,16 @@ export default function AdminEvents() {
     }
 
     setShowForm(nextForm)
-    if (detail.venue_id) {
-      try {
-        const response = await adminApi.listLayouts(detail.venue_id)
-        setVenueLayouts(response)
-      } catch {
-        setVenueLayouts([])
-      }
-    } else {
-      setVenueLayouts([])
-    }
+    setVenueLayouts([])
     setShowModalOpen(true)
   }
 
   async function openSeatPlanner(show: ShowSummary) {
     if (!activeEvent) return
-    if (show.status !== 'draft') {
+    if (show.status !== 'DRAFT') {
       if (!window.confirm('Seat Planner là thao tác chỉnh sửa show. Show sẽ được chuyển về Draft trước khi mở planner. Tiếp tục?')) return
       try {
-        await adminApi.updateShow(activeEvent.slug, show.id, { status: 'draft' })
+        await adminApi.updateShow(activeEvent.slug, show.id, { status: 'DRAFT' })
         await loadEventDetail(activeEvent.slug)
         await loadEvents()
       } catch (errorValue) {
@@ -439,10 +440,10 @@ export default function AdminEvents() {
 
   async function handleDeleteShow(show: ShowSummary) {
     if (!activeEvent) return
-    if (show.status !== 'draft') {
+    if (show.status !== 'DRAFT') {
       if (!window.confirm(`Show "${show.title}" phải ở trạng thái Draft trước khi xóa. Chuyển về Draft ngay?`)) return
       try {
-        await adminApi.updateShow(activeEvent.slug, show.id, { status: 'draft' })
+        await adminApi.updateShow(activeEvent.slug, show.id, { status: 'DRAFT' })
         await loadEventDetail(activeEvent.slug)
         await loadEvents()
       } catch (errorValue) {
@@ -462,15 +463,15 @@ export default function AdminEvents() {
 
   async function handleShowSubmit() {
     if (!activeEvent) return
-    if (!showForm.title || !showForm.description || !showForm.venue || !showForm.show_date || !showForm.start_time || !showForm.end_time) {
+    if (!showForm.title || !showForm.description || !showForm.location || !showForm.show_date || !showForm.start_time || !showForm.end_time) {
       setFormError('Vui lòng nhập đầy đủ thông tin show.')
       return
     }
-    if (showForm.seat_map_mode === 'venue' && !editingShow && (!showForm.venue_id || !showForm.venue_layout_id)) {
+    if (showForm.seat_source === 'LAYOUT' && !editingShow && (!showForm.venue_id || !showForm.venue_layout_id)) {
       setFormError('Vui lòng chọn venue và layout cho show này.')
       return
     }
-    if (showForm.seat_map_mode === 'free' && !editingShow && showForm.create_seed_zone && (!showForm.zone_code || !showForm.zone_name)) {
+    if (showForm.seat_source === 'FREE_FORM' && !editingShow && showForm.create_seed_zone && (!showForm.zone_code || !showForm.zone_name)) {
       setFormError('Vui lòng cấu hình zone khởi tạo cho show chọn chỗ tự do.')
       return
     }
@@ -483,15 +484,16 @@ export default function AdminEvents() {
       const payload = {
         title: showForm.title,
         description: showForm.description,
-        venue: showForm.venue,
+        location: showForm.location,
         show_date: utcStart.date,
         start_time: utcStart.time,
         end_time: utcEnd.time,
         status: showForm.status,
         hold_minutes: Number(showForm.hold_minutes),
+        seat_source: showForm.seat_source,
         ...(editingShow
           ? {}
-          : showForm.seat_map_mode === 'venue'
+          : showForm.seat_source === 'LAYOUT'
             ? {
                 venue_id: Number(showForm.venue_id),
                 venue_layout_id: Number(showForm.venue_layout_id),
@@ -566,9 +568,9 @@ export default function AdminEvents() {
               onChange={(event) => setStatusFilter(event.target.value as 'all' | EventStatus)}
             >
               <option value="all">Tất cả status</option>
-              <option value="draft">Bản nháp</option>
-              <option value="live">Đang mở bán</option>
-              <option value="closed">Đã đóng</option>
+              <option value="DRAFT">Bản nháp</option>
+              <option value="LIVE">Đang mở bán</option>
+              <option value="CLOSED">Đã đóng</option>
             </select>
           </div>
         </CardContent>
@@ -668,14 +670,19 @@ export default function AdminEvents() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label className="mb-2 block text-sm font-medium text-white">Thể loại</label>
-              <Input className="text-white" value={eventForm.category} onChange={(event) => setEventForm((prev) => ({ ...prev, category: event.target.value }))} />
+              <select className="w-full rounded-lg border border-white/10 admin-bg-listbox px-3 py-2 text-gray-500" value={eventForm.category} onChange={(event) => setEventForm((prev) => ({ ...prev, category: event.target.value }))}>
+                <option value="">Chọn thể loại</option>
+                {EVENT_CATEGORY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-300">Trạng thái</label>
               <select className="w-full rounded-lg border border-white/10 admin-bg-listbox px-3 py-2 text-gray-500" value={eventForm.status} onChange={(event) => setEventForm((prev) => ({ ...prev, status: event.target.value as EventStatus }))}>
-                <option value="live">Đang mở bán</option>
-                <option value="draft">Bản nháp</option>
-                <option value="closed">Đã đóng</option>
+                <option value="LIVE">Đang mở bán</option>
+                <option value="DRAFT">Bản nháp</option>
+                <option value="CLOSED">Đã đóng</option>
               </select>
             </div>
           </div>
@@ -750,12 +757,12 @@ export default function AdminEvents() {
                           <div className="flex items-center gap-2">
                             <h3 className="text-lg font-semibold customer-text-header">{show.title}</h3>
                             {statusBadge(show.status)}
-                            <Badge variant="info" size="sm">{show.venue_layout_id ? 'Sơ đồ venue' : 'Chọn chỗ tự do'}</Badge>
+                            <Badge variant="info" size="sm">{show.seat_source === 'LAYOUT' ? 'Theo layout' : 'Tự do'}</Badge>
                           </div>
                           <p className="text-sm text-gray-500">{show.description}</p>
                           <div className="space-y-1 text-sm text-gray-400">
                             <p>{formatDateTime(show.start_at)} - {formatDateTime(show.end_at)}</p>
-                            <p>{show.venue}</p>
+                            <p>{show.location}</p>
                           </div>
                         </div>
 
@@ -812,20 +819,20 @@ export default function AdminEvents() {
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-300">Venue</label>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Địa điểm</label>
               <Input
                 className="text-white"
-                value={showForm.venue}
-                disabled={showForm.seat_map_mode === 'venue'}
-                onChange={(event) => setShowForm((prev) => ({ ...prev, venue: event.target.value }))}
+                value={showForm.location}
+                disabled={showForm.seat_source === 'LAYOUT'}
+                onChange={(event) => setShowForm((prev) => ({ ...prev, location: event.target.value }))}
               />
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-300">Trạng thái</label>
               <select className="w-full rounded-lg border border-white/10 admin-bg-listbox px-3 py-2 text-gray-500" value={showForm.status} onChange={(event) => setShowForm((prev) => ({ ...prev, status: event.target.value as EventStatus }))}>
-                <option value="live">Đang mở bán</option>
-                <option value="draft">Bản nháp</option>
-                <option value="closed">Đã đóng</option>
+                <option value="LIVE">Đang mở bán</option>
+                <option value="DRAFT">Bản nháp</option>
+                <option value="CLOSED">Đã đóng</option>
               </select>
             </div>
           </div>
@@ -864,23 +871,23 @@ export default function AdminEvents() {
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <button
                   type="button"
-                  className={`rounded-xl border px-4 py-4 text-left transition ${showForm.seat_map_mode === 'free' ? 'border-brand-red/40 bg-brand-red/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
-                  onClick={() => setShowForm((prev) => ({ ...prev, seat_map_mode: 'free', venue_id: '', venue_layout_id: '' }))}
+                  className={`rounded-xl border px-4 py-4 text-left transition ${showForm.seat_source === 'FREE_FORM' ? 'border-brand-red/40 bg-brand-red/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                  onClick={() => setShowForm((prev) => ({ ...prev, seat_source: 'FREE_FORM', venue_id: '', venue_layout_id: '' }))}
                 >
                   <p className="font-semibold text-white">Chọn chỗ tự do</p>
                   <p className="mt-1 text-sm text-slate-400">Dùng một seat plan chung và chỉnh toàn bộ trong Seat Planner.</p>
                 </button>
                 <button
                   type="button"
-                  className={`rounded-xl border px-4 py-4 text-left transition ${showForm.seat_map_mode === 'venue' ? 'border-brand-red/40 bg-brand-red/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
-                  onClick={() => setShowForm((prev) => ({ ...prev, seat_map_mode: 'venue' }))}
+                  className={`rounded-xl border px-4 py-4 text-left transition ${showForm.seat_source === 'LAYOUT' ? 'border-brand-red/40 bg-brand-red/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                  onClick={() => setShowForm((prev) => ({ ...prev, seat_source: 'LAYOUT' }))}
                 >
                   <p className="font-semibold text-white">Venue Layout</p>
                   <p className="mt-1 text-sm text-slate-400">Clone layout đã dựng từ Venue Studio.</p>
                 </button>
               </div>
 
-              {showForm.seat_map_mode === 'venue' ? (
+              {showForm.seat_source === 'LAYOUT' ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
                     <label className="mb-2 block text-sm font-medium text-gray-300">Venue template</label>

@@ -62,9 +62,9 @@ function buildValidation(rows: DraftPerformer[]): ValidationState {
   const sectionErrors: ValidationState['sectionErrors'] = {}
   const fieldErrors: ValidationState['fieldErrors'] = {}
 
-  const mainCount = rows.filter((item) => item.role === 'main').length
+  const mainCount = rows.filter((item) => item.role === 'MAIN').length
   if (mainCount < 1) {
-    sectionErrors.main = 'Cần ít nhất 1 main performer.'
+    sectionErrors.MAIN = 'Cần ít nhất 1 main performer.'
   }
 
   const nameMap = new Map<string, string[]>()
@@ -368,7 +368,7 @@ export function ShowPerformersModal({ isOpen, show, onClose, onSaved }: ShowPerf
   }
 
   function renderEmptyState(role: PerformerRole, title: string) {
-    const buttonLabel = role === 'main' ? 'Thêm main' : role === 'guest' ? 'Thêm guest' : 'Thêm backup'
+    const buttonLabel = role === 'MAIN' ? 'Thêm main' : role === 'GUEST' ? 'Thêm guest' : 'Thêm backup'
 
     return (
       <div className="rounded-xl border border-dashed border-white/10 bg-black/10 px-4 py-5">
@@ -392,7 +392,7 @@ export function ShowPerformersModal({ isOpen, show, onClose, onSaved }: ShowPerf
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base font-semibold text-white">{title}</h3>
-              <Badge variant={role === 'main' ? 'success' : role === 'guest' ? 'warning' : 'default'} size="sm">
+              <Badge variant={role === 'MAIN' ? 'success' : role === 'GUEST' ? 'warning' : 'default'} size="sm">
                 {items.length}
               </Badge>
             </div>
@@ -463,7 +463,7 @@ export function ShowPerformersModal({ isOpen, show, onClose, onSaved }: ShowPerf
                             />
                           </div>
                           <div className="flex items-end gap-2">
-                            <Badge variant={role === 'main' ? 'success' : role === 'guest' ? 'warning' : 'default'}>{role}</Badge>
+                            <Badge variant={role === 'MAIN' ? 'success' : role === 'GUEST' ? 'warning' : 'default'}>{role}</Badge>
                           </div>
                         </div>
 
@@ -494,9 +494,9 @@ export function ShowPerformersModal({ isOpen, show, onClose, onSaved }: ShowPerf
           <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center text-gray-400">Đang tải lineup nghệ sĩ...</div>
         ) : (
           <>
-            {renderSection('main', 'Main performers', 'Lineup chính của show. Show cần ít nhất 1 main để có thể lưu.')}
-            {renderSection('guest', 'Guest performers', 'Khách mời hiển thị public cùng main và có thể xóa khỏi show.')}
-            {renderSection('backup', 'Backup performers', 'Danh sách dự phòng nội bộ của show.')}
+            {renderSection('MAIN', 'Main performers', 'Lineup chính của show. Show cần ít nhất 1 main để có thể lưu.')}
+            {renderSection('GUEST', 'Guest performers', 'Khách mời hiển thị public cùng main và có thể xóa khỏi show.')}
+            {renderSection('BACKUP', 'Backup performers', 'Danh sách dự phòng nội bộ của show.')}
           </>
         )}
 

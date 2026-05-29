@@ -30,7 +30,6 @@ class Venue(TimestampMixin, Base):
     address: Mapped[str] = mapped_column(Text, nullable=True)
     city: Mapped[str] = mapped_column(String(100), nullable=True)
     venue_type: Mapped[str] = mapped_column(String(50), nullable=False)  # Loại venue như sân vận động, nhà hát, arena hoặc cấu hình tùy biến.
-    capacity: Mapped[int] = mapped_column(Integer, nullable=True)
     svg_source: Mapped[str] = mapped_column(Text, nullable=True)  # Dữ liệu nền gốc được tải lên.
     svg_processed: Mapped[str] = mapped_column(Text, nullable=True)  # Dữ liệu nền đã qua tiền xử lý để gắn marker hoặc parse.
     width: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)

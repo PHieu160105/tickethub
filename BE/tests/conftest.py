@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from app.core.redis_client import get_redis_client
 from app.core.security import hash_password
 from app.models import Base
-from app.models.enums import EventStatus, Gender, UserRole
+from app.models.enums import EventCategory, EventStatus, Gender, UserRole
 from app.models.user import User
 from app.models.event import Event, Show
 from app.schemas.event import EventCreateRequest, SeatZoneCreate, ShowCreateRequest
@@ -116,7 +116,7 @@ async def sample_event_with_show(db_session: AsyncSession, admin_user: User) -> 
     event_payload = EventCreateRequest(
         title="Test Event",
         description="Event for testing seat lock and checkout lifecycle.",
-        category="Concert",
+        category=EventCategory.MUSIC,
         start_date=show_date,
         end_date=show_date,
         cover_image_url="",
@@ -125,13 +125,12 @@ async def sample_event_with_show(db_session: AsyncSession, admin_user: User) -> 
     show_payload = ShowCreateRequest(
         title="Test Show",
         description="Show inventory used by backend test fixtures.",
-        venue="Test Venue",
+        location="Test Venue",
         show_date=show_date,
         start_time=time(hour=19, minute=0),
         end_time=time(hour=21, minute=30),
         status=EventStatus.LIVE,
         hold_minutes=10,
-        queue_enabled=False,
         zones=[SeatZoneCreate(code="VIP", name="VIP", row_count=2, seats_per_row=3, price=100.0, color="#024ddf")],
     )
 

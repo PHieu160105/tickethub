@@ -28,7 +28,7 @@ function formatDate(value: string) {
 }
 
 function toCardStatus(ticket: TicketItem): 'confirmed' | 'pending' {
-  return ticket.seat_status === 'locked' ? 'pending' : 'confirmed'
+  return ticket.seat_status === 'LOCKED' ? 'pending' : 'confirmed'
 }
 
 const CustomerTicket: React.FC = () => {
@@ -57,8 +57,8 @@ const CustomerTicket: React.FC = () => {
       const eventTime = new Date(ticket.show_start_at).getTime()
       const isPast = eventTime < referenceTime
 
-      if (activeTab === 'upcoming') return !isPast && ticket.seat_status === 'sold'
-      return isPast && ticket.seat_status === 'sold'
+      if (activeTab === 'upcoming') return !isPast && ticket.seat_status === 'SOLD'
+      return isPast && ticket.seat_status === 'SOLD'
     })
   }, [activeTab, referenceTime, tickets])
 

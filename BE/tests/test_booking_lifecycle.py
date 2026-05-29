@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import OrderStatus, SeatStatus
+from app.models.order import Ticket
 from app.models.seat import Seat
 from app.services.booking_service import checkout_locked_seats, fetch_my_tickets, lock_seats, release_expired_locks
 
@@ -93,7 +94,9 @@ async def test_expired_lock_worker_releases_seat(
 
     await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[seat.id], queue_token=None)
 
-    seat.lock_expires_at = datetime.now(UTC) - timedelta(minutes=1)
+    ticket = await db_session.scalar(select(Ticket).where(Ticket.seat_id == seat.id))
+    assert ticket is not None
+    ticket.lock_expires_at = datetime.now(UTC) - timedelta(minutes=1)
     await db_session.commit()
 
     released = await release_expired_locks(db_session)

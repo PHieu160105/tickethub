@@ -11,9 +11,9 @@ import type { QueueJoinResponse, QueueStatusResponse } from '@/types'
 import { AlertTriangle, CheckCircle2, Clock3, Loader2, LogIn, Timer } from 'lucide-react'
 
 function statusDescription(status: QueueJoinResponse['status']) {
-  if (status === 'admitted') return 'Bạn đã được vào lượt đặt chỗ.'
-  if (status === 'waiting') return 'Hệ thống đang điều tiết truy cập, vui lòng chờ.'
-  if (status === 'completed') return 'Phiên phòng chờ đã hoàn tất.'
+  if (status === 'ADMITTED') return 'Bạn đã được vào lượt đặt chỗ.'
+  if (status === 'WAITING') return 'Hệ thống đang điều tiết truy cập, vui lòng chờ.'
+  if (status === 'COMPLETED') return 'Phiên phòng chờ đã hoàn tất.'
   return 'Phiên phòng chờ đã hết hạn, vui lòng vào lại phòng chờ.'
 }
 
@@ -43,7 +43,7 @@ export default function VirtualQueue() {
   const eventKey = searchParams.get('eventKey')?.trim() ?? ''
 
   const [queueToken, setQueueToken] = useState<string | null>(null)
-  const [status, setStatus] = useState<QueueJoinResponse['status']>('waiting')
+  const [status, setStatus] = useState<QueueJoinResponse['status']>('WAITING')
   const [position, setPosition] = useState<number | null>(null)
   const [admittedUntil, setAdmittedUntil] = useState<string | null>(null)
   const [message, setMessage] = useState('Đang kết nối phòng chờ...')
@@ -59,18 +59,18 @@ export default function VirtualQueue() {
 
   const etaLabel = useMemo(() => {
     if (etaMinutes > 0) return `~${etaMinutes} phút`
-    if (status === 'waiting') return 'Đang tính'
+    if (status === 'WAITING') return 'Đang tính'
     return '-'
   }, [etaMinutes, status])
 
   const waitingRoomMessage = useMemo(() => {
-    if (status !== 'waiting') return message || statusDescription(status)
+    if (status !== 'WAITING') return message || statusDescription(status)
     if (!position || position <= 0) return message || 'Bạn đang ở trong phòng chờ. Vui lòng không tải lại trang.'
     return `Bạn đang ở vị trí thứ ${position} trong hàng đợi. Vui lòng không tải lại trang.`
   }, [message, position, status])
 
   const positionText = useMemo(() => {
-    if (status !== 'waiting') return '-'
+    if (status !== 'WAITING') return '-'
     if (!position || position <= 0) return 'Đang tính...'
     return `#${position}`
   }, [position, status])
@@ -97,7 +97,7 @@ export default function VirtualQueue() {
       description: 'Phiên hàng đợi hiện tại đã kết thúc vì admin đang chỉnh sửa show. Vui lòng chọn show khác hoặc quay lại sau.',
     })
     setQueueToken(null)
-    setStatus('expired')
+    setStatus('EXPIRED')
     setPosition(null)
     setAdmittedUntil(null)
     setMessage('Show đang được cập nhật. Phiên hàng đợi hiện tại đã kết thúc.')
@@ -144,7 +144,7 @@ export default function VirtualQueue() {
         setAdmittedUntil(response.admitted_until ?? null)
         setMessage(response.message || statusDescription(response.status))
 
-        if (response.status === 'admitted') {
+        if (response.status === 'ADMITTED') {
           navigate(`/shows/${showId}/seats`, { replace: true })
         }
       } catch (joinError) {
@@ -173,15 +173,15 @@ export default function VirtualQueue() {
         setAdmittedUntil(result.admitted_until ?? null)
         setMessage(result.message)
 
-        if (result.status === 'admitted') {
+        if (result.status === 'ADMITTED') {
           navigate(`/shows/${showId}/seats`, { replace: true })
           return
         }
 
-        if (result.status === 'expired') {
+        if (result.status === 'EXPIRED') {
           queueStorage.clearToken(showId)
           setQueueToken(null)
-          setStatus('expired')
+          setStatus('EXPIRED')
           setPosition(null)
           setAdmittedUntil(null)
           setMessage('Token hàng đợi đã hết hạn. Hệ thống đang tạo lại phiên hàng đợi mới cho bạn.')
@@ -199,7 +199,7 @@ export default function VirtualQueue() {
         if (isRecoverableQueueTokenError(pollError)) {
           queueStorage.clearToken(showId)
           setQueueToken(null)
-          setStatus('expired')
+          setStatus('EXPIRED')
           setPosition(null)
           setAdmittedUntil(null)
           setMessage('Token hàng đợi cũ không còn hợp lệ. Hệ thống sẽ tạo lại phiên hàng đợi mới cho bạn.')
@@ -240,7 +240,7 @@ export default function VirtualQueue() {
   }, [handleShowUnavailable, isAuthenticated, navigate, showId])
 
   useEffect(() => {
-    if (!showId || Number.isNaN(showId) || status !== 'admitted' || !queueToken) {
+    if (!showId || Number.isNaN(showId) || status !== 'ADMITTED' || !queueToken) {
       return
     }
 
@@ -257,7 +257,7 @@ export default function VirtualQueue() {
 
         queueStorage.clearToken(showId)
         setQueueToken(null)
-        setStatus('expired')
+        setStatus('EXPIRED')
         setPosition(null)
         setAdmittedUntil(null)
         setMessage('Phiên hàng đợi đã hết hạn. Vui lòng vào lại hàng đợi để nhận lượt mới.')
@@ -276,7 +276,7 @@ export default function VirtualQueue() {
             <p className="text-slate-400 mt-2">Buổi diễn: {showId || 'Không xác định'}</p>
           </div>
 
-          {status === 'waiting' ? (
+          {status === 'WAITING' ? (
             <section className="rounded-2xl border border-cyan-400/40 bg-cyan-400/10 p-6 text-center">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-200">Số thứ tự của bạn</p>
               <p className="mt-3 text-6xl font-black text-white">{positionText}</p>
@@ -340,7 +340,7 @@ export default function VirtualQueue() {
                   queueStorage.clearToken(showId)
                 }
                 setQueueToken(null)
-                setStatus('waiting')
+                setStatus('WAITING')
                 setPosition(null)
                 setAdmittedUntil(null)
                 setMessage('Đang tạo lại phiên hàng đợi...')
@@ -351,7 +351,7 @@ export default function VirtualQueue() {
             >
               Vào hàng đợi lại
             </Button> */}
-            {status === 'admitted' ? (
+            {status === 'ADMITTED' ? (
               <Button variant="primary" onClick={() => navigate(`/shows/${showId}/seats`)}>
                 <CheckCircle2 className="h-4 w-4" />
                 Đi tới chọn ghế

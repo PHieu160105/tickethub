@@ -15,9 +15,6 @@ class VenueCreateRequest(BaseModel):
     address: str | None = None
     city: str | None = Field(default=None, max_length=100)
     venue_type: str = Field(default="custom", max_length=50)
-    capacity: int | None = Field(default=None, ge=1)
-    width: int = Field(default=1000, ge=100)
-    height: int = Field(default=600, ge=100)
 
 
 class VenueUpdateRequest(BaseModel):
@@ -27,9 +24,6 @@ class VenueUpdateRequest(BaseModel):
     address: str | None = None
     city: str | None = Field(default=None, max_length=100)
     venue_type: str | None = Field(default=None, max_length=50)
-    capacity: int | None = Field(default=None, ge=1)
-    width: int | None = Field(default=None, ge=100)
-    height: int | None = Field(default=None, ge=100)
     is_active: bool | None = None
 
 
@@ -40,7 +34,6 @@ class VenueListResponse(BaseModel):
     name: str
     city: str | None
     venue_type: str
-    capacity: int | None
     is_active: bool
     created_at: datetime
 
@@ -154,6 +147,8 @@ class ArcConfig(BaseModel):
 class VenueSeatSingleCreateRequest(BaseModel):
     layout_id: int | None = Field(default=None, ge=1)
     label: str = Field(min_length=1, max_length=100)
+    row_label: str | None = Field(default=None, min_length=1, max_length=20)
+    seat_number: int | None = Field(default=None, ge=0)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
     rotation: float = Field(default=0.0, ge=0.0, le=360.0)
@@ -177,6 +172,8 @@ class VenueSeatBulkCreateRequest(BaseModel):
 
 class VenueSeatUpdateRequest(BaseModel):
     label: str | None = Field(default=None, min_length=1, max_length=100)
+    row_label: str | None = Field(default=None, min_length=1, max_length=20)
+    seat_number: int | None = Field(default=None, ge=0)
     x: float | None = Field(default=None, ge=0.0, le=100.0)
     y: float | None = Field(default=None, ge=0.0, le=100.0)
     rotation: float | None = Field(default=None, ge=0.0, le=360.0)
@@ -190,6 +187,8 @@ class VenueSeatResponse(BaseModel):
     section_id: int | None
     section_name: str | None = None
     label: str
+    row_label: str
+    seat_number: int
     x: float | None
     y: float | None
     rotation: float
@@ -204,6 +203,8 @@ class VenueSeatBulkCreateResponse(BaseModel):
 class VenueSeatSyncCreateItem(BaseModel):
     client_id: int = Field(lt=0)
     label: str = Field(min_length=1, max_length=100)
+    row_label: str | None = Field(default=None, min_length=1, max_length=20)
+    seat_number: int | None = Field(default=None, ge=0)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
     rotation: float = Field(default=0.0, ge=0.0, le=360.0)
@@ -214,6 +215,8 @@ class VenueSeatSyncCreateItem(BaseModel):
 class VenueSeatSyncUpdateItem(BaseModel):
     id: int = Field(ge=1)
     label: str = Field(min_length=1, max_length=100)
+    row_label: str | None = Field(default=None, min_length=1, max_length=20)
+    seat_number: int | None = Field(default=None, ge=0)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
     rotation: float = Field(default=0.0, ge=0.0, le=360.0)
@@ -232,6 +235,8 @@ class VenueSeatSyncCreatedItem(BaseModel):
     client_id: int
     id: int
     label: str
+    row_label: str
+    seat_number: int
     x: float | None
     y: float | None
 

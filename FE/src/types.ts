@@ -1,9 +1,11 @@
-export type UserRole = 'customer' | 'admin'
-export type Gender = 'male' | 'female' | 'other'
-export type EventStatus = 'draft' | 'live' | 'closed'
-export type SeatStatus = 'available' | 'locked' | 'sold'
-export type QueueStatus = 'waiting' | 'admitted' | 'expired' | 'completed'
-export type PerformerRole = 'main' | 'guest' | 'backup'
+export type UserRole = 'CUSTOMER' | 'ADMIN'
+export type Gender = 'MALE' | 'FEMALE' | 'OTHER'
+export type EventStatus = 'DRAFT' | 'LIVE' | 'CLOSED'
+export type EventCategory = 'MUSIC' | 'THEATER' | 'DANCE' | 'TRADITIONAL' | 'COMEDY' | 'CIRCUS' | 'OTHER'
+export type SeatStatus = 'AVAILABLE' | 'LOCKED' | 'SOLD'
+export type QueueStatus = 'WAITING' | 'ADMITTED' | 'EXPIRED' | 'COMPLETED'
+export type PerformerRole = 'MAIN' | 'GUEST' | 'BACKUP'
+export type SeatSource = 'LAYOUT' | 'FREE_FORM'
 
 export interface User {
   id: number
@@ -35,14 +37,13 @@ export interface EventCard {
   slug: string
   title: string
   description: string
-  category: string
+  category: EventCategory
   venue: string
   start_at: string
   end_at: string
   cover_image_url: string
   status: EventStatus
   created_at: string
-  queue_enabled: boolean
   max_price: number
 }
 
@@ -51,15 +52,12 @@ export interface ShowSummary {
   event_id: number
   title: string
   description: string
-  venue: string
+  location: string
   start_at: string
   end_at: string
   status: EventStatus
-  queue_enabled: boolean
-  queue_release_batch?: number
-  max_active_queue_tokens?: number
+  seat_source: SeatSource
   performers: ShowPerformer[]
-  venue_id?: number | null
   venue_layout_id?: number | null
 }
 
@@ -97,7 +95,6 @@ export interface VenueSummary {
   name: string
   city: string | null
   venue_type: string
-  capacity: number | null
   is_active: boolean
   created_at: string
 }
@@ -142,9 +139,11 @@ export interface VenueSectionItem {
 export interface VenueSeatItem {
   id: number
   venue_layout_id: number | null
-  section_id: number | null
-  section_name: string | null
+  section_id?: number | null
+  section_name?: string | null
   label: string
+  row_label: string
+  seat_number: number
   x: number | null
   y: number | null
   rotation: number
@@ -160,8 +159,8 @@ export interface VenuePolygonItem {
   id: number
   venue_id: number
   venue_layout_id: number
-  section_id: number | null
-  section_name: string | null
+  section_id?: number | null
+  section_name?: string | null
   label: string | null
   points: VenuePolygonPoint[]
   created_at: string
@@ -226,18 +225,9 @@ export interface SeatMatrixResponse {
   event_id: number
   event_slug: string
   event_title: string
-  queue_enabled: boolean
   queue_required: boolean
   zones: SeatZone[]
   seats: Seat[]
-}
-
-export interface SeatMapSection {
-  id: number
-  name: string
-  code: string
-  color: string
-  price_base: number
 }
 
 export interface SeatMapZone {
@@ -264,8 +254,8 @@ export interface SeatMapPolygon {
   id: number
   zone_id: number | null
   zone_name: string | null
-  section_id: number | null
-  section_name: string | null
+  section_id?: number | null
+  section_name?: string | null
   label: string | null
   points: SeatMapPolygonPoint[]
 }
@@ -278,8 +268,8 @@ export interface SeatMapSeat {
   rotation: number
   zone_id: number | null
   zone_name: string | null
-  section_id: number | null
-  section_name: string | null
+  section_id?: number | null
+  section_name?: string | null
   price: number
   status: SeatStatus
   lock_expires_at: string | null
@@ -300,11 +290,10 @@ export interface SeatMapResponse {
   event_slug: string
   event_title: string
   venue_name: string
-  queue_enabled: boolean
   queue_required: boolean
   background: SeatMapBackground | null
   zones: SeatMapZone[]
-  sections: SeatMapSection[]
+  sections?: Array<{ id: number; name: string; code: string; color: string; price_base: number }>
   polygons: SeatMapPolygon[]
   seats: SeatMapSeat[]
   seat_count: number
@@ -350,7 +339,7 @@ export interface CheckoutItem {
 
 export interface CheckoutResponse {
   order_id: number
-  order_status: 'pending' | 'paid' | 'cancelled'
+  order_status: 'PENDING' | 'PAID' | 'CANCELLED'
   total_amount: number
   discount_amount?: number
   discount_code?: string | null
@@ -419,7 +408,8 @@ export interface DashboardRealtimePayload {
 export interface AdminEventUpdatePayload {
   title?: string
   description?: string
-  category?: string
+  category?: EventCategory | string
+  seat_source?: SeatSource
   start_date?: string
   end_date?: string
   cover_image_url?: string

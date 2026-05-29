@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_active_admin
 from app.core.db import get_db_session
 from app.core.search import build_ilike_pattern
-from app.models.order import Order, OrderItem, Ticket
+from app.models.order import Order, Ticket
 from app.models.user import User
 from app.schemas.admin import AdminUserResponse, PaginatedAdminUsersResponse
 
@@ -33,8 +33,7 @@ async def list_admin_users(
             func.count(Ticket.id).label("total_tickets"),
         )
         .outerjoin(Order, Order.user_id == User.id)
-        .outerjoin(OrderItem, OrderItem.order_id == Order.id)
-        .outerjoin(Ticket, Ticket.order_item_id == OrderItem.id)
+        .outerjoin(Ticket, Ticket.order_id == Order.id)
         .group_by(User.id, User.full_name, User.email, User.role, User.gender, User.age, User.created_at)
         .order_by(User.created_at.desc())
     )
@@ -43,7 +42,7 @@ async def list_admin_users(
     if pattern:
         stmt = stmt.where(User.full_name.ilike(pattern, escape="\\") | User.email.ilike(pattern, escape="\\"))
     if role:
-        stmt = stmt.where(User.role == role.strip().lower())
+        stmt = stmt.where(User.role == role.strip().upper())
 
     filtered_stmt = stmt.subquery()
     total = int((await session.scalar(select(func.count()).select_from(filtered_stmt))) or 0)

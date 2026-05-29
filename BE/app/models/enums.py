@@ -2,44 +2,71 @@
 
 from enum import StrEnum
 
+from sqlalchemy import Enum as SAEnum
+
 
 class UserRole(StrEnum):
-    CUSTOMER = "customer"
-    ADMIN = "admin"
+    CUSTOMER = "CUSTOMER"
+    ADMIN = "ADMIN"
 
 
 class Gender(StrEnum):
-    MALE = "male"
-    FEMALE = "female"
-    OTHER = "other"
+    MALE = "MALE"
+    FEMALE = "FEMALE"
+    OTHER = "OTHER"
 
 
 class EventStatus(StrEnum):
-    DRAFT = "draft"
-    LIVE = "live"
-    CLOSED = "closed"
+    DRAFT = "DRAFT"
+    LIVE = "LIVE"
+    CLOSED = "CLOSED"
+
+
+class EventCategory(StrEnum):
+    MUSIC = "MUSIC"
+    THEATER = "THEATER"
+    DANCE = "DANCE"
+    TRADITIONAL = "TRADITIONAL"
+    COMEDY = "COMEDY"
+    CIRCUS = "CIRCUS"
+    OTHER = "OTHER"
+
+
+class SeatSource(StrEnum):
+    LAYOUT = "LAYOUT"
+    FREE_FORM = "FREE_FORM"
 
 
 class SeatStatus(StrEnum):
-    AVAILABLE = "available"
-    LOCKED = "locked"
-    SOLD = "sold"
+    AVAILABLE = "AVAILABLE"
+    LOCKED = "LOCKED"
+    SOLD = "SOLD"
 
 
 class OrderStatus(StrEnum):
-    PENDING = "pending"
-    PAID = "paid"
-    CANCELLED = "cancelled"
+    PENDING = "PENDING"
+    PAID = "PAID"
+    CANCELLED = "CANCELLED"
 
 
 class QueueStatus(StrEnum):
-    WAITING = "waiting"
-    ADMITTED = "admitted"
-    EXPIRED = "expired"
-    COMPLETED = "completed"
+    WAITING = "WAITING"
+    ADMITTED = "ADMITTED"
+    EXPIRED = "EXPIRED"
+    COMPLETED = "COMPLETED"
 
 
 class PerformerRole(StrEnum):
-    MAIN = "main"
-    GUEST = "guest"
-    BACKUP = "backup"
+    MAIN = "MAIN"
+    GUEST = "GUEST"
+    BACKUP = "BACKUP"
+
+
+def sa_enum(enum_cls: type[StrEnum]) -> SAEnum:
+    """Create a SQLAlchemy enum that persists enum values instead of names."""
+
+    return SAEnum(
+        enum_cls,
+        native_enum=False,
+        values_callable=lambda cls: [item.value for item in cls],
+    )

@@ -38,8 +38,8 @@ function formatCurrency(amount: number) {
 }
 
 function statusBadge(status: string) {
-  if (status === 'paid') return <Badge variant="success" size="sm">Đã thanh toán</Badge>
-  if (status === 'pending') return <Badge variant="warning" size="sm">Đang chờ</Badge>
+  if (status === 'PAID') return <Badge variant="success" size="sm">Đã thanh toán</Badge>
+  if (status === 'PENDING') return <Badge variant="warning" size="sm">Đang chờ</Badge>
   return <Badge variant="default" size="sm">Khác</Badge>
 }
 
@@ -134,8 +134,8 @@ export default function AdminTickets() {
   ]
   const statusOptions: SelectOption[] = [
     { value: 'all', label: 'Tất cả trạng thái' },
-    { value: 'paid', label: 'Đã thanh toán' },
-    { value: 'pending', label: 'Đang chờ' },
+    { value: 'PAID', label: 'Đã thanh toán' },
+    { value: 'PENDING', label: 'Đang chờ' },
   ]
 
   return (

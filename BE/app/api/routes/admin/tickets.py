@@ -6,8 +6,7 @@ from app.api.deps import get_current_active_admin
 from app.core.db import get_db_session
 from app.models.enums import OrderStatus
 from app.models.event import Event, SeatZone, Show
-from app.models.order import Order, OrderItem
-from app.models.seat import Seat
+from app.models.order import Order, Ticket
 from app.models.user import User
 from app.schemas.admin import AdminEventRevenueResponse, AdminTicketSaleResponse, PaginatedAdminTicketSalesResponse
 
@@ -26,7 +25,7 @@ async def list_admin_ticket_sales(
 ) -> PaginatedAdminTicketSalesResponse:
     stmt = (
         select(
-            OrderItem.id,
+            Ticket.id,
             Event.id.label("event_id"),
             Event.title.label("event_title"),
             Show.id.label("show_id"),
@@ -34,18 +33,17 @@ async def list_admin_ticket_sales(
             Show.start_at.label("show_start_at"),
             Show.venue.label("venue"),
             User.full_name.label("customer_name"),
-            Seat.seat_label,
+            Ticket.label.label("seat_label"),
             SeatZone.name.label("zone_name"),
-            OrderItem.price,
+            Ticket.price,
             Order.created_at,
             Order.status,
         )
-        .join(Order, OrderItem.order_id == Order.id)
-        .join(Show, Order.show_id == Show.id)
+        .join(Order, Ticket.order_id == Order.id)
+        .join(Show, Ticket.show_id == Show.id)
         .join(Event, Show.event_id == Event.id)
         .join(User, Order.user_id == User.id)
-        .join(Seat, OrderItem.seat_id == Seat.id)
-        .outerjoin(SeatZone, Seat.zone_id == SeatZone.id)
+        .outerjoin(SeatZone, Ticket.ticket_tier_id == SeatZone.id)
         .where(Order.status.in_([OrderStatus.PAID, OrderStatus.PENDING]))
         .order_by(Order.created_at.desc())
     )
@@ -95,12 +93,12 @@ async def list_admin_show_revenue(
             Show.id.label("show_id"),
             Show.title.label("show_title"),
             Show.start_at.label("show_start_at"),
-            func.sum(case((Order.status == OrderStatus.PAID, OrderItem.price), else_=0)).label("revenue"),
+            func.sum(case((Order.status == OrderStatus.PAID, Ticket.price), else_=0)).label("revenue"),
             func.sum(case((Order.status == OrderStatus.PAID, 1), else_=0)).label("tickets_sold"),
         )
         .join(Show, Show.event_id == Event.id)
         .outerjoin(Order, Order.show_id == Show.id)
-        .outerjoin(OrderItem, OrderItem.order_id == Order.id)
+        .outerjoin(Ticket, Ticket.order_id == Order.id)
         .where(Show.is_deleted.is_(False))
         .group_by(Event.id, Event.title, Show.id, Show.title, Show.start_at)
         .order_by(Show.start_at.desc())

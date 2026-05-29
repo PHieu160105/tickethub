@@ -159,13 +159,13 @@ async def test_admin_show_live_must_be_drafted_before_edit_or_delete(db_session,
             delete_response = await client.delete(f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}")
             draft_response = await client.patch(
                 f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}",
-                json={"status": "draft"},
+                json={"status": "DRAFT"},
             )
 
         assert edit_response.status_code == status.HTTP_400_BAD_REQUEST
         assert delete_response.status_code == status.HTTP_400_BAD_REQUEST
         assert draft_response.status_code == status.HTTP_200_OK
-        assert draft_response.json()["status"] == "draft"
+        assert draft_response.json()["status"] == "DRAFT"
     finally:
         app.dependency_overrides.clear()
 
@@ -191,11 +191,11 @@ async def test_admin_can_draft_live_show_even_if_show_date_outside_event_range(d
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.patch(
                 f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}",
-                json={"status": "draft"},
+                json={"status": "DRAFT"},
             )
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.json()["status"] == "draft"
+        assert response.json()["status"] == "DRAFT"
     finally:
         app.dependency_overrides.clear()
 
@@ -258,7 +258,7 @@ async def test_admin_drafting_live_show_interrupts_active_booking_sessions(db_se
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             draft_response = await client.patch(
                 f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}",
-                json={"status": "draft"},
+                json={"status": "DRAFT"},
             )
             lock_response = await client.post(
                 "/api/bookings/lock",
@@ -322,7 +322,7 @@ async def test_admin_seat_planner_mutations_require_draft_show(db_session, admin
             )
             await client.patch(
                 f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}",
-                json={"status": "draft"},
+                json={"status": "DRAFT"},
             )
             draft_response = await client.post(
                 f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}/zones",
@@ -351,7 +351,7 @@ async def test_admin_event_delete_requires_draft(db_session, admin_user, sample_
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             live_delete_response = await client.delete(f"/api/admin/events/{sample_event.slug}")
-            await client.patch(f"/api/admin/events/{sample_event.slug}", json={"status": "draft"})
+            await client.patch(f"/api/admin/events/{sample_event.slug}", json={"status": "DRAFT"})
             draft_delete_response = await client.delete(f"/api/admin/events/{sample_event.slug}")
 
         assert live_delete_response.status_code == status.HTTP_400_BAD_REQUEST
