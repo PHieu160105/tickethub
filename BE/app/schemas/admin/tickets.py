@@ -10,7 +10,7 @@ class AdminTicketSaleResponse(BaseModel):
     show_start_at: str
     customer_name: str
     seat_label: str
-    zone_name: str
+    ticket_tier_name: str
     venue: str
     price: float
     purchased_at: str

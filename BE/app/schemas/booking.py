@@ -45,7 +45,7 @@ class CheckoutItemResponse(BaseModel):
 
     seat_id: int
     seat_label: str
-    zone_name: str
+    ticket_tier_name: str
     price: Decimal
     ticket_code: str
     qr_payload: str
@@ -79,7 +79,7 @@ class MyTicketResponse(BaseModel):
     event_cover_image_url: str | None = None
     venue: str
     seat_label: str
-    zone_name: str
+    ticket_tier_name: str
     price: Decimal
     order_id: int | None = None
     seat_status: SeatStatus

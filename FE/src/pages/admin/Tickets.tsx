@@ -309,7 +309,7 @@ export default function AdminTickets() {
                         <div className="text-xs text-gray-500">{sale.venue}</div>
                       </td>
                       <td className="py-3 admin-text-body">{sale.customer_name}</td>
-                      <td className="py-3 admin-text-body">{sale.zone_name} - {sale.seat_label}</td>
+                      <td className="py-3 admin-text-body">{sale.ticket_tier_name} - {sale.seat_label}</td>
                       <td className="py-3 text-green-400">{formatCurrency(sale.price)}</td>
                       <td className="py-3 admin-text-body">{new Date(sale.purchased_at).toLocaleString('vi-VN')}</td>
                       <td className="py-3">{statusBadge(sale.order_status)}</td>

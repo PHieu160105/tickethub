@@ -88,7 +88,7 @@ export default function Confirmation() {
                         <Ticket className="w-4 h-4 text-secondary" />
                         <div>
                           <p className="font-semibold">
-                            {ticket.seat_label} | {ticket.zone_name}
+                            {ticket.seat_label} | {ticket.ticket_tier_name}
                           </p>
                           <p className="text-xs text-slate-400">Mã vé: {ticket.ticket_code}</p>
                         </div>

@@ -14,7 +14,7 @@ import { useWebSocketHeartbeat } from '@/hooks/useWebSocketHeartbeat'
 import { eventApi, extractApiErrorMessage, getWaitingRoomQueueUrl, isWaitingRoomRequiredError, seatmapApi } from '@/lib/api'
 import { authStorage, checkoutReturnSeatStorage, flashNoticeStorage, queueStorage } from '@/lib/storage'
 import { formatCurrencyVnd } from '@/lib/utils'
-import type { Seat, SeatMapResponse, SeatMapSeat, SeatZone } from '@/types'
+import type { Seat, SeatMapResponse, SeatMapSeat, TicketTier } from '@/types'
 import { AlertCircle, MapPin, Ticket } from 'lucide-react'
 
 function seatClass(seat: Seat, isSelected: boolean) {
@@ -27,8 +27,9 @@ function seatClass(seat: Seat, isSelected: boolean) {
 
 function groupSeatsByZone(seats: Seat[]) {
   return seats.reduce<Record<number, Seat[]>>((acc, seat) => {
-    if (!acc[seat.zone_id]) acc[seat.zone_id] = []
-    acc[seat.zone_id].push(seat)
+    const ticketTierId = seat.ticket_tier_id ?? 0
+    if (!acc[ticketTierId]) acc[ticketTierId] = []
+    acc[ticketTierId].push(seat)
     return acc
   }, {})
 }
@@ -252,9 +253,9 @@ export default function SeatSelection() {
 
     const map = new Map<number, string>()
 
-    displaySeatMap.zones.forEach((zone) => {
+    displaySeatMap.ticket_tiers.forEach((zone) => {
       displaySeatMap.seats
-        .filter((seat) => seat.zone_id === zone.id)
+        .filter((seat) => seat.ticket_tier_id === zone.id)
         .forEach((seat) => map.set(seat.id, zone.color))
     })
 
@@ -458,7 +459,7 @@ export default function SeatSelection() {
             />
           ) : (
             <div className="space-y-6">
-              {matrix.zones.map((zone: SeatZone) => {
+              {matrix.ticket_tiers.map((zone: TicketTier) => {
                 const zoneSeats = seatsByZone[zone.id] ?? []
 
                 return (
@@ -498,7 +499,7 @@ export default function SeatSelection() {
 
           {useCanvas && (
             <div className="xl:hidden">
-              <SeatMapLegend zones={displaySeatMap?.zones ?? []} />
+              <SeatMapLegend ticket_tiers={displaySeatMap?.ticket_tiers ?? []} />
             </div>
           )}
         </section>
@@ -506,7 +507,7 @@ export default function SeatSelection() {
         <aside className="space-y-4">
           {useCanvas && (
             <div className="hidden xl:block">
-              <SeatMapLegend zones={displaySeatMap?.zones ?? []} />
+              <SeatMapLegend ticket_tiers={displaySeatMap?.ticket_tiers ?? []} />
             </div>
           )}
 

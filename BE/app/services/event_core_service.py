@@ -13,7 +13,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import EventCategory, EventStatus, SeatSource, SeatStatus
-from app.models.event import Event, EventAssignment, SeatZone, Show
+from app.models.event import Event, EventAssignment, TicketTier, Show
 from app.models.order import Order, Ticket
 from app.models.performer import Performer, ShowPerformer
 from app.models.seat import Seat
@@ -83,7 +83,7 @@ async def create_show_with_inventory(session: AsyncSession, event: Event, staff_
     if end_at <= start_at:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gio ket thuc phai sau gio bat dau")
 
-    if payload.seat_source == SeatSource.LAYOUT and payload.venue_layout_id is None and not payload.zones:
+    if payload.seat_source == SeatSource.LAYOUT and payload.venue_layout_id is None and not payload.ticket_tiers:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Show dung layout phai co venue_layout_id")
 
     await _get_layout(session, payload.venue_layout_id)
@@ -104,19 +104,17 @@ async def create_show_with_inventory(session: AsyncSession, event: Event, staff_
     session.add(show)
     await session.flush()
 
-    created_zone_pairs: list[tuple[SeatZone, object]] = []
-    for zone_payload in payload.zones:
-        zone = SeatZone(
+    for tier_payload in payload.ticket_tiers:
+        tier = TicketTier(
             show_id=show.id,
-            code=zone_payload.code,
-            name=zone_payload.name,
-            description=zone_payload.description,
-            base_price=zone_payload.base_price,
-            color=zone_payload.color,
-            is_active=zone_payload.is_active,
+            code=tier_payload.code,
+            name=tier_payload.name,
+            description=tier_payload.description,
+            base_price=tier_payload.base_price,
+            color=tier_payload.color,
+            is_active=tier_payload.is_active,
         )
-        session.add(zone)
-        created_zone_pairs.append((zone, zone_payload))
+        session.add(tier)
     await session.flush()
 
     await sync_show_ticket_inventory(session, show)
@@ -204,12 +202,12 @@ async def get_show_by_id(session: AsyncSession, show_id: int) -> Show:
     return show
 
 
-async def list_show_zones(session: AsyncSession, show_id: int) -> list[SeatZone]:
-    return list(await session.scalars(select(SeatZone).where(SeatZone.show_id == show_id).order_by(SeatZone.id.asc())))
+async def list_show_ticket_tiers(session: AsyncSession, show_id: int) -> list[TicketTier]:
+    return list(await session.scalars(select(TicketTier).where(TicketTier.show_id == show_id).order_by(TicketTier.id.asc())))
 
 
-async def create_show_zone(session: AsyncSession, show: Show, payload) -> SeatZone:
-    zone = SeatZone(
+async def create_show_ticket_tier(session: AsyncSession, show: Show, payload) -> TicketTier:
+    tier = TicketTier(
         show_id=show.id,
         code=payload.code,
         name=payload.name,
@@ -218,63 +216,63 @@ async def create_show_zone(session: AsyncSession, show: Show, payload) -> SeatZo
         color=payload.color,
         is_active=payload.is_active,
     )
-    session.add(zone)
+    session.add(tier)
     await session.flush()
     await sync_show_ticket_inventory(session, show)
-    return zone
+    return tier
 
 
-async def update_show_zone(session: AsyncSession, show: Show, zone_id: int, payload) -> SeatZone:
-    zone = await session.scalar(select(SeatZone).where(SeatZone.id == zone_id, SeatZone.show_id == show.id))
-    if not zone:
+async def update_show_ticket_tier(session: AsyncSession, show: Show, ticket_tier_id: int, payload) -> TicketTier:
+    tier = await session.scalar(select(TicketTier).where(TicketTier.id == ticket_tier_id, TicketTier.show_id == show.id))
+    if not tier:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay hang ve cua buoi dien")
 
-    zone.code = payload.code
-    zone.name = payload.name
-    zone.description = payload.description
-    zone.base_price = payload.base_price
-    zone.color = payload.color
-    zone.is_active = payload.is_active
+    tier.code = payload.code
+    tier.name = payload.name
+    tier.description = payload.description
+    tier.base_price = payload.base_price
+    tier.color = payload.color
+    tier.is_active = payload.is_active
     await session.flush()
 
     tickets = list(
         await session.scalars(
             select(Ticket).where(
                 Ticket.show_id == show.id,
-                Ticket.ticket_tier_id == zone.id,
+                Ticket.ticket_tier_id == tier.id,
                 Ticket.status != SeatStatus.SOLD,
             )
         )
     )
     for ticket in tickets:
-        ticket.price = float(zone.base_price)
+        ticket.price = float(tier.base_price)
     await session.flush()
-    return zone
+    return tier
 
 
-async def delete_show_zone(session: AsyncSession, show: Show, zone_id: int) -> None:
-    zone = await session.scalar(select(SeatZone).where(SeatZone.id == zone_id, SeatZone.show_id == show.id))
-    if not zone:
+async def delete_show_ticket_tier(session: AsyncSession, show: Show, ticket_tier_id: int) -> None:
+    tier = await session.scalar(select(TicketTier).where(TicketTier.id == ticket_tier_id, TicketTier.show_id == show.id))
+    if not tier:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay hang ve cua buoi dien")
     sold_count = await session.scalar(
         select(func.count(Ticket.id)).where(
             Ticket.show_id == show.id,
-            Ticket.ticket_tier_id == zone.id,
+            Ticket.ticket_tier_id == tier.id,
             Ticket.status == SeatStatus.SOLD,
         )
     )
     if sold_count:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Khong the xoa hang ve da phat sinh ve ban")
 
-    replacement_zone = await session.scalar(
-        select(SeatZone).where(SeatZone.show_id == show.id, SeatZone.id != zone.id).order_by(SeatZone.id.asc())
+    replacement_tier = await session.scalar(
+        select(TicketTier).where(TicketTier.show_id == show.id, TicketTier.id != tier.id).order_by(TicketTier.id.asc())
     )
-    tickets = list(await session.scalars(select(Ticket).where(Ticket.show_id == show.id, Ticket.ticket_tier_id == zone.id)))
+    tickets = list(await session.scalars(select(Ticket).where(Ticket.show_id == show.id, Ticket.ticket_tier_id == tier.id)))
     for ticket in tickets:
-        ticket.ticket_tier_id = replacement_zone.id if replacement_zone else None
-        if replacement_zone and ticket.status != SeatStatus.SOLD:
-            ticket.price = float(replacement_zone.base_price)
-    await session.delete(zone)
+        ticket.ticket_tier_id = replacement_tier.id if replacement_tier else None
+        if replacement_tier and ticket.status != SeatStatus.SOLD:
+            ticket.price = float(replacement_tier.base_price)
+    await session.delete(tier)
     await session.flush()
 
 
@@ -409,17 +407,17 @@ async def build_show_detail_response(session: AsyncSession, show: Show) -> dict:
             "event_slug": event.slug,
             "event_title": event.title,
             "hold_minutes": show.hold_minutes,
-            "zones": [
+            "ticket_tiers": [
                 {
-                    "id": zone.id,
-                    "code": zone.code,
-                    "name": zone.name,
-                    "description": zone.description,
-                    "base_price": Decimal(str(zone.base_price)),
-                    "color": zone.color,
-                    "is_active": zone.is_active,
+                    "id": tier.id,
+                    "code": tier.code,
+                    "name": tier.name,
+                    "description": tier.description,
+                    "base_price": Decimal(str(tier.base_price)),
+                    "color": tier.color,
+                    "is_active": tier.is_active,
                 }
-                for zone in await list_show_zones(session, show.id)
+                for tier in await list_show_ticket_tiers(session, show.id)
             ],
         }
     )
@@ -428,8 +426,8 @@ async def build_show_detail_response(session: AsyncSession, show: Show) -> dict:
 
 async def sync_show_ticket_inventory(session: AsyncSession, show: Show) -> None:
     await session.flush()
-    zones = await list_show_zones(session, show.id)
-    default_zone = zones[0] if zones else None
+    ticket_tiers = await list_show_ticket_tiers(session, show.id)
+    default_tier = ticket_tiers[0] if ticket_tiers else None
 
     if show.seat_source == SeatSource.LAYOUT:
         if show.venue_layout_id is None:
@@ -453,14 +451,14 @@ async def sync_show_ticket_inventory(session: AsyncSession, show: Show) -> None:
             if not ticket:
                 ticket = Ticket(
                     show_id=show.id,
-                    ticket_tier_id=default_zone.id if default_zone else None,
+                    ticket_tier_id=default_tier.id if default_tier else None,
                     seat_id=seat.id,
                     label=seat.label,
                     row_label=seat.row_label,
                     seat_number=seat.seat_number,
                     x=seat.x,
                     y=seat.y,
-                    price=float(default_zone.base_price) if default_zone else 0,
+                    price=float(default_tier.base_price) if default_tier else 0,
                     status=SeatStatus.AVAILABLE,
                     is_staff_locked=False,
                 )
@@ -473,19 +471,19 @@ async def sync_show_ticket_inventory(session: AsyncSession, show: Show) -> None:
                 ticket.seat_number = seat.seat_number
                 ticket.x = seat.x
                 ticket.y = seat.y
-                if ticket.ticket_tier_id is None and default_zone:
-                    ticket.ticket_tier_id = default_zone.id
-                if ticket.ticket_tier_id == (default_zone.id if default_zone else None):
-                    ticket.price = float(default_zone.base_price) if default_zone else ticket.price
+                if ticket.ticket_tier_id is None and default_tier:
+                    ticket.ticket_tier_id = default_tier.id
+                if ticket.ticket_tier_id == (default_tier.id if default_tier else None):
+                    ticket.price = float(default_tier.base_price) if default_tier else ticket.price
         await session.flush()
         return
 
     existing_tickets = list(await session.scalars(select(Ticket).where(Ticket.show_id == show.id)))
     for ticket in existing_tickets:
-        if ticket.ticket_tier_id is None and default_zone is not None:
-            ticket.ticket_tier_id = default_zone.id
+        if ticket.ticket_tier_id is None and default_tier is not None:
+            ticket.ticket_tier_id = default_tier.id
             if ticket.status != SeatStatus.SOLD:
-                ticket.price = float(default_zone.base_price)
+                ticket.price = float(default_tier.base_price)
     await session.flush()
 
 
@@ -499,8 +497,8 @@ async def get_show_seat_matrix(
     show = await get_show_by_id(session, show_id)
     await sync_show_ticket_inventory(session, show)
 
-    zones = await list_show_zones(session, show.id)
-    zone_map = {zone.id: zone for zone in zones}
+    ticket_tiers = await list_show_ticket_tiers(session, show.id)
+    tier_map = {tier.id: tier for tier in ticket_tiers}
     tickets = list(await session.scalars(select(Ticket).where(Ticket.show_id == show.id).order_by(Ticket.id.asc())))
 
     user_ids = {ticket.locked_by_customer_id for ticket in tickets if include_user_details and ticket.locked_by_customer_id is not None}
@@ -518,17 +516,17 @@ async def get_show_seat_matrix(
         )
     }
 
-    zone_responses = [
+    tier_responses = [
         {
-            "id": zone.id,
-            "code": zone.code,
-            "name": zone.name,
-            "description": zone.description,
-            "base_price": Decimal(str(zone.base_price)),
-            "color": zone.color,
-            "is_active": zone.is_active,
+            "id": tier.id,
+            "code": tier.code,
+            "name": tier.name,
+            "description": tier.description,
+            "base_price": Decimal(str(tier.base_price)),
+            "color": tier.color,
+            "is_active": tier.is_active,
         }
-        for zone in zones
+        for tier in ticket_tiers
     ]
 
     seat_responses: list[dict] = []
@@ -576,7 +574,7 @@ async def get_show_seat_matrix(
         seat_responses.append(
             {
                 "id": ticket.id,
-                "zone_id": ticket.ticket_tier_id,
+                "ticket_tier_id": ticket.ticket_tier_id,
                 "row_index": 0,
                 "row_label": ticket.row_label or "",
                 "seat_number": ticket.seat_number or 0,
@@ -591,4 +589,4 @@ async def get_show_seat_matrix(
             }
         )
 
-    return zone_responses, seat_responses
+    return tier_responses, seat_responses

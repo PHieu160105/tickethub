@@ -16,6 +16,7 @@ import type {
   EventDetailStats,
   EventDetail,
   EventStaffItem,
+  EventAssignmentOverviewItem,
   PerformerDetail,
   ShowDetail,
   ShowSummary,
@@ -29,13 +30,10 @@ import type {
   QueueStatusResponse,
   RevenuePoint,
   SeatMatrixResponse,
-  ShowSeatPolygonItem,
   TicketItem,
-  VenuePolygonItem,
   VenueDetail,
   VenueLayoutItem,
   VenueSeatItem,
-  VenueSectionItem,
   VenueSummary,
   SeatMapResponse,
   TicketTier,
@@ -461,6 +459,13 @@ export const adminApi = {
     const response = await api.patch<EventStaffItem>(`/admin/staff/${staffUserId}/status`, { is_active: isActive })
     return response.data
   },
+  async listEventAssignments() {
+    return withRetry(() => api.get<EventAssignmentOverviewItem[]>('/admin/staff/assignments'))
+  },
+  async updateEventAssignments(eventId: number, staffIds: number[]) {
+    const response = await api.put<EventAssignmentOverviewItem>(`/admin/staff/assignments/${eventId}`, { staff_ids: staffIds })
+    return response.data
+  },
   async ticketSales(params?: { event_id?: number; status_filter?: string; limit?: number; offset?: number }) {
     return withRetry(() => api.get<PaginatedAdminTicketSalesResponse>('/admin/tickets/sales', { params }))
   },
@@ -530,27 +535,6 @@ export const adminApi = {
     const response = await api.delete(`/admin/layouts/${layoutId}`)
     return response.data
   },
-  async listLayoutSections(layoutId: number) {
-    return withRetry(() => api.get<VenueSectionItem[]>(`/admin/layouts/${layoutId}/sections`))
-  },
-  async createLayoutSection(
-    layoutId: number,
-    payload: { name: string; code: string; color?: string; price_base: number; sort_order?: number },
-  ) {
-    const response = await api.post<VenueSectionItem>(`/admin/layouts/${layoutId}/sections`, payload)
-    return response.data
-  },
-  async updateSection(
-    sectionId: number,
-    payload: Partial<{ name: string; code: string; color: string; price_base: number; sort_order: number }>,
-  ) {
-    const response = await api.patch<VenueSectionItem>(`/admin/sections/${sectionId}`, payload)
-    return response.data
-  },
-  async deleteSection(sectionId: number) {
-    const response = await api.delete(`/admin/sections/${sectionId}`)
-    return response.data
-  },
   async createVenueSeatSingle(
     venueId: number,
     payload: { layout_id?: number | null; label: string; row_label?: string | null; seat_number?: number | null; x: number; y: number },
@@ -599,78 +583,34 @@ export const adminApi = {
     const response = await api.delete<ApiMessage>(`/admin/seats/${seatId}`)
     return response.data
   },
-  async listVenuePolygons(venueId: number, layoutId?: number | null) {
-    return withRetry(() =>
-      api.get<VenuePolygonItem[]>(`/admin/venues/${venueId}/polygons`, {
-        params: { layout_id: layoutId ?? undefined },
-      }),
-    )
+  async getShowTicketTiers(eventKey: string | number, showId: number) {
+    return withRetry(() => api.get<TicketTier[]>(`/admin/events/${eventKey}/shows/${showId}/ticket-tiers`))
   },
-  async createVenuePolygon(
-    venueId: number,
-    payload: { layout_id?: number | null; section_id?: number | null; label?: string | null; points: Array<{ x: number; y: number }> },
-  ) {
-    const response = await api.post<VenuePolygonItem>(`/admin/venues/${venueId}/polygons`, payload)
-    return response.data
-  },
-  async updateVenuePolygon(
-    polygonId: number,
-    payload: Partial<{ section_id: number | null; label: string | null; points: Array<{ x: number; y: number }> }>,
-  ) {
-    const response = await api.patch<VenuePolygonItem>(`/admin/polygons/${polygonId}`, payload)
-    return response.data
-  },
-  async deleteVenuePolygon(polygonId: number) {
-    const response = await api.delete<ApiMessage>(`/admin/polygons/${polygonId}`)
-    return response.data
-  },
-  async getShowZones(eventKey: string | number, showId: number) {
-    return withRetry(() => api.get<TicketTier[]>(`/admin/events/${eventKey}/shows/${showId}/zones`))
-  },
-  async createZone(
+  async createTicketTier(
     eventKey: string | number,
     showId: number,
     payload: Omit<TicketTier, 'id'>,
   ) {
-    const response = await api.post<TicketTier>(`/admin/events/${eventKey}/shows/${showId}/zones`, payload)
+    const response = await api.post<TicketTier>(`/admin/events/${eventKey}/shows/${showId}/ticket-tiers`, payload)
     return response.data
   },
-  async updateZone(
+  async updateTicketTier(
     eventKey: string | number,
     showId: number,
-    zoneId: number,
+    ticketTierId: number,
     payload: Omit<TicketTier, 'id'>,
   ) {
-    const response = await api.patch<TicketTier>(`/admin/events/${eventKey}/shows/${showId}/zones/${zoneId}`, payload)
+    const response = await api.patch<TicketTier>(`/admin/events/${eventKey}/shows/${showId}/ticket-tiers/${ticketTierId}`, payload)
     return response.data
   },
-  async deleteZone(eventKey: string | number, showId: number, zoneId: number) {
-    const response = await api.delete(`/admin/events/${eventKey}/shows/${showId}/zones/${zoneId}`)
-    return response.data
-  },
-  async createShowPolygon(
-    eventKey: string | number,
-    showId: number,
-    payload: { zone_id?: number | null; label?: string | null; points: Array<{ x: number; y: number }> },
-  ) {
-    const response = await api.post<ShowSeatPolygonItem>(`/admin/events/${eventKey}/shows/${showId}/polygons`, payload)
-    return response.data
-  },
-  async updateShowPolygon(
-    polygonId: number,
-    payload: Partial<{ zone_id: number | null; label: string | null; points: Array<{ x: number; y: number }> }>,
-  ) {
-    const response = await api.patch<ShowSeatPolygonItem>(`/admin/show-polygons/${polygonId}`, payload)
-    return response.data
-  },
-  async deleteShowPolygon(polygonId: number) {
-    const response = await api.delete<ApiMessage>(`/admin/show-polygons/${polygonId}`)
+  async deleteTicketTier(eventKey: string | number, showId: number, ticketTierId: number) {
+    const response = await api.delete(`/admin/events/${eventKey}/shows/${showId}/ticket-tiers/${ticketTierId}`)
     return response.data
   },
   async createEventSeatSingle(
     eventKey: string | number,
     showId: number,
-    payload: { seat_label: string; x: number; y: number; rotation?: number; zone_id?: number | null; section_id?: number | null; price?: number | null; is_admin_locked?: boolean },
+    payload: { seat_label: string; x: number; y: number; ticket_tier_id?: number | null; price?: number | null; is_admin_locked?: boolean },
   ) {
     const response = await api.post(`/admin/events/${eventKey}/shows/${showId}/seats/single`, payload)
     return response.data
@@ -679,8 +619,7 @@ export const adminApi = {
     eventKey: string | number,
     showId: number,
     payload: {
-      zone_id?: number | null
-      section_id?: number | null
+      ticket_tier_id?: number | null
       pattern: 'straight' | 'arc'
       rows: number
       cols: number
@@ -699,7 +638,7 @@ export const adminApi = {
     eventKey: string | number,
     showId: number,
     seatId: number,
-    payload: Partial<{ seat_label: string; x: number; y: number; rotation: number; zone_id: number | null; section_id: number | null; price: number | null; is_admin_locked: boolean }>,
+    payload: Partial<{ seat_label: string; x: number; y: number; ticket_tier_id: number | null; price: number | null; is_admin_locked: boolean }>,
   ) {
     const response = await api.patch(`/admin/events/${eventKey}/shows/${showId}/seats/${seatId}`, payload)
     return response.data
@@ -708,8 +647,8 @@ export const adminApi = {
     eventKey: string | number,
     showId: number,
     payload: {
-      create: Array<{ client_id: number; seat_label: string; x: number; y: number; rotation: number; zone_id: number | null; section_id: number | null; price: number | null; is_admin_locked: boolean }>
-      update: Array<{ id: number; seat_label: string; x: number; y: number; rotation: number; zone_id: number | null; section_id: number | null; price: number | null; is_admin_locked: boolean }>
+      create: Array<{ client_id: number; seat_label: string; x: number; y: number; ticket_tier_id: number | null; price: number | null; is_admin_locked: boolean }>
+      update: Array<{ id: number; seat_label: string; x: number; y: number; ticket_tier_id: number | null; price: number | null; is_admin_locked: boolean }>
       delete_ids: number[]
     },
   ) {

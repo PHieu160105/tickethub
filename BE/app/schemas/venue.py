@@ -73,9 +73,6 @@ class VenueSeatSingleCreateRequest(BaseModel):
     seat_number: int | None = Field(default=None, ge=0)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
-    rotation: float | None = None
-    section_id: int | None = None
-    is_admin_locked: bool = False
 
 
 class VenueSeatBulkCreateRequest(BaseModel):
@@ -89,7 +86,6 @@ class VenueSeatBulkCreateRequest(BaseModel):
     start_y: float = Field(default=0.0, ge=0.0, le=100.0)
     label_prefix: str = Field(default="A", min_length=1, max_length=12)
     arc_config: ArcConfig | None = None
-    section_id: int | None = None
 
 
 class VenueSeatUpdateRequest(BaseModel):
@@ -98,9 +94,6 @@ class VenueSeatUpdateRequest(BaseModel):
     seat_number: int | None = Field(default=None, ge=0)
     x: float | None = Field(default=None, ge=0.0, le=100.0)
     y: float | None = Field(default=None, ge=0.0, le=100.0)
-    rotation: float | None = None
-    section_id: int | None = None
-    is_admin_locked: bool | None = None
 
 
 class VenueSeatResponse(BaseModel):
@@ -111,10 +104,6 @@ class VenueSeatResponse(BaseModel):
     seat_number: int | None
     x: float | None
     y: float | None
-    rotation: float = 0
-    is_admin_locked: bool = False
-    section_id: int | None = None
-    section_name: str | None = None
 
 
 class VenueSeatBulkCreateResponse(BaseModel):
@@ -129,9 +118,6 @@ class VenueSeatSyncCreateItem(BaseModel):
     seat_number: int | None = Field(default=None, ge=0)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
-    rotation: float | None = None
-    section_id: int | None = None
-    is_admin_locked: bool = False
 
 
 class VenueSeatSyncUpdateItem(BaseModel):
@@ -141,9 +127,6 @@ class VenueSeatSyncUpdateItem(BaseModel):
     seat_number: int | None = Field(default=None, ge=0)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
-    rotation: float | None = None
-    section_id: int | None = None
-    is_admin_locked: bool = False
 
 
 class VenueSeatSyncRequest(BaseModel):

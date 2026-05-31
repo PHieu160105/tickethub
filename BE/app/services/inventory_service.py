@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import SeatStatus
-from app.models.event import Event, SeatZone, Show
+from app.models.event import Event, TicketTier, Show
 from app.models.order import Ticket
 from app.models.venue import Venue, VenueLayout
 from app.services.event_inventory_service import sync_show_ticket_inventory
@@ -33,16 +33,16 @@ async def get_seatmap(
     layout: VenueLayout | None = await session.get(VenueLayout, show.venue_layout_id) if show.venue_layout_id else None
     venue: Venue | None = await session.get(Venue, layout.venue_id) if layout else None
 
-    zones = list(await session.scalars(select(SeatZone).where(SeatZone.show_id == show.id).order_by(SeatZone.id.asc())))
-    zone_map = {
-        zone.id: {
-            "id": zone.id,
-            "name": zone.name,
-            "code": zone.code,
-            "color": zone.color,
-            "price": float(zone.price),
+    ticket_tiers = list(await session.scalars(select(TicketTier).where(TicketTier.show_id == show.id).order_by(TicketTier.id.asc())))
+    tier_map = {
+        tier.id: {
+            "id": tier.id,
+            "name": tier.name,
+            "code": tier.code,
+            "color": tier.color,
+            "price": float(tier.price),
         }
-        for zone in zones
+        for tier in ticket_tiers
     }
 
     tickets = list(await session.scalars(select(Ticket).where(Ticket.show_id == show_id).order_by(Ticket.id.asc())))
@@ -55,16 +55,15 @@ async def get_seatmap(
         if normalized_status == SeatStatus.LOCKED and ticket.lock_expires_at and ticket.lock_expires_at < now:
             normalized_status = SeatStatus.AVAILABLE
 
-        zone_info = zone_map.get(ticket.ticket_tier_id or -1)
+        tier_info = tier_map.get(ticket.ticket_tier_id or -1)
         seat_responses.append(
             {
                 "id": ticket.id,
                 "label": ticket.seat_label or f"Ticket #{ticket.id}",
                 "x": float(ticket.x_coord) if ticket.x_coord is not None else None,
                 "y": float(ticket.y_coord) if ticket.y_coord is not None else None,
-                "rotation": 0,
-                "zone_id": ticket.ticket_tier_id,
-                "zone_name": zone_info.get("name") if zone_info else None,
+                "ticket_tier_id": ticket.ticket_tier_id,
+                "ticket_tier_name": tier_info.get("name") if tier_info else None,
                 "price": float(ticket.price),
                 "status": normalized_status.value,
                 "lock_expires_at": ticket.lock_expires_at.isoformat() if ticket.lock_expires_at else None,
@@ -88,8 +87,7 @@ async def get_seatmap(
         }
         if venue
         else None,
-        "zones": [zone_map[zone.id] for zone in zones],
-        "polygons": [],
+        "ticket_tiers": [tier_map[tier.id] for tier in ticket_tiers],
         "seats": seat_responses,
         "seat_count": len(tickets),
     }

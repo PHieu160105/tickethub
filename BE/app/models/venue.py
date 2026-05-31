@@ -12,7 +12,7 @@ class Venue(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
-    svg_source: Mapped[str | None] = mapped_column(Text, nullable=True)
+    background_source: Mapped[str | None] = mapped_column("svg_source", Text, nullable=True)
     width: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     height: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -31,24 +31,10 @@ class Venue(TimestampMixin, Base):
         return self.created_by_staff_id
 
     @property
-    def city(self) -> None:
-        return None
-
-    @property
-    def venue_type(self) -> str:
-        return "custom"
-
-    @property
-    def background_source(self) -> str | None:
-        return self.svg_source
-
-    @property
     def background_type(self) -> str | None:
-        if not self.svg_source:
+        if not self.background_source:
             return None
-        if "<svg" in self.svg_source[:500].lower():
-            return "svg"
-        return "raster"
+        return "svg" if self.background_source.startswith("data:image/svg+xml") else "raster"
 
 class VenueLayout(TimestampMixin, Base):
     __tablename__ = "venue_layouts"
@@ -60,11 +46,3 @@ class VenueLayout(TimestampMixin, Base):
 
     venue = relationship("Venue", back_populates="layouts")
     seats = relationship("Seat", back_populates="venue_layout", cascade="all,delete")
-
-    @property
-    def svg_data(self) -> None:
-        return None
-
-    @property
-    def sort_order(self) -> int:
-        return 0

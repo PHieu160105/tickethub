@@ -25,15 +25,3 @@ class Seat(TimestampMixin, Base):
 
     venue_layout = relationship("VenueLayout", back_populates="seats")
     tickets = relationship("Ticket", back_populates="seat")
-
-    @property
-    def rotation(self) -> float:
-        return 0.0
-
-    @property
-    def section_id(self) -> None:
-        return None
-
-    @property
-    def is_admin_locked(self) -> bool:
-        return False

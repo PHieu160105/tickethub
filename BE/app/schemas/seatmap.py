@@ -3,8 +3,8 @@
 from pydantic import BaseModel, ConfigDict
 
 
-class SeatMapZoneResponse(BaseModel):
-    """Metadata khu giá vé của một buổi diễn."""
+class SeatMapTicketTierResponse(BaseModel):
+    """Metadata hạng vé của một buổi diễn."""
 
     id: int
     code: str
@@ -22,11 +22,8 @@ class SeatMapSeatResponse(BaseModel):
     label: str
     x: float | None
     y: float | None
-    rotation: float
-    zone_id: int | None = None
-    zone_name: str | None = None
-    section_id: int | None = None
-    section_name: str | None = None
+    ticket_tier_id: int | None = None
+    ticket_tier_name: str | None = None
     price: float
     status: str
     lock_expires_at: str | None
@@ -36,29 +33,8 @@ class SeatMapSeatResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class SeatMapPolygonPointResponse(BaseModel):
-    """Một điểm polygon theo hệ tọa độ phần trăm."""
-
-    x: float
-    y: float
-
-
-class SeatMapPolygonResponse(BaseModel):
-    """Metadata polygon overlay để vẽ vùng ghế trên bản đồ khách hàng."""
-
-    id: int
-    zone_id: int | None = None
-    zone_name: str | None = None
-    section_id: int | None = None
-    section_name: str | None = None
-    label: str | None
-    points: list[SeatMapPolygonPointResponse]
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class SeatMapBackgroundResponse(BaseModel):
-    """Metadata ảnh nền địa điểm dùng làm lớp nền sơ đồ ghế."""
+    """Metadata ảnh nền tĩnh của địa điểm."""
 
     source: str | None
     type: str | None
@@ -79,7 +55,6 @@ class SeatMapResponse(BaseModel):
     venue_name: str
     queue_required: bool = False
     background: SeatMapBackgroundResponse | None = None
-    zones: list[SeatMapZoneResponse]
-    polygons: list[SeatMapPolygonResponse]
+    ticket_tiers: list[SeatMapTicketTierResponse]
     seats: list[SeatMapSeatResponse]
     seat_count: int

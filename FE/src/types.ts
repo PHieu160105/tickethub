@@ -102,7 +102,7 @@ export interface VenueDetail extends VenueSummary {
   width: number
   height: number
   background_source: string | null
-  background_type: 'svg' | 'raster' | 'unknown' | null
+  background_type: 'svg' | 'raster' | null
   created_by_staff_id: number | null
   updated_at: string
 }
@@ -116,18 +116,6 @@ export interface VenueLayoutItem {
   updated_at: string
 }
 
-export interface VenueSectionItem {
-  id: number
-  venue_layout_id: number
-  name: string
-  code: string
-  color: string
-  price_base: number
-  sort_order: number
-  created_at: string
-  updated_at: string
-}
-
 export interface VenueSeatItem {
   id: number
   venue_layout_id: number | null
@@ -136,27 +124,6 @@ export interface VenueSeatItem {
   seat_number: number | null
   x: number | null
   y: number | null
-  rotation?: number
-  is_admin_locked?: boolean
-  section_id?: number | null
-  section_name?: string | null
-}
-
-export interface VenuePolygonPoint {
-  x: number
-  y: number
-}
-
-export interface VenuePolygonItem {
-  id: number
-  venue_id: number
-  venue_layout_id: number
-  section_id?: number | null
-  section_name?: string | null
-  label: string | null
-  points: VenuePolygonPoint[]
-  created_at: string
-  updated_at: string
 }
 
 export interface TicketTier {
@@ -169,8 +136,6 @@ export interface TicketTier {
   is_active: boolean
 }
 
-export type SeatZone = TicketTier
-
 export interface EventDetail extends EventCard {
   shows: ShowSummary[]
 }
@@ -179,12 +144,12 @@ export interface ShowDetail extends ShowSummary {
   event_slug: string
   event_title: string
   hold_minutes: number
-  zones: TicketTier[]
+  ticket_tiers: TicketTier[]
 }
 
 export interface Seat {
   id: number
-  zone_id: number
+  ticket_tier_id: number | null
   row_index: number
   row_label: string
   seat_number: number
@@ -220,11 +185,11 @@ export interface SeatMatrixResponse {
   event_slug: string
   event_title: string
   queue_required: boolean
-  zones: TicketTier[]
+  ticket_tiers: TicketTier[]
   seats: Seat[]
 }
 
-export interface SeatMapZone {
+export interface SeatMapTicketTier {
   id: number
   name: string
   code: string
@@ -234,24 +199,9 @@ export interface SeatMapZone {
 
 export interface SeatMapBackground {
   source: string | null
-  type: 'svg' | 'raster' | 'unknown' | null
+  type: 'svg' | 'raster' | null
   width: number | null
   height: number | null
-}
-
-export interface SeatMapPolygonPoint {
-  x: number
-  y: number
-}
-
-export interface SeatMapPolygon {
-  id: number
-  zone_id: number | null
-  zone_name: string | null
-  section_id?: number | null
-  section_name?: string | null
-  label: string | null
-  points: SeatMapPolygonPoint[]
 }
 
 export interface SeatMapSeat {
@@ -259,22 +209,13 @@ export interface SeatMapSeat {
   label: string
   x: number | null
   y: number | null
-  rotation: number
-  zone_id: number | null
-  zone_name: string | null
-  section_id?: number | null
-  section_name?: string | null
+  ticket_tier_id: number | null
+  ticket_tier_name: string | null
   price: number
   status: SeatStatus
   lock_expires_at: string | null
   is_locked_by_me: boolean
   is_admin_locked: boolean
-}
-
-export interface ShowSeatPolygonItem extends SeatMapPolygon {
-  show_id: number
-  created_at: string
-  updated_at: string
 }
 
 export interface SeatMapResponse {
@@ -286,9 +227,7 @@ export interface SeatMapResponse {
   venue_name: string
   queue_required: boolean
   background: SeatMapBackground | null
-  zones: SeatMapZone[]
-  sections?: Array<{ id: number; name: string; code: string; color: string; price_base: number }>
-  polygons: SeatMapPolygon[]
+  ticket_tiers: SeatMapTicketTier[]
   seats: SeatMapSeat[]
   seat_count: number
 }
@@ -325,7 +264,7 @@ export interface LockSeatResponse {
 export interface CheckoutItem {
   seat_id: number
   seat_label: string
-  zone_name: string
+  ticket_tier_name: string
   price: number
   ticket_code: string
   qr_payload: string
@@ -355,7 +294,7 @@ export interface TicketItem {
   event_cover_image_url: string
   venue: string
   seat_label: string
-  zone_name: string
+  ticket_tier_name: string
   price: number
   order_id?: number
   seat_status: SeatStatus
@@ -410,10 +349,10 @@ export interface AdminEventUpdatePayload {
   status?: EventStatus
 }
 
-export interface EventZoneStats {
-  zone_id: number
-  zone_code: string
-  zone_name: string
+export interface EventTicketTierStats {
+  ticket_tier_id: number
+  ticket_tier_code: string
+  ticket_tier_name: string
   color: string
   total_seats: number
   sold_seats: number
@@ -438,7 +377,7 @@ export interface EventDetailStats {
   occupancy_rate: number
   tickets_issued: number
   total_revenue: number
-  zone_stats: EventZoneStats[]
+  ticket_tier_stats: EventTicketTierStats[]
 }
 
 export interface ApiMessage {
@@ -472,7 +411,7 @@ export interface AdminTicketSaleItem {
   show_start_at: string
   customer_name: string
   seat_label: string
-  zone_name: string
+  ticket_tier_name: string
   venue: string
   price: number
   purchased_at: string
@@ -510,4 +449,18 @@ export interface EventStaffItem {
   staff_code: string
   is_active: boolean
   created_at: string
+}
+
+export interface AssignedEventStaffItem {
+  user_id: number
+  full_name: string
+  staff_code: string
+}
+
+export interface EventAssignmentOverviewItem {
+  event_id: number
+  event_slug: string
+  event_title: string
+  event_status: EventStatus
+  assigned_staff: AssignedEventStaffItem[]
 }

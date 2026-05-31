@@ -14,7 +14,7 @@ from app.core.cache import public_api_cache, show_seat_cache_namespace, user_tic
 from app.core.db import AsyncSessionLocal
 from app.core.search import build_ilike_pattern
 from app.models.enums import EventStatus, OrderStatus, SeatStatus
-from app.models.event import Event, SeatZone, Show
+from app.models.event import Event, TicketTier, Show
 from app.models.order import Order, Ticket
 from app.models.seat import Seat
 from app.schemas.booking import CheckoutItemResponse, CheckoutResponse, LockSeatsResponse, MyTicketResponse
@@ -246,9 +246,9 @@ async def checkout_locked_seats(
         if not valid_tickets:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không có vé đang giữ hợp lệ để thanh toán")
 
-        zone_ids = {ticket.ticket_tier_id for ticket in valid_tickets if ticket.ticket_tier_id is not None}
-        zone_rows = await session.execute(select(SeatZone.id, SeatZone.name).where(SeatZone.id.in_(zone_ids))) if zone_ids else None
-        zone_map = {zone_id: zone_name for zone_id, zone_name in (zone_rows.all() if zone_rows else [])}
+        tier_ids = {ticket.ticket_tier_id for ticket in valid_tickets if ticket.ticket_tier_id is not None}
+        tier_rows = await session.execute(select(TicketTier.id, TicketTier.name).where(TicketTier.id.in_(tier_ids))) if tier_ids else None
+        tier_map = {ticket_tier_id: ticket_tier_name for ticket_tier_id, ticket_tier_name in (tier_rows.all() if tier_rows else [])}
 
         subtotal_amount = sum(Decimal(str(ticket.price)) for ticket in valid_tickets)
         discount_amount = Decimal("0")
@@ -283,7 +283,7 @@ async def checkout_locked_seats(
                 CheckoutItemResponse(
                     seat_id=ticket.id,
                     seat_label=ticket.seat_label or f"Ticket #{ticket.id}",
-                    zone_name=zone_map.get(ticket.ticket_tier_id, "Chưa phân hạng"),
+                    ticket_tier_name=tier_map.get(ticket.ticket_tier_id, "Chưa phân hạng"),
                     price=Decimal(str(ticket.price)),
                     ticket_code=ticket_code,
                     qr_payload=qr_payload,
@@ -324,11 +324,11 @@ async def fetch_my_tickets(
     offset: int = 0,
 ) -> list[MyTicketResponse]:
     active_stmt = (
-        select(Ticket, Order, Event, Show, SeatZone, Seat)
+        select(Ticket, Order, Event, Show, TicketTier, Seat)
         .join(Order, Ticket.order_id == Order.id)
         .join(Show, Order.show_id == Show.id)
         .join(Event, Show.event_id == Event.id)
-        .outerjoin(SeatZone, Ticket.ticket_tier_id == SeatZone.id)
+        .outerjoin(TicketTier, Ticket.ticket_tier_id == TicketTier.id)
         .outerjoin(Seat, Ticket.seat_id == Seat.id)
         .where(Order.customer_id == user_id, Ticket.ticket_code.is_not(None))
         .order_by(Ticket.issued_at.desc())
@@ -366,14 +366,14 @@ async def fetch_my_tickets(
             event_cover_image_url=event.cover_image_url,
             venue=show.location,
             seat_label=ticket.seat_label or (seat.seat_label if seat else f"Ticket #{ticket.id}"),
-            zone_name=zone.name if zone else "Khu vực chung",
+            ticket_tier_name=tier.name if tier else "Khu vực chung",
             price=Decimal(str(ticket.price)),
             order_id=order.id,
             seat_status=ticket.status,
             ticket_status="active",
             issued_at=ticket.issued_at,
         )
-        for ticket, order, event, show, zone, seat in active_rows
+        for ticket, order, event, show, tier, seat in active_rows
     ]
 
 

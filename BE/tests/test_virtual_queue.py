@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import EventCategory, EventStatus, QueueStatus
-from app.schemas.event import EventCreateRequest, SeatZoneCreate, ShowCreateRequest
+from app.schemas.event import EventCreateRequest, TicketTierCreate, ShowCreateRequest
 from app.services import queue_service
 from app.services.event_service import create_event, create_show_with_inventory
 from app.services.queue_service import QueueRuntimeEntry, _runtime_queue, get_queue_status, join_show_queue, process_virtual_queue
@@ -41,7 +41,7 @@ async def test_virtual_queue_batches_users(
         end_time=datetime.now(UTC).time().replace(hour=20, minute=0, second=0, microsecond=0),
         status=EventStatus.LIVE,
         hold_minutes=10,
-        zones=[SeatZoneCreate(code="GA", name="Khu phổ thông", base_price=500_000, color="#024ddf")],
+        ticket_tiers=[TicketTierCreate(code="GA", name="Khu phổ thông", base_price=500_000, color="#024ddf")],
     )
 
     event = await create_event(db_session, admin_user.id, event_payload)
@@ -104,7 +104,7 @@ async def test_virtual_queue_releases_exact_batch_of_fifty(
         end_time=datetime.now(UTC).time().replace(hour=20, minute=0, second=0, microsecond=0),
         status=EventStatus.LIVE,
         hold_minutes=10,
-        zones=[SeatZoneCreate(code="GA", name="Khu phổ thông", base_price=500_000, color="#024ddf")],
+        ticket_tiers=[TicketTierCreate(code="GA", name="Khu phổ thông", base_price=500_000, color="#024ddf")],
     )
 
     event = await create_event(db_session, admin_user.id, event_payload)
@@ -176,7 +176,7 @@ async def test_existing_admitted_token_does_not_force_queue_when_below_threshold
         end_time=datetime.now(UTC).time().replace(hour=20, minute=0, second=0, microsecond=0),
         status=EventStatus.LIVE,
         hold_minutes=10,
-        zones=[SeatZoneCreate(code="GA", name="Khu phổ thông", base_price=500_000, color="#024ddf")],
+        ticket_tiers=[TicketTierCreate(code="GA", name="Khu phổ thông", base_price=500_000, color="#024ddf")],
     )
 
     event = await create_event(db_session, admin_user.id, event_payload)
