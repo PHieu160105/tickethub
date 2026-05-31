@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timezone
 from decimal import Decimal
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import EventCategory, EventStatus, SeatSource, SeatStatus
@@ -110,37 +110,15 @@ async def create_show_with_inventory(session: AsyncSession, event: Event, staff_
             show_id=show.id,
             code=zone_payload.code,
             name=zone_payload.name,
-            description=None,
-            base_price=zone_payload.price,
+            description=zone_payload.description,
+            base_price=zone_payload.base_price,
             color=zone_payload.color,
-            is_active=True,
+            is_active=zone_payload.is_active,
         )
         session.add(zone)
         created_zone_pairs.append((zone, zone_payload))
     await session.flush()
 
-    if payload.venue_layout_id is None and created_zone_pairs:
-        for zone, zone_payload in created_zone_pairs:
-            for row_index in range(zone_payload.row_count):
-                row_label = chr(65 + row_index) if row_index < 26 else f"R{row_index + 1}"
-                for seat_number in range(1, zone_payload.seats_per_row + 1):
-                    session.add(
-                        Ticket(
-                            show_id=show.id,
-                            ticket_tier_id=zone.id,
-                            seat_id=None,
-                            label=f"{row_label}{seat_number}",
-                            row_label=row_label,
-                            seat_number=seat_number,
-                            price=float(zone_payload.price),
-                            status=SeatStatus.AVAILABLE,
-                            is_staff_locked=False,
-                        )
-                    )
-        await session.flush()
-    else:
-        for zone, _zone_payload in created_zone_pairs:
-            session.add(zone)
     await sync_show_ticket_inventory(session, show)
     return show
 
@@ -235,19 +213,15 @@ async def create_show_zone(session: AsyncSession, show: Show, payload) -> SeatZo
         show_id=show.id,
         code=payload.code,
         name=payload.name,
-        description=None,
-        base_price=payload.price,
+        description=payload.description,
+        base_price=payload.base_price,
         color=payload.color,
-        is_active=True,
+        is_active=payload.is_active,
     )
     session.add(zone)
     await session.flush()
     await sync_show_ticket_inventory(session, show)
     return zone
-
-
-async def create_initial_show_zone(session: AsyncSession, show: Show, payload) -> SeatZone:
-    return await create_show_zone(session, show, payload)
 
 
 async def update_show_zone(session: AsyncSession, show: Show, zone_id: int, payload) -> SeatZone:
@@ -257,8 +231,10 @@ async def update_show_zone(session: AsyncSession, show: Show, zone_id: int, payl
 
     zone.code = payload.code
     zone.name = payload.name
-    zone.base_price = payload.price
+    zone.description = payload.description
+    zone.base_price = payload.base_price
     zone.color = payload.color
+    zone.is_active = payload.is_active
     await session.flush()
 
     tickets = list(
@@ -312,8 +288,18 @@ async def list_live_events(
     limit: int = 30,
     offset: int = 0,
     include_unpublished: bool = False,
+    staff_id: int | None = None,
 ) -> list[Event]:
     stmt = select(Event).where(Event.is_deleted.is_(False))
+    if staff_id is not None:
+        stmt = stmt.where(
+            Event.assignments.any(
+                and_(
+                    EventAssignment.staff_id == staff_id,
+                    EventAssignment.is_active.is_(True),
+                )
+            )
+        )
     if not include_unpublished:
         stmt = stmt.where(Event.status == EventStatus.LIVE)
     if search:
@@ -428,10 +414,10 @@ async def build_show_detail_response(session: AsyncSession, show: Show) -> dict:
                     "id": zone.id,
                     "code": zone.code,
                     "name": zone.name,
-                    "row_count": 0,
-                    "seats_per_row": 0,
-                    "price": Decimal(str(zone.price)),
+                    "description": zone.description,
+                    "base_price": Decimal(str(zone.base_price)),
                     "color": zone.color,
+                    "is_active": zone.is_active,
                 }
                 for zone in await list_show_zones(session, show.id)
             ],
@@ -537,10 +523,10 @@ async def get_show_seat_matrix(
             "id": zone.id,
             "code": zone.code,
             "name": zone.name,
-            "row_count": 0,
-            "seats_per_row": 0,
-            "price": Decimal(str(zone.price)),
+            "description": zone.description,
+            "base_price": Decimal(str(zone.base_price)),
             "color": zone.color,
+            "is_active": zone.is_active,
         }
         for zone in zones
     ]

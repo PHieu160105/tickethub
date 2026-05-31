@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_active_admin
+from app.api.deps import get_current_active_event_staff, get_current_assigned_event_staff
 from app.core.cache import EVENT_DETAIL_CACHE_NAMESPACE, EVENT_LIST_CACHE_NAMESPACE, SHOW_DETAIL_CACHE_NAMESPACE, public_api_cache, show_seat_cache_namespace
 from app.core.db import get_db_session
 from app.models.enums import EventStatus
@@ -32,7 +32,7 @@ router = APIRouter()
 async def create_admin_event(
     payload: EventCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    admin_user: User = Depends(get_current_active_admin),
+    admin_user: User = Depends(get_current_active_event_staff),
 ) -> EventDetailResponse:
     event = await create_event(session, admin_user.id, payload)
     try:
@@ -57,7 +57,7 @@ async def list_admin_events(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    staff_user: User = Depends(get_current_active_event_staff),
 ) -> list[EventCardResponse]:
     events = await list_live_events(
         session,
@@ -68,6 +68,7 @@ async def list_admin_events(
         limit=limit,
         offset=offset,
         include_unpublished=True,
+        staff_id=staff_user.id,
     )
     shows_by_event_id = await list_shows_for_event_ids(session, [event.id for event in events], include_deleted=True)
     max_prices_by_event_id = await list_event_max_prices_for_event_ids(session, [event.id for event in events])
@@ -86,7 +87,7 @@ async def list_admin_events(
 async def get_admin_event(
     event_key: str,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> EventDetailResponse:
     event = await get_event_by_slug_or_id(session, event_key)
     return await build_event_detail_response(session, event, include_unpublished_shows=True)
@@ -97,7 +98,7 @@ async def update_event(
     event_key: str,
     payload: EventUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> EventDetailResponse:
     event = await get_event_by_slug_or_id(session, event_key)
     updates = payload.model_dump(exclude_unset=True)
@@ -130,7 +131,7 @@ async def update_event(
 async def delete_event(
     event_key: str,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> APIMessage:
     event = await get_event_by_slug_or_id(session, event_key)
     if event.status != EventStatus.DRAFT:
@@ -158,7 +159,7 @@ async def delete_event(
 @router.post("/events/upload-image", response_model=UploadImageResponse)
 async def upload_event_image(
     file: UploadFile = File(...),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> UploadImageResponse:
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chi cho phep upload file anh")

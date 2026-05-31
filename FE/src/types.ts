@@ -159,15 +159,17 @@ export interface VenuePolygonItem {
   updated_at: string
 }
 
-export interface SeatZone {
+export interface TicketTier {
   id: number
   code: string
   name: string
-  row_count: number
-  seats_per_row: number
-  price: number
+  description: string | null
+  base_price: number
   color: string
+  is_active: boolean
 }
+
+export type SeatZone = TicketTier
 
 export interface EventDetail extends EventCard {
   shows: ShowSummary[]
@@ -177,7 +179,7 @@ export interface ShowDetail extends ShowSummary {
   event_slug: string
   event_title: string
   hold_minutes: number
-  zones: SeatZone[]
+  zones: TicketTier[]
 }
 
 export interface Seat {
@@ -218,7 +220,7 @@ export interface SeatMatrixResponse {
   event_slug: string
   event_title: string
   queue_required: boolean
-  zones: SeatZone[]
+  zones: TicketTier[]
   seats: Seat[]
 }
 
@@ -499,4 +501,13 @@ export interface PaginatedAdminTicketSalesResponse {
   total: number
   limit: number
   offset: number
+}
+
+export interface EventStaffItem {
+  user_id: number
+  full_name: string
+  email: string
+  staff_code: string
+  is_active: boolean
+  created_at: string
 }

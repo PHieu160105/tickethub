@@ -392,7 +392,7 @@ export default function SeatSelection() {
     } catch {
       // Bỏ qua gói tin WebSocket không đúng định dạng để luồng cập nhật ghế tiếp tục ổn định.
     }
-  }, [handleShowInterrupted, matrix?.event_slug, refetch])
+  }, [handleShowInterrupted, matrix, refetch])
 
   useWebSocketHeartbeat({ url: wsUrl, onMessage: handleSeatUpdates })
 
@@ -467,7 +467,7 @@ export default function SeatSelection() {
                       <div>
                         <h3 className="font-semibold">{zone.name}</h3>
                         <p className="text-xs text-slate-400">
-                          {zone.code} | {formatCurrencyVnd(zone.price)}
+                          {zone.code} | {formatCurrencyVnd(zone.base_price)}
                         </p>
                       </div>
                       <span className="text-xs text-slate-400">{zoneSeats.length} ghế</span>

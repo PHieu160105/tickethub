@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_active_admin
+from app.api.deps import get_current_assigned_event_staff
 from app.core.db import get_db_session
 from app.models.enums import EventStatus
 from app.models.user import User
@@ -25,7 +25,7 @@ router = APIRouter()
 async def list_admin_event_shows(
     event_key: str,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> list[ShowSummaryResponse]:
     event = await get_event_by_slug_or_id(session, event_key)
     shows = await list_event_shows(session, event.id)
@@ -37,7 +37,7 @@ async def create_admin_show(
     event_key: str,
     payload: ShowCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    admin_user: User = Depends(get_current_active_admin),
+    admin_user: User = Depends(get_current_assigned_event_staff),
 ) -> ShowDetailResponse:
     event = await get_event_by_slug_or_id(session, event_key)
     try:
@@ -58,7 +58,7 @@ async def get_admin_show(
     event_key: str,
     show_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> ShowDetailResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     return ShowDetailResponse(**(await build_show_detail_response(session, show)))
@@ -70,7 +70,7 @@ async def update_admin_show(
     show_id: int,
     payload: ShowUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> ShowDetailResponse:
     event, show = await _build_event_or_404_show(session, event_key, show_id)
     updates = payload.model_dump(exclude_unset=True)
@@ -142,7 +142,7 @@ async def delete_admin_show(
     event_key: str,
     show_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> APIMessage:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     if show.status != EventStatus.DRAFT:
@@ -164,7 +164,7 @@ async def show_stats_detail(
     event_key: str,
     show_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> EventDetailStatsResponse:
     event, show = await _build_event_or_404_show(session, event_key, show_id)
     return await _build_show_stats_response(session, show, event)

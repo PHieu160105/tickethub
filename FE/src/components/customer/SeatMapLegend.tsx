@@ -42,7 +42,7 @@ export function SeatMapLegend({ zones = [] }: SeatMapLegendProps) {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-[11px] uppercase tracking-[0.24em] text-gray-500">Loại ghế</p>
+        <p className="text-[11px] uppercase tracking-[0.24em] text-gray-500">Hạng vé</p>
         <div className="mt-3 grid grid-cols-1 gap-2">
           {zones.map((zone) => (
             <div key={zone.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2">
@@ -56,7 +56,7 @@ export function SeatMapLegend({ zones = [] }: SeatMapLegendProps) {
                   <p className="text-[11px] uppercase tracking-[0.18em] text-white">{zone.code}</p>
                 </div>
               </div>
-              <p className="text-sm font-semibold text-slate-200">{formatCurrencyVnd(zone.price)}</p>
+              <p className="text-sm font-semibold text-slate-200">{formatCurrencyVnd('base_price' in zone ? zone.base_price : zone.price)}</p>
             </div>
           ))}
         </div>
