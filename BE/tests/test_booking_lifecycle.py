@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import OrderStatus, SeatStatus
 from app.models.order import Ticket
-from app.models.seat import Seat
 from app.services.booking_service import checkout_locked_seats, fetch_my_tickets, lock_seats, release_expired_locks
 
 
@@ -21,15 +20,15 @@ async def test_seat_lock_prevents_second_user(
     """Khách thứ nhất giữ ghế thành công thì khách thứ hai bị từ chối trên cùng ghế."""
 
     user1, user2 = customer_users
-    seat = await db_session.scalar(select(Seat).where(Seat.show_id == sample_show.id).order_by(Seat.id.asc()))
-    assert seat is not None
+    ticket = await db_session.scalar(select(Ticket).where(Ticket.show_id == sample_show.id).order_by(Ticket.id.asc()))
+    assert ticket is not None
 
-    first_result = await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[seat.id], queue_token=None)
-    second_result = await lock_seats(db_session, user_id=user2.id, show_id=sample_show.id, seat_ids=[seat.id], queue_token=None)
+    first_result = await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[ticket.id], queue_token=None)
+    second_result = await lock_seats(db_session, user_id=user2.id, show_id=sample_show.id, seat_ids=[ticket.id], queue_token=None)
 
-    assert first_result.locked_seat_ids == [seat.id]
+    assert first_result.locked_seat_ids == [ticket.id]
     assert second_result.locked_seat_ids == []
-    assert seat.id in second_result.failed_seat_ids
+    assert ticket.id in second_result.failed_seat_ids
 
 
 @pytest.mark.asyncio
@@ -41,18 +40,18 @@ async def test_locked_seat_without_expiry_still_blocks_other_user(
     """Ghế đang khóa bởi người khác nhưng thiếu hạn khóa vẫn không được cấp cho user mới."""
 
     user1, user2 = customer_users
-    seat = await db_session.scalar(select(Seat).where(Seat.show_id == sample_show.id).order_by(Seat.id.asc()))
-    assert seat is not None
+    ticket = await db_session.scalar(select(Ticket).where(Ticket.show_id == sample_show.id).order_by(Ticket.id.asc()))
+    assert ticket is not None
 
-    seat.status = SeatStatus.LOCKED
-    seat.locked_by_user_id = user2.id
-    seat.lock_expires_at = None
+    ticket.status = SeatStatus.LOCKED
+    ticket.locked_by_customer_id = user2.id
+    ticket.lock_expires_at = None
     await db_session.commit()
 
-    result = await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[seat.id], queue_token=None)
+    result = await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[ticket.id], queue_token=None)
 
     assert result.locked_seat_ids == []
-    assert result.failed_seat_ids == [seat.id]
+    assert result.failed_seat_ids == [ticket.id]
 
 
 @pytest.mark.asyncio
@@ -64,20 +63,20 @@ async def test_checkout_marks_seat_sold_and_generates_ticket(
     """Thanh toán chuyển ghế đang giữ sang đã bán và trả dữ liệu vé điện tử."""
 
     user1, _ = customer_users
-    seat = await db_session.scalar(select(Seat).where(Seat.show_id == sample_show.id).order_by(Seat.id.asc()))
-    assert seat is not None
+    ticket = await db_session.scalar(select(Ticket).where(Ticket.show_id == sample_show.id).order_by(Ticket.id.asc()))
+    assert ticket is not None
 
-    await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[seat.id], queue_token=None)
+    await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[ticket.id], queue_token=None)
     checkout = await checkout_locked_seats(db_session, user_id=user1.id, show_id=sample_show.id, queue_token=None)
 
     assert checkout.order_status == OrderStatus.PAID
     assert len(checkout.items) == 1
-    assert checkout.items[0].seat_id == seat.id
+    assert checkout.items[0].seat_id == ticket.id
     assert checkout.items[0].ticket_code.startswith("TR-")
 
-    refreshed_seat = await db_session.scalar(select(Seat).where(Seat.id == seat.id))
-    assert refreshed_seat is not None
-    assert refreshed_seat.status == SeatStatus.SOLD
+    refreshed_ticket = await db_session.scalar(select(Ticket).where(Ticket.id == ticket.id))
+    assert refreshed_ticket is not None
+    assert refreshed_ticket.status == SeatStatus.SOLD
 
 
 @pytest.mark.asyncio
@@ -89,22 +88,20 @@ async def test_expired_lock_worker_releases_seat(
     """Worker nền phải mở khóa các ghế đã hết hạn giữ."""
 
     user1, _ = customer_users
-    seat = await db_session.scalar(select(Seat).where(Seat.show_id == sample_show.id).order_by(Seat.id.asc()))
-    assert seat is not None
-
-    await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[seat.id], queue_token=None)
-
-    ticket = await db_session.scalar(select(Ticket).where(Ticket.seat_id == seat.id))
+    ticket = await db_session.scalar(select(Ticket).where(Ticket.show_id == sample_show.id).order_by(Ticket.id.asc()))
     assert ticket is not None
+
+    await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[ticket.id], queue_token=None)
+
     ticket.lock_expires_at = datetime.now(UTC) - timedelta(minutes=1)
     await db_session.commit()
 
     released = await release_expired_locks(db_session)
     assert sample_show.id in released
 
-    refreshed_seat = await db_session.scalar(select(Seat).where(Seat.id == seat.id))
-    assert refreshed_seat is not None
-    assert refreshed_seat.status == SeatStatus.AVAILABLE
+    refreshed_ticket = await db_session.scalar(select(Ticket).where(Ticket.id == ticket.id))
+    assert refreshed_ticket is not None
+    assert refreshed_ticket.status == SeatStatus.AVAILABLE
 
 
 @pytest.mark.asyncio
@@ -117,10 +114,10 @@ async def test_my_ticket_search_supports_code_event_and_time(
     """Danh sách vé hỗ trợ tìm theo mã vé, tên sự kiện và khoảng thời gian."""
 
     user1, _ = customer_users
-    seat = await db_session.scalar(select(Seat).where(Seat.show_id == sample_show.id).order_by(Seat.id.asc()))
-    assert seat is not None
+    ticket = await db_session.scalar(select(Ticket).where(Ticket.show_id == sample_show.id).order_by(Ticket.id.asc()))
+    assert ticket is not None
 
-    await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[seat.id], queue_token=None)
+    await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[ticket.id], queue_token=None)
     await checkout_locked_seats(db_session, user_id=user1.id, show_id=sample_show.id, queue_token=None)
 
     all_tickets = await fetch_my_tickets(db_session, user_id=user1.id)

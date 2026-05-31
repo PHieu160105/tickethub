@@ -67,7 +67,7 @@ async def suggest(
                 .where(
                     Event.is_deleted.is_(False),
                     Event.status == EventStatus.LIVE,
-                    or_(Event.title.ilike(pattern), Event.venue.ilike(pattern), Event.category.ilike(pattern)),
+                    or_(Event.title.ilike(pattern), Event.description.ilike(pattern), Event.category.ilike(pattern)),
                 )
                 .order_by(Event.start_date.asc(), Event.id.asc())
                 .limit(limit)
@@ -76,7 +76,7 @@ async def suggest(
         # Map từng Event ORM sang schema gợi ý thống nhất cho frontend.
         items.extend(
             [
-                SearchSuggestionItem(label=row.title, value=str(row.id), item_type="event", meta={"venue": row.venue, "id": row.id})
+                SearchSuggestionItem(label=row.title, value=str(row.id), item_type="event", meta={"venue": row.description or "", "id": row.id})
                 for row in rows
             ]
         )

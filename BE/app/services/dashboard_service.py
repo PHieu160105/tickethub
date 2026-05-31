@@ -8,13 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.sqltypes import Date
 
 from app.core.db import AsyncSessionLocal
-from app.models.enums import EventStatus, OrderStatus, QueueStatus, SeatStatus
+from app.models.enums import EventStatus, OrderStatus, SeatStatus
 from app.models.event import Event, Show
 from app.models.order import Order, Ticket
-from app.models.queue import QueueEntry
 from app.models.user import User
 from app.schemas.admin import AudienceDistributionResponse, DashboardStreamResponse, DashboardSummaryResponse, RevenuePoint
 from app.schemas.event import EventOccupancyResponse
+from app.services.queue_service import get_waiting_queue_user_count
 from app.ws.connection_manager import admin_ws_manager
 
 
@@ -34,10 +34,6 @@ async def get_dashboard_summary(session: AsyncSession) -> DashboardSummaryRespon
                 .where(Show.status == EventStatus.LIVE, Show.is_deleted.is_(False))
                 .scalar_subquery()
                 .label("active_events"),
-                select(func.count(QueueEntry.id))
-                .where(QueueEntry.status == QueueStatus.WAITING, QueueEntry.show_id.is_not(None))
-                .scalar_subquery()
-                .label("waiting_queue_users"),
             )
         )
     ).one()
@@ -46,7 +42,7 @@ async def get_dashboard_summary(session: AsyncSession) -> DashboardSummaryRespon
         total_revenue=float(summary_row.total_revenue or 0),
         tickets_sold=int(summary_row.tickets_sold or 0),
         active_events=int(summary_row.active_events or 0),
-        waiting_queue_users=int(summary_row.waiting_queue_users or 0),
+        waiting_queue_users=get_waiting_queue_user_count(),
     )
 
 
@@ -144,7 +140,7 @@ async def get_audience_distribution(session: AsyncSession) -> AudienceDistributi
     rows = (
         await session.execute(
             select(User.age, User.gender, func.count(Order.id).label("orders_count"))
-            .join(Order, Order.user_id == User.id)
+            .join(Order, Order.customer_id == User.id)
             .where(Order.status == OrderStatus.PAID)
             .group_by(User.age, User.gender)
         )

@@ -1,13 +1,15 @@
-"""Khai báo các enum miền nghiệp vụ dùng chung cho model ORM và schema."""
+"""Shared domain enums for ORM models and API schemas."""
 
 from enum import StrEnum
 
 from sqlalchemy import Enum as SAEnum
 
 
-class UserRole(StrEnum):
+class UserType(StrEnum):
     CUSTOMER = "CUSTOMER"
-    ADMIN = "ADMIN"
+    EVENT_STAFF = "EVENT_STAFF"
+    SYSTEM_ADMIN = "SYSTEM_ADMIN"
+    ADMIN = "SYSTEM_ADMIN"
 
 
 class Gender(StrEnum):
@@ -63,10 +65,11 @@ class PerformerRole(StrEnum):
 
 
 def sa_enum(enum_cls: type[StrEnum]) -> SAEnum:
-    """Create a SQLAlchemy enum that persists enum values instead of names."""
-
     return SAEnum(
         enum_cls,
         native_enum=False,
         values_callable=lambda cls: [item.value for item in cls],
     )
+
+
+UserRole = UserType

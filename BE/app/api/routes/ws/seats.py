@@ -2,7 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from app.core.db import AsyncSessionLocal
-from app.models.enums import EventStatus, UserRole
+from app.models.enums import EventStatus, UserType
 from app.models.event import Show
 from app.ws.connection_manager import seat_ws_manager
 
@@ -24,7 +24,8 @@ async def show_seat_ws(websocket: WebSocket, show_id: int, token: str | None = N
     if not show:
         await websocket.close(code=1008, reason="Khong tim thay buoi dien")
         return
-    if (not user or user.role != UserRole.ADMIN) and show.status != EventStatus.LIVE:
+    is_internal_user = bool(user and user.user_type in {UserType.EVENT_STAFF, UserType.SYSTEM_ADMIN})
+    if not is_internal_user and show.status != EventStatus.LIVE:
         await websocket.close(code=1008, reason="Buoi dien dang duoc cap nhat")
         return
 

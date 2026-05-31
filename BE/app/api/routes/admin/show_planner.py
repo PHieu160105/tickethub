@@ -7,10 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_active_admin
 from app.core.db import get_db_session
 from app.models.enums import SeatStatus
-from app.models.event import SeatZone, ShowPolygon
-from app.models.seat import Seat
+from app.models.event import SeatZone
+from app.models.order import Ticket
 from app.models.user import User
-from app.models.venue import Section
 from app.schemas.common import APIMessage
 from app.schemas.event import (
     SeatBulkCreateRequest,
@@ -24,26 +23,29 @@ from app.schemas.event import (
     SeatZoneCreate,
     SeatZoneResponse,
     SeatZoneUpdate,
-    ShowPolygonCreateRequest,
-    ShowPolygonResponse,
-    ShowPolygonUpdateRequest,
 )
 from app.services.dashboard_service import broadcast_dashboard_update
 from app.services.event_inventory_service import sync_show_ticket_inventory
 from app.services.event_lifecycle_service import create_initial_show_zone, create_show_zone, delete_show_zone, update_show_zone
-from app.services.event_query_service import get_show_by_id, list_show_zones
 
 from ._shared import (
-    _apply_admin_lock_state,
     _build_event_or_404_show,
     _ensure_show_is_draft,
     _invalidate_show_cache,
-    _show_polygon_response_from_model,
     _validate_unique_ids,
     _validate_unique_labels,
 )
 
 router = APIRouter()
+
+
+def _ticket_response(ticket: Ticket) -> SeatCreateResponse:
+    return SeatCreateResponse(
+        id=ticket.id,
+        seat_label=ticket.seat_label or f"Ticket #{ticket.id}",
+        x=float(ticket.x_coord) if ticket.x_coord is not None else None,
+        y=float(ticket.y_coord) if ticket.y_coord is not None else None,
+    )
 
 
 @router.get("/events/{event_key}/shows/{show_id}/zones", response_model=list[SeatZoneResponse])
@@ -54,8 +56,19 @@ async def list_zones(
     _: User = Depends(get_current_active_admin),
 ) -> list[SeatZoneResponse]:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
-    zones = await list_show_zones(session, show.id)
-    return [SeatZoneResponse.model_validate(zone) for zone in zones]
+    zones = list(await session.scalars(select(SeatZone).where(SeatZone.show_id == show.id).order_by(SeatZone.id.asc())))
+    return [
+        SeatZoneResponse(
+            id=zone.id,
+            code=zone.code,
+            name=zone.name,
+            row_count=0,
+            seats_per_row=0,
+            price=zone.price,
+            color=zone.color,
+        )
+        for zone in zones
+    ]
 
 
 @router.post("/events/{event_key}/shows/{show_id}/zones", response_model=SeatZoneResponse, status_code=status.HTTP_201_CREATED)
@@ -70,14 +83,13 @@ async def create_zone(
     _ensure_show_is_draft(show)
     try:
         zone = await create_show_zone(session, show, payload)
-        await sync_show_ticket_inventory(session, show)
         await session.commit()
     except Exception:
         await session.rollback()
         raise
     await _invalidate_show_cache(show.id)
     await broadcast_dashboard_update()
-    return SeatZoneResponse.model_validate(zone)
+    return SeatZoneResponse(id=zone.id, code=zone.code, name=zone.name, row_count=0, seats_per_row=0, price=zone.price, color=zone.color)
 
 
 @router.post("/events/{event_key}/shows/{show_id}/zones/initial", response_model=SeatZoneResponse, status_code=status.HTTP_201_CREATED)
@@ -92,14 +104,13 @@ async def create_initial_zone(
     _ensure_show_is_draft(show)
     try:
         zone = await create_initial_show_zone(session, show, payload)
-        await sync_show_ticket_inventory(session, show)
         await session.commit()
     except Exception:
         await session.rollback()
         raise
     await _invalidate_show_cache(show.id)
     await broadcast_dashboard_update()
-    return SeatZoneResponse.model_validate(zone)
+    return SeatZoneResponse(id=zone.id, code=zone.code, name=zone.name, row_count=0, seats_per_row=0, price=zone.price, color=zone.color)
 
 
 @router.patch("/events/{event_key}/shows/{show_id}/zones/{zone_id}", response_model=SeatZoneResponse)
@@ -115,14 +126,13 @@ async def update_zone(
     _ensure_show_is_draft(show)
     try:
         zone = await update_show_zone(session, show, zone_id, payload)
-        await sync_show_ticket_inventory(session, show)
         await session.commit()
     except Exception:
         await session.rollback()
         raise
     await _invalidate_show_cache(show.id)
     await broadcast_dashboard_update()
-    return SeatZoneResponse.model_validate(zone)
+    return SeatZoneResponse(id=zone.id, code=zone.code, name=zone.name, row_count=0, seats_per_row=0, price=zone.price, color=zone.color)
 
 
 @router.delete("/events/{event_key}/shows/{show_id}/zones/{zone_id}", response_model=APIMessage)
@@ -137,98 +147,24 @@ async def delete_zone(
     _ensure_show_is_draft(show)
     try:
         await delete_show_zone(session, show, zone_id)
-        await sync_show_ticket_inventory(session, show)
         await session.commit()
     except Exception:
         await session.rollback()
         raise
     await _invalidate_show_cache(show.id)
     await broadcast_dashboard_update()
-    return APIMessage(detail="Da xoa khu vuc ghe thanh cong")
+    return APIMessage(detail="Da xoa hang ve thanh cong")
 
 
-@router.post("/events/{event_key}/shows/{show_id}/polygons", response_model=ShowPolygonResponse)
-async def create_show_polygon(
-    event_key: str,
-    show_id: int,
-    payload: ShowPolygonCreateRequest,
-    session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
-) -> ShowPolygonResponse:
-    _, show = await _build_event_or_404_show(session, event_key, show_id)
-    _ensure_show_is_draft(show)
-    zone = None
-    if payload.zone_id is not None:
-        zone = await session.scalar(select(SeatZone).where(SeatZone.id == payload.zone_id, SeatZone.show_id == show.id))
-        if not zone:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay khu vuc ghe thuoc buoi dien nay")
-
-    polygon = ShowPolygon(
-        show_id=show.id,
-        zone_id=zone.id if zone else None,
-        label=payload.label,
-        points=[point.model_dump() for point in payload.points],
-    )
-    session.add(polygon)
-    await session.commit()
-    await session.refresh(polygon)
-
-    await _invalidate_show_cache(show.id)
-    return _show_polygon_response_from_model(polygon, zone.name if zone else None)
-
-
-@router.patch("/show-polygons/{polygon_id}", response_model=ShowPolygonResponse)
-async def update_show_polygon(
-    polygon_id: int,
-    payload: ShowPolygonUpdateRequest,
-    session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
-) -> ShowPolygonResponse:
-    polygon = await session.scalar(select(ShowPolygon).where(ShowPolygon.id == polygon_id))
-    if not polygon:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay polygon cua buoi dien")
-    show = await get_show_by_id(session, polygon.show_id)
-    _ensure_show_is_draft(show)
-
-    zone = None
-    if payload.zone_id is not None:
-        zone = await session.scalar(select(SeatZone).where(SeatZone.id == payload.zone_id, SeatZone.show_id == polygon.show_id))
-        if not zone:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay khu vuc ghe thuoc buoi dien nay")
-        polygon.zone_id = zone.id
-    elif payload.zone_id is None and "zone_id" in payload.model_fields_set:
-        polygon.zone_id = None
-
-    if payload.label is not None:
-        polygon.label = payload.label
-    if payload.points is not None:
-        polygon.points = [point.model_dump() for point in payload.points]
-
-    await session.commit()
-    await session.refresh(polygon)
-    await _invalidate_show_cache(polygon.show_id)
-    if zone is None and polygon.zone_id is not None:
-        zone = await session.scalar(select(SeatZone).where(SeatZone.id == polygon.zone_id))
-    return _show_polygon_response_from_model(polygon, zone.name if zone else None)
-
-
-@router.delete("/show-polygons/{polygon_id}", response_model=APIMessage)
-async def delete_show_polygon(
-    polygon_id: int,
-    session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
-) -> APIMessage:
-    polygon = await session.scalar(select(ShowPolygon).where(ShowPolygon.id == polygon_id))
-    if not polygon:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay polygon cua buoi dien")
-    show = await get_show_by_id(session, polygon.show_id)
-    _ensure_show_is_draft(show)
-
-    show_id = polygon.show_id
-    await session.delete(polygon)
-    await session.commit()
-    await _invalidate_show_cache(show_id)
-    return APIMessage(detail="Da xoa polygon cua buoi dien")
+async def _default_zone(session: AsyncSession, show_id: int, zone_id: int | None) -> SeatZone:
+    stmt = select(SeatZone).where(SeatZone.show_id == show_id)
+    if zone_id is not None:
+        stmt = stmt.where(SeatZone.id == zone_id)
+    stmt = stmt.order_by(SeatZone.id.asc())
+    zone = await session.scalar(stmt)
+    if not zone:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Show can it nhat mot hang ve")
+    return zone
 
 
 @router.post("/events/{event_key}/shows/{show_id}/seats/single", response_model=SeatCreateResponse)
@@ -241,48 +177,34 @@ async def create_show_seat_single(
 ) -> SeatCreateResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
-    if not payload.zone_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bat buoc chon khu vuc ghe")
-
-    zone = await session.scalar(select(SeatZone).where(SeatZone.id == payload.zone_id, SeatZone.show_id == show.id))
-    if not zone:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay khu vuc ghe thuoc buoi dien nay")
-
-    exists = await session.scalar(select(func.count()).select_from(Seat).where(Seat.show_id == show.id, Seat.seat_label == payload.seat_label))
+    zone = await _default_zone(session, show.id, payload.zone_id)
+    exists = await session.scalar(select(func.count()).select_from(Ticket).where(Ticket.show_id == show.id, Ticket.seat_label == payload.seat_label))
     if exists and exists > 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nhan ghe da ton tai trong buoi dien nay")
 
-    price = float(payload.price) if payload.price is not None else float(zone.price)
-    seat = Seat(
-        event_id=show.event_id,
+    ticket = Ticket(
         show_id=show.id,
-        zone_id=zone.id,
-        row_index=0,
-        row_label="",
-        seat_number=0,
-        seat_label=payload.seat_label,
-        price=price,
+        ticket_tier_id=zone.id,
+        seat_id=None,
+        label=payload.seat_label,
+        row_label=None,
+        seat_number=None,
+        x=round(payload.x, 2),
+        y=round(payload.y, 2),
+        price=float(payload.price) if payload.price is not None else float(zone.base_price),
         status=SeatStatus.LOCKED if payload.is_admin_locked else SeatStatus.AVAILABLE,
-        x_coord=payload.x,
-        y_coord=payload.y,
-        rotation=payload.rotation,
-        section_id=payload.section_id,
-        venue_layout_id=show.venue_layout_id,
-        is_admin_locked=payload.is_admin_locked,
+        is_staff_locked=payload.is_admin_locked,
     )
-    session.add(seat)
+    session.add(ticket)
     try:
-        await session.flush()
-        await sync_show_ticket_inventory(session, show)
         await session.commit()
-        await session.refresh(seat)
+        await session.refresh(ticket)
     except Exception:
         await session.rollback()
         raise
-
     await _invalidate_show_cache(show.id)
     await broadcast_dashboard_update()
-    return SeatCreateResponse(id=seat.id, seat_label=seat.seat_label, x=float(seat.x_coord) if seat.x_coord is not None else None, y=float(seat.y_coord) if seat.y_coord is not None else None)
+    return _ticket_response(ticket)
 
 
 @router.post("/events/{event_key}/shows/{show_id}/seats/bulk", response_model=SeatBulkCreateResponse)
@@ -295,107 +217,57 @@ async def create_show_seat_bulk(
 ) -> SeatBulkCreateResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
-    if not payload.zone_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bat buoc chon khu vuc ghe khi sinh ghe hang loat")
+    zone = await _default_zone(session, show.id, payload.zone_id)
+    existing_labels = set(await session.scalars(select(Ticket.seat_label).where(Ticket.show_id == show.id)))
+    created: list[Ticket] = []
 
-    zone = await session.scalar(select(SeatZone).where(SeatZone.id == payload.zone_id, SeatZone.show_id == show.id))
-    if not zone:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay khu vuc ghe thuoc buoi dien nay")
-
-    existing_labels = set(await session.scalars(select(Seat.seat_label).where(Seat.show_id == show.id)))
-    created: list[SeatCreateResponse] = []
-    seats_to_add: list[Seat] = []
-
-    rows = payload.rows
-    cols = payload.cols
-    prefix = payload.label_prefix
-    start_x = payload.start_x
-    start_y = payload.start_y
-    gap_x = payload.gap_x
-    gap_y = payload.gap_y
-
-    if payload.pattern == "straight":
-        for r in range(rows):
-            for c in range(cols):
-                x = max(0.0, min(100.0, start_x + c * gap_x))
-                y = max(0.0, min(100.0, start_y + r * gap_y))
-                label = f"{prefix}{r + 1}-{c + 1}"
-                if label in existing_labels:
-                    continue
-                existing_labels.add(label)
-                seats_to_add.append(
-                    Seat(
-                        event_id=show.event_id,
-                        show_id=show.id,
-                        zone_id=zone.id,
-                        row_index=r + 1,
-                        row_label="",
-                        seat_number=c + 1,
-                        seat_label=label,
-                        price=float(zone.price),
-                        status=SeatStatus.AVAILABLE,
-                        x_coord=round(x, 2),
-                        y_coord=round(y, 2),
-                        rotation=0.0,
-                        section_id=payload.section_id,
-                        venue_layout_id=show.venue_layout_id,
-                        is_admin_locked=False,
-                    )
-                )
-    elif payload.pattern == "arc":
-        if not payload.arc_config:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bat buoc co cau hinh vong cung khi dung mau vong cung")
-        cfg = payload.arc_config
-        for r in range(rows):
-            radius = cfg.radius + r * gap_y
-            seats_in_row = cols + r * 2
-            for c in range(seats_in_row):
-                angle = cfg.start_angle + (cfg.end_angle - cfg.start_angle) * (c / (seats_in_row - 1 if seats_in_row > 1 else 1))
-                rad = math.radians(angle)
-                x = max(0.0, min(100.0, cfg.center_x + radius * math.sin(rad)))
-                y = max(0.0, min(100.0, cfg.center_y + radius * math.cos(rad)))
-                label = f"{prefix}{r + 1}-{c + 1}"
-                if label in existing_labels:
-                    continue
-                existing_labels.add(label)
-                seats_to_add.append(
-                    Seat(
-                        event_id=show.event_id,
-                        show_id=show.id,
-                        zone_id=zone.id,
-                        row_index=r + 1,
-                        row_label="",
-                        seat_number=c + 1,
-                        seat_label=label,
-                        price=float(zone.price),
-                        status=SeatStatus.AVAILABLE,
-                        x_coord=round(x, 2),
-                        y_coord=round(y, 2),
-                        rotation=angle,
-                        section_id=payload.section_id,
-                        venue_layout_id=show.venue_layout_id,
-                        is_admin_locked=False,
-                    )
-                )
-    else:
+    if payload.pattern not in {"straight", "arc"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mau sinh ghe khong duoc ho tro")
 
-    if seats_to_add:
-        session.add_all(seats_to_add)
-        try:
-            await session.flush()
-            await sync_show_ticket_inventory(session, show)
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        for seat in seats_to_add:
-            await session.refresh(seat)
-            created.append(SeatCreateResponse(id=seat.id, seat_label=seat.seat_label, x=float(seat.x_coord) if seat.x_coord is not None else None, y=float(seat.y_coord) if seat.y_coord is not None else None))
+    for row in range(payload.rows):
+        seats_in_row = payload.cols if payload.pattern == "straight" or payload.arc_config is None else payload.cols + row * 2
+        for col in range(seats_in_row):
+            label = f"{payload.label_prefix}{row + 1}-{col + 1}"
+            if label in existing_labels:
+                continue
+            if payload.pattern == "straight":
+                x = max(0.0, min(100.0, payload.start_x + col * payload.gap_x))
+                y = max(0.0, min(100.0, payload.start_y + row * payload.gap_y))
+            else:
+                cfg = payload.arc_config
+                radius = cfg.radius + row * payload.gap_y
+                denominator = seats_in_row - 1 if seats_in_row > 1 else 1
+                angle = cfg.start_angle + (cfg.end_angle - cfg.start_angle) * (col / denominator)
+                radians = math.radians(angle)
+                x = max(0.0, min(100.0, cfg.center_x + radius * math.sin(radians)))
+                y = max(0.0, min(100.0, cfg.center_y + radius * math.cos(radians)))
+            ticket = Ticket(
+                show_id=show.id,
+                ticket_tier_id=zone.id,
+                seat_id=None,
+                label=label,
+                row_label=f"{payload.label_prefix}{row + 1}",
+                seat_number=col + 1,
+                x=round(x, 2),
+                y=round(y, 2),
+                price=float(zone.base_price),
+                status=SeatStatus.AVAILABLE,
+                is_staff_locked=False,
+            )
+            existing_labels.add(label)
+            session.add(ticket)
+            created.append(ticket)
 
+    try:
+        await session.commit()
+        for ticket in created:
+            await session.refresh(ticket)
+    except Exception:
+        await session.rollback()
+        raise
     await _invalidate_show_cache(show.id)
     await broadcast_dashboard_update()
-    return SeatBulkCreateResponse(created_count=len(created), seats=created)
+    return SeatBulkCreateResponse(created_count=len(created), seats=[_ticket_response(ticket) for ticket in created])
 
 
 @router.post("/events/{event_key}/shows/{show_id}/seats/sync", response_model=SeatSyncResponse)
@@ -408,11 +280,10 @@ async def sync_show_seats(
 ) -> SeatSyncResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
-    existing_seats = list(await session.scalars(select(Seat).where(Seat.show_id == show.id).order_by(Seat.id.asc())))
-    seat_map = {seat.id: seat for seat in existing_seats}
+
+    existing_tickets = list(await session.scalars(select(Ticket).where(Ticket.show_id == show.id).order_by(Ticket.id.asc())))
+    ticket_map = {ticket.id: ticket for ticket in existing_tickets}
     zone_map = {zone.id: zone for zone in await session.scalars(select(SeatZone).where(SeatZone.show_id == show.id))}
-    sections = list(await session.scalars(select(Section).where(Section.venue_layout_id == show.venue_layout_id))) if show.venue_layout_id is not None else []
-    section_map = {section.id: section for section in sections}
 
     update_ids = [item.id for item in payload.update]
     delete_ids = list(payload.delete_ids)
@@ -421,114 +292,87 @@ async def sync_show_seats(
     _validate_unique_ids(delete_ids, "Duplicate seat ids in delete payload")
     _validate_unique_ids(client_ids, "Duplicate client ids in create payload")
 
-    delete_id_set = set(delete_ids)
-    if delete_id_set.intersection(update_ids):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mot ghe khong the vua cap nhat vua xoa trong cung request")
-
-    missing_update_ids = [seat_id for seat_id in update_ids if seat_id not in seat_map]
-    if missing_update_ids:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
-
-    missing_delete_ids = [seat_id for seat_id in delete_ids if seat_id not in seat_map]
-    if missing_delete_ids:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
-
-    if show.venue_layout_id is None:
-        if any(item.section_id is not None for item in payload.create) or any(item.section_id is not None for item in payload.update):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Buoi dien nay khong ho tro section_id")
-    else:
-        invalid_section = next((item.section_id for item in [*payload.create, *payload.update] if item.section_id is not None and item.section_id not in section_map), None)
-        if invalid_section is not None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay khu vuc layout thuoc buoi dien nay")
-
-    for item in payload.create:
-        if item.zone_id is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bat buoc chon khu vuc ghe")
-        if item.zone_id not in zone_map:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay khu vuc ghe thuoc buoi dien nay")
-
-    for item in payload.update:
-        if item.zone_id is not None and item.zone_id not in zone_map:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay khu vuc ghe thuoc buoi dien nay")
-
     final_labels: list[str] = []
     update_map = {item.id: item for item in payload.update}
-    for seat in existing_seats:
-        if seat.id in delete_id_set:
+    delete_set = set(delete_ids)
+    for ticket in existing_tickets:
+        if ticket.id in delete_set:
             continue
-        candidate = update_map.get(seat.id)
-        final_labels.append(candidate.seat_label if candidate else seat.seat_label)
+        candidate = update_map.get(ticket.id)
+        final_labels.append(candidate.seat_label if candidate else (ticket.seat_label or f"Ticket #{ticket.id}"))
     final_labels.extend(item.seat_label for item in payload.create)
     _validate_unique_labels(final_labels, "Nhan ghe da ton tai trong buoi dien nay")
 
-    created_pairs: list[tuple[int, Seat]] = []
+    created_pairs: list[tuple[int, Ticket]] = []
     try:
         for item in payload.update:
-            seat = seat_map[item.id]
-            zone = zone_map.get(item.zone_id) if item.zone_id is not None else None
+            ticket = ticket_map.get(item.id)
+            if not ticket:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
             if item.zone_id is not None:
-                seat.zone_id = item.zone_id
+                zone = zone_map.get(item.zone_id)
+                if not zone:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay hang ve cua buoi dien nay")
+                ticket.ticket_tier_id = zone.id
                 if item.price is None:
-                    seat.price = float(zone.price) if zone else seat.price
-
-            seat.seat_label = item.seat_label
-            seat.x_coord = item.x
-            seat.y_coord = item.y
-            seat.rotation = item.rotation
-            seat.section_id = item.section_id
+                    ticket.price = float(zone.base_price)
+            ticket.label = item.seat_label
+            ticket.x = round(item.x, 2)
+            ticket.y = round(item.y, 2)
             if item.price is not None:
-                seat.price = float(item.price)
-            _apply_admin_lock_state(seat, item.is_admin_locked)
+                ticket.price = float(item.price)
+            ticket.is_staff_locked = item.is_admin_locked
+            ticket.status = SeatStatus.LOCKED if item.is_admin_locked and ticket.status != SeatStatus.SOLD else (
+                SeatStatus.AVAILABLE if ticket.status != SeatStatus.SOLD else ticket.status
+            )
 
         for item in payload.create:
-            zone = zone_map[item.zone_id]
-            seat = Seat(
-                event_id=show.event_id,
+            zone = await _default_zone(session, show.id, item.zone_id)
+            ticket = Ticket(
                 show_id=show.id,
-                zone_id=zone.id,
-                row_index=0,
-                row_label="",
-                seat_number=0,
-                seat_label=item.seat_label,
-                price=float(item.price) if item.price is not None else float(zone.price),
+                ticket_tier_id=zone.id,
+                seat_id=None,
+                label=item.seat_label,
+                row_label=None,
+                seat_number=None,
+                x=round(item.x, 2),
+                y=round(item.y, 2),
+                price=float(item.price) if item.price is not None else float(zone.base_price),
                 status=SeatStatus.LOCKED if item.is_admin_locked else SeatStatus.AVAILABLE,
-                x_coord=item.x,
-                y_coord=item.y,
-                rotation=item.rotation,
-                section_id=item.section_id,
-                venue_layout_id=show.venue_layout_id,
-                is_admin_locked=item.is_admin_locked,
+                is_staff_locked=item.is_admin_locked,
             )
-            session.add(seat)
-            created_pairs.append((item.client_id, seat))
+            session.add(ticket)
+            created_pairs.append((item.client_id, ticket))
 
         for seat_id in delete_ids:
-            await session.delete(seat_map[seat_id])
+            ticket = ticket_map.get(seat_id)
+            if not ticket:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
+            await session.delete(ticket)
 
-        await session.flush()
-        await sync_show_ticket_inventory(session, show)
-        response = SeatSyncResponse(
-            created=[
-                SeatSyncCreatedItem(
-                    client_id=client_id,
-                    id=seat.id,
-                    seat_label=seat.seat_label,
-                    x=float(seat.x_coord) if seat.x_coord is not None else None,
-                    y=float(seat.y_coord) if seat.y_coord is not None else None,
-                )
-                for client_id, seat in created_pairs
-            ],
-            updated_ids=update_ids,
-            deleted_ids=delete_ids,
-        )
         await session.commit()
+        for _, ticket in created_pairs:
+            await session.refresh(ticket)
     except Exception:
         await session.rollback()
         raise
 
     await _invalidate_show_cache(show.id)
     await broadcast_dashboard_update()
-    return response
+    return SeatSyncResponse(
+        created=[
+            SeatSyncCreatedItem(
+                client_id=client_id,
+                id=ticket.id,
+                seat_label=ticket.seat_label or f"Ticket #{ticket.id}",
+                x=float(ticket.x_coord) if ticket.x_coord is not None else None,
+                y=float(ticket.y_coord) if ticket.y_coord is not None else None,
+            )
+            for client_id, ticket in created_pairs
+        ],
+        updated_ids=update_ids,
+        deleted_ids=delete_ids,
+    )
 
 
 @router.patch("/events/{event_key}/shows/{show_id}/seats/{seat_id}", response_model=SeatCreateResponse)
@@ -542,55 +386,41 @@ async def update_show_seat(
 ) -> SeatCreateResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
-    seat = await session.scalar(select(Seat).where(Seat.id == seat_id, Seat.show_id == show.id))
-    if not seat:
+    ticket = await session.scalar(select(Ticket).where(Ticket.id == seat_id, Ticket.show_id == show.id))
+    if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
-
     if payload.zone_id is not None:
-        zone = await session.scalar(select(SeatZone).where(SeatZone.id == payload.zone_id, SeatZone.show_id == show.id))
-        if not zone:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay khu vuc ghe thuoc buoi dien nay")
-        seat.zone_id = zone.id
+        zone = await _default_zone(session, show.id, payload.zone_id)
+        ticket.ticket_tier_id = zone.id
         if payload.price is None:
-            seat.price = float(zone.price)
-
-    if payload.seat_label is not None and payload.seat_label != seat.seat_label:
+            ticket.price = float(zone.base_price)
+    if payload.seat_label is not None:
         exists = await session.scalar(
-            select(func.count()).select_from(Seat).where(
-                Seat.show_id == show.id,
-                Seat.seat_label == payload.seat_label,
-                Seat.id != seat.id,
-            )
+            select(func.count()).select_from(Ticket).where(Ticket.show_id == show.id, Ticket.seat_label == payload.seat_label, Ticket.id != ticket.id)
         )
         if exists and exists > 0:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nhan ghe da ton tai trong buoi dien nay")
-        seat.seat_label = payload.seat_label
-
+        ticket.label = payload.seat_label
     if payload.x is not None:
-        seat.x_coord = payload.x
+        ticket.x = round(payload.x, 2)
     if payload.y is not None:
-        seat.y_coord = payload.y
-    if payload.rotation is not None:
-        seat.rotation = payload.rotation
-    if payload.section_id is not None:
-        seat.section_id = payload.section_id
+        ticket.y = round(payload.y, 2)
     if payload.price is not None:
-        seat.price = float(payload.price)
+        ticket.price = float(payload.price)
     if payload.is_admin_locked is not None:
-        _apply_admin_lock_state(seat, payload.is_admin_locked)
+        ticket.is_staff_locked = payload.is_admin_locked
+        if ticket.status != SeatStatus.SOLD:
+            ticket.status = SeatStatus.LOCKED if payload.is_admin_locked else SeatStatus.AVAILABLE
 
     try:
-        await session.flush()
-        await sync_show_ticket_inventory(session, show)
         await session.commit()
-        await session.refresh(seat)
+        await session.refresh(ticket)
     except Exception:
         await session.rollback()
         raise
-
     await _invalidate_show_cache(show.id)
     await broadcast_dashboard_update()
-    return SeatCreateResponse(id=seat.id, seat_label=seat.seat_label, x=float(seat.x_coord) if seat.x_coord is not None else None, y=float(seat.y_coord) if seat.y_coord is not None else None)
+    return _ticket_response(ticket)
 
 
 @router.delete("/events/{event_key}/shows/{show_id}/seats/{seat_id}", response_model=APIMessage)
@@ -603,19 +433,13 @@ async def delete_show_seat(
 ) -> APIMessage:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
-    seat = await session.scalar(select(Seat).where(Seat.id == seat_id, Seat.show_id == show.id))
-    if not seat:
+    ticket = await session.scalar(select(Ticket).where(Ticket.id == seat_id, Ticket.show_id == show.id))
+    if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
-
-    await session.delete(seat)
-    try:
-        await session.flush()
-        await sync_show_ticket_inventory(session, show)
-        await session.commit()
-    except Exception:
-        await session.rollback()
-        raise
-
+    if ticket.seat_id is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Khong the xoa ghe duoc sinh tu layout")
+    await session.delete(ticket)
+    await session.commit()
     await _invalidate_show_cache(show.id)
     await broadcast_dashboard_update()
     return APIMessage(detail="Da xoa ghe thanh cong")

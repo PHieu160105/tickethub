@@ -13,7 +13,7 @@ async def test_anonymous_seat_matrix_does_not_mark_available_seats_as_mine(db_se
     _, seats = await get_show_seat_matrix(db_session, sample_show.id, current_user_id=None)
 
     assert seats
-    assert all(seat.is_locked_by_me is False for seat in seats)
+    assert all(seat["is_locked_by_me"] is False for seat in seats)
 
 
 @pytest.mark.asyncio

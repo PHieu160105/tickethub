@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { Building2, Check, Copy, Edit, FileUp, Hand, Layers3, MapPin, MousePointer2, Plus, Redo2, RefreshCw, Save, Shapes, Trash2, Undo2 } from 'lucide-react'
+import { Building2, Copy, Edit, FileUp, Hand, Layers3, MapPin, MousePointer2, Plus, Redo2, RefreshCw, Save, Shapes, Trash2, Undo2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
 import { InteractiveSeatCanvas } from '@/components/admin/InteractiveSeatCanvas'
@@ -12,8 +12,6 @@ import type { VenueDetail, VenueLayoutItem, VenuePolygonItem, VenueSeatItem, Ven
 const DEFAULT_LAYOUT_FORM = {
     name: '',
     description: '',
-    svg_data: '',
-    sort_order: '0',
 }
 
 const DEFAULT_SECTION_FORM = {
@@ -27,8 +25,6 @@ const DEFAULT_SECTION_FORM = {
 const DEFAULT_VENUE_FORM = {
     name: '',
     address: '',
-    city: '',
-    venue_type: 'custom',
     is_active: true,
 }
 
@@ -74,9 +70,9 @@ const STUDIO_STEPS = ['venue', 'layout', 'builder'] as const
 type StudioStep = (typeof STUDIO_STEPS)[number]
 
 const STEP_META: Record<StudioStep, { title: string; description: string }> = {
-    venue: { title: 'VENUE', description: 'Nhập địa điểm và background_source trong cùng một bước.' },
-    layout: { title: 'VENUE_LAYOUT', description: 'Tạo bố cục và khu vực ghế cho địa điểm.' },
-    builder: { title: 'SEAT / POLYGON', description: 'Đặt ghế mẫu và vùng sơ đồ trực tiếp trên canvas.' },
+    venue: { title: 'Địa điểm', description: 'Nhập thông tin địa điểm và tải nền sơ đồ.' },
+    layout: { title: 'Bố cục sắp xếp', description: 'Tạo bố cục sắp xếp cho địa điểm.' },
+    builder: { title: 'Trình dựng sơ đồ', description: 'Đặt ghế mẫu trực tiếp trên canvas.' },
 }
 
 function isSvgMarkup(value: string | null) {
@@ -150,8 +146,6 @@ export default function AdminVenues() {
     const [error, setError] = useState<string | null>(null)
     const [message, setMessage] = useState<string | null>(null)
     const [backgroundFile, setBackgroundFile] = useState<File | null>(null)
-    const [studioTab, setStudioTab] = useState<'builder' | 'parse'>('builder')
-    const [backgroundViewMode, setBackgroundViewMode] = useState<'original' | 'processed'>('original')
     const [studioStep, setStudioStep] = useState<StudioStep>('venue')
     const [activeBuilderPanel, setActiveBuilderPanel] = useState<'seat' | 'bulk' | 'polygon'>('seat')
     const [canvasCursor, setCanvasCursor] = useState<{ x: number; y: number } | null>(null)
@@ -198,15 +192,8 @@ export default function AdminVenues() {
         [layouts, selectedLayoutId],
     )
 
-    const selectedVenueBackground = useMemo(() => {
-        if (!selectedVenue) return null
-        if (backgroundViewMode === 'processed' && selectedVenue.background_processed) {
-            return selectedVenue.background_processed
-        }
-        return selectedVenue.background_source ?? selectedVenue.svg_source ?? null
-    }, [backgroundViewMode, selectedVenue])
+    const selectedVenueBackground = selectedVenue?.background_source ?? null
 
-    const isSvgBackground = selectedVenue?.background_type === 'svg' || isSvgMarkup(selectedVenue?.background_source ?? null)
     const hasLayout = Boolean(selectedLayoutId)
     const activeStepIndex = STUDIO_STEPS.indexOf(studioStep)
     const sectionMap = useMemo(() => new Map(sections.map((section) => [section.id, section])), [sections])
@@ -437,15 +424,6 @@ export default function AdminVenues() {
             active = false
         }
     }, [layouts, selectedLayoutId, selectedVenueId])
-
-    useEffect(() => {
-        if (backgroundViewMode === 'processed' && !selectedVenue?.background_processed) {
-            setBackgroundViewMode('original')
-        }
-        if (studioTab === 'parse' && !selectedVenue?.can_parse_background) {
-            setStudioTab('builder')
-        }
-    }, [backgroundViewMode, selectedVenue?.background_processed, selectedVenue?.can_parse_background, studioTab])
 
     useEffect(() => {
         if (studioStep === 'builder' && !canAccessStep('builder')) {
@@ -704,8 +682,8 @@ export default function AdminVenues() {
             section_id: selectedSeat.section_id ? String(selectedSeat.section_id) : '',
             x: String(selectedSeat.x ?? 0),
             y: String(selectedSeat.y ?? 0),
-            rotation: String(selectedSeat.rotation),
-            is_admin_locked: selectedSeat.is_admin_locked,
+            rotation: String(selectedSeat.rotation ?? 0),
+            is_admin_locked: selectedSeat.is_admin_locked ?? false,
         })
     }, [selectedSeat, selectedSeatIds])
 
@@ -714,8 +692,6 @@ export default function AdminVenues() {
         setVenueForm({
             name: venue.name,
             address: selectedVenue?.id === venue.id ? selectedVenue.address ?? '' : '',
-            city: venue.city ?? '',
-            venue_type: venue.venue_type,
             is_active: venue.is_active,
         })
         setStudioStep('venue')
@@ -735,8 +711,6 @@ export default function AdminVenues() {
                 const updated = await adminApi.updateVenue(editingVenueId, {
                     name: venueForm.name,
                     address: venueForm.address || null,
-                    city: venueForm.city || null,
-                    venue_type: venueForm.venue_type,
                     is_active: venueForm.is_active,
                 })
                 setMessage('Đã cập nhật venue.')
@@ -749,8 +723,6 @@ export default function AdminVenues() {
             const created = await adminApi.createVenue({
                 name: venueForm.name,
                 address: venueForm.address || null,
-                city: venueForm.city || null,
-                venue_type: venueForm.venue_type,
             })
             resetVenueForm()
             setMessage('Đã tạo venue mới.')
@@ -797,35 +769,12 @@ export default function AdminVenues() {
         setError(null)
         setMessage(null)
         try {
-            const result = await adminApi.uploadVenueBackground(selectedVenueId, file)
-            setBackgroundViewMode('original')
-            setStudioTab('builder')
-            setMessage(
-                result.background_type === 'svg'
-                    ? 'Đã tải nền SVG lên. Trình dựng đã sẵn sàng, bước phân tích là tùy chọn.'
-                    : 'Đã tải nền ảnh lên. Trình dựng đã sẵn sàng.',
-            )
+            await adminApi.uploadVenueBackground(selectedVenueId, file)
+            setMessage('Đã tải nền lên. Trình dựng đã sẵn sàng.')
             await loadVenueBundle(selectedVenueId)
             setStudioStep(nextStepAfterUpload)
         } catch (errorValue) {
             setError(extractApiErrorMessage(errorValue, 'Không thể tải background.'))
-        } finally {
-            setBusy(false)
-        }
-    }
-
-    async function handleProcessSvg() {
-        if (!selectedVenueId) return
-        setBusy(true)
-        setError(null)
-        setMessage(null)
-        try {
-            const result = await adminApi.processVenueSvg(selectedVenueId)
-            setBackgroundViewMode('processed')
-            setMessage(`Đã parse SVG: ${result.seat_count} seat markers, ${result.sections_detected} sections.`)
-            await loadVenueBundle(selectedVenueId)
-        } catch (errorValue) {
-            setError(extractApiErrorMessage(errorValue, 'Không thể parse SVG.'))
         } finally {
             setBusy(false)
         }
@@ -850,8 +799,6 @@ export default function AdminVenues() {
         setLayoutForm({
             name: layout.name,
             description: layout.description ?? '',
-            svg_data: layout.svg_data ?? '',
-            sort_order: String(layout.sort_order),
         })
     }
 
@@ -870,8 +817,6 @@ export default function AdminVenues() {
                 await adminApi.updateLayout(editingLayoutId, {
                     name: layoutForm.name,
                     description: layoutForm.description || null,
-                    svg_data: layoutForm.svg_data || null,
-                    sort_order: Number(layoutForm.sort_order),
                 })
                 setMessage('Đã cập nhật layout.')
                 setStudioStep('builder')
@@ -879,8 +824,6 @@ export default function AdminVenues() {
                 const created = await adminApi.createLayout(selectedVenueId, {
                     name: layoutForm.name,
                     description: layoutForm.description || null,
-                    svg_data: layoutForm.svg_data || null,
-                    sort_order: Number(layoutForm.sort_order),
                 })
                 setMessage('Đã tạo layout mới.')
                 setSelectedLayoutId(created.id)
@@ -1139,8 +1082,8 @@ export default function AdminVenues() {
             section_id: seat.section_id ? String(seat.section_id) : '',
             x: String(seat.x ?? 0),
             y: String(seat.y ?? 0),
-            rotation: String(seat.rotation),
-            is_admin_locked: seat.is_admin_locked,
+            rotation: String(seat.rotation ?? 0),
+            is_admin_locked: seat.is_admin_locked ?? false,
         })
     }
 
@@ -1580,7 +1523,7 @@ export default function AdminVenues() {
                 <div>
                     <h1 className="text-3xl font-black admin-text-body">Venue Studio</h1>
                     <p className="text-slate-500 mt-1 max-w-2xl">
-                        Thiết lập dữ liệu theo VENUE, VENUE_LAYOUT và SEAT/POLYGON. Background của địa điểm được nhập cùng bước VENUE.
+                        Tạo các mẫu sơ đồ bố trí khán đài.
                     </p>
                 </div>
                 <Button
@@ -1752,22 +1695,9 @@ export default function AdminVenues() {
 
                 <div className={`${studioStep === 'builder' ? 'space-y-6' : 'xl:col-span-2 space-y-6'}`}>
                     <Card className={`bg-space-900/90 border-white/10 ${studioStep === 'venue' ? '' : 'hidden'}`}>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 customer-text-body">
-                            <Building2 className="h-5 w-5 text-primary" /> Bảng VENUE
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm text-slate-500">
-                        <p>Form bên trái chỉ giữ các trường admin cần nhập: name, address và is_active khi sửa.</p>
-                        <p>background_source được upload ngay trong bước này; width/height là kích thước nền do BE đọc sau upload và chỉ hiển thị, không nhập tay.</p>
-                        <p className="text-slate-500">Số lượng chỗ được tính từ dữ liệu ghế thực tế của layout.</p>
-                    </CardContent>
-                </Card>
-
-                    <Card className={`bg-space-900/90 border-white/10 ${studioStep === 'venue' ? '' : 'hidden'}`}>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 customer-text-body">
-                                <FileUp className="h-5 w-5 text-yellow" /> background_source
+                                <FileUp className="h-5 w-5 text-yellow" /> Tải lên nền sơ đồ
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -1780,7 +1710,7 @@ export default function AdminVenues() {
                                     onChange={(event) => handleBackgroundFileChange(event.target.files?.[0] ?? null)}
                                 />
                                 <Button variant="outline" onClick={() => void handleUploadBackground()} disabled={!selectedVenueId || !backgroundFile} isLoading={busy}>
-                                    Tải lại
+                                    Reup
                                 </Button>
                             </div>
                             <p className="text-xs text-slate-500">
@@ -1803,84 +1733,15 @@ export default function AdminVenues() {
                                 <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 uppercase tracking-[0.2em] text-emerald-200">
                                     {selectedVenue?.background_source ? 'Đã có nền' : 'Chưa có nền'}
                                 </span>
-                                {selectedVenue?.can_parse_background && (
-                                    <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 uppercase tracking-[0.2em] text-sky-200">
-                                        Có thể phân tích SVG
-                                    </span>
-                                )}
-                                {selectedVenue?.background_processed && (
-                                    <span className="rounded-full border border-brand-yellow/20 bg-/10 px-3 py-1 uppercase tracking-[0.2em] text-brand-yellow">
-                                        Có dữ liệu ghế đã phân tích
-                                    </span>
-                                )}
                             </div>
 
-                            <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3">
-                                <Button variant={studioTab === 'builder' ? 'primary' : 'outline'} onClick={() => setStudioTab('builder')}>
-                                    Nền / Xem dựng sơ đồ
-                                </Button>
-                                <Button
-                                    variant={studioTab === 'parse' ? 'primary' : 'outline'}
-                                    onClick={() => setStudioTab('parse')}
-                                    disabled={!selectedVenue?.can_parse_background}
-                                >
-                                    Phân tích SVG
-                                </Button>
+                            <div className="gap-4">
+                                <div>
+                                    <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-500">Nền hiện tại</p>
+                                    {renderBackgroundPreview(selectedVenue?.background_source ?? null)}
+                                </div>
+
                             </div>
-
-                            {studioTab === 'builder' ? (
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    <div>
-                                        <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-500">Nền hiện tại</p>
-                                        {renderBackgroundPreview(selectedVenue?.background_source ?? selectedVenue?.svg_source ?? null)}
-                                    </div>
-                                    <div className="space-y-3">
-                                        <div>
-                                            <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-500">Chế độ nền</p>
-                                            <div className="rounded-xl border border-white/10 customer-bg-page p-4 text-sm text-slate-500 space-y-2">
-                                                <p>Trình dựng hoạt động ngay sau khi tải nền lên. Phân tích chỉ là bước tùy chọn cho SVG.</p>
-                                                <p>Định dạng hỗ trợ: SVG, PNG, JPG/JPEG, WEBP.</p>
-                                            </div>
-                                        </div>
-                                        {isSvgBackground && selectedVenue?.background_processed && (
-                                            <div>
-                                                <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-500">Nguồn hiển thị trên canvas</p>
-                                                <div className="flex gap-2">
-                                                    <Button variant={backgroundViewMode === 'original' ? 'primary' : 'outline'} onClick={() => setBackgroundViewMode('original')}>
-                                                        Bản gốc
-                                                    </Button>
-                                                    <Button variant={backgroundViewMode === 'processed' ? 'primary' : 'outline'} onClick={() => setBackgroundViewMode('processed')}>
-                                                        Bản đã phân tích
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-xl border border-white/10 customer-bg-page p-4">
-                                        <div className="space-y-1 text-sm text-slate-500">
-                                            <p>Phân tích SVG là công cụ tùy chọn để tự tìm seat markers từ nền SVG hiện tại.</p>
-                                            <p className="text-slate-500">Nếu phân tích thất bại, trình dựng thủ công vẫn hoạt động bình thường.</p>
-                                        </div>
-                                        <Button variant="primary" onClick={() => void handleProcessSvg()} disabled={!selectedVenueId || !selectedVenue?.can_parse_background} isLoading={busy}>
-                                            <Check className="h-4 w-4" /> Chạy phân tích
-                                        </Button>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                        <div>
-                                            <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-500">SVG gốc</p>
-                                            {renderBackgroundPreview(selectedVenue?.background_source ?? selectedVenue?.svg_source ?? null)}
-                                        </div>
-                                        <div>
-                                            <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-500">SVG đã phân tích</p>
-                                            {renderBackgroundPreview(selectedVenue?.background_processed ?? selectedVenue?.svg_processed ?? null)}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
                         </CardContent>
                     </Card>
 
@@ -1955,7 +1816,7 @@ export default function AdminVenues() {
                             </CardContent>
                         </Card>
 
-                        <Card className="bg-space-900/90 border-white/10">
+                        <Card className="hidden">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 customer-text-body ">
                                     <Shapes className="h-5 w-5 text-brand-red" /> SECTION / khu vực ghế
@@ -2042,7 +1903,7 @@ export default function AdminVenues() {
                                     onZoomOut={() => zoomCanvas(0.9)}
                                     cursorClassName={placementMode === 'polygon' ? 'cursor-cell' : placementMode === 'pan' ? 'cursor-grab' : 'cursor-crosshair'}
                                     gridSize={snapToGrid ? '5% 5%' : '10% 10%'}
-                                    aspectRatio={selectedVenue ? selectedVenue.width / selectedVenue.height : undefined}
+                                    aspectRatio={selectedVenue && selectedVenue.width > 0 && selectedVenue.height > 0 ? selectedVenue.width / selectedVenue.height : undefined}
                                     toolbar={
                                         <div className="flex flex-wrap items-center gap-2 customer-text-body ">
                                             <Button size="icon" variant={activeBuilderPanel === 'seat' ? 'primary' : 'outline'} onClick={() => { resetSeatForm(); setSelectedSeatIds([]); setActiveBuilderPanel('seat'); setPlacementMode('seat') }} title="Thêm một ghế">
@@ -2051,7 +1912,7 @@ export default function AdminVenues() {
                                             <Button size="icon" variant={activeBuilderPanel === 'bulk' ? 'primary' : 'outline'} onClick={() => { setSelectedSeatIds([]); setActiveBuilderPanel('bulk') }} title="Tạo nhiều ghế">
                                                 <Copy className="h-4 w-4" />
                                             </Button>
-                                            <Button size="icon" variant={activeBuilderPanel === 'polygon' ? 'primary' : 'outline'} onClick={() => { setSelectedSeatIds([]); setActiveBuilderPanel('polygon'); setPlacementMode('polygon') }} title="Tạo vùng polygon">
+                                            <Button className="hidden" size="icon" variant={activeBuilderPanel === 'polygon' ? 'primary' : 'outline'} onClick={() => { setSelectedSeatIds([]); setActiveBuilderPanel('polygon'); setPlacementMode('polygon') }} title="Tạo vùng polygon">
                                                 <Shapes className="h-4 w-4" />
                                             </Button>
                                             <Button size="icon" variant={placementMode === 'select' ? 'primary' : 'outline'} onClick={() => setPlacementMode('select')} title="Chọn vùng ghế">
@@ -2072,7 +1933,7 @@ export default function AdminVenues() {
                                             <Button variant="ghost" onClick={() => setViewport(DEFAULT_VIEWPORT)}>
                                                 Đặt lại góc nhìn
                                             </Button>
-                                            {placementMode === 'polygon' && (
+                                            {false && placementMode === 'polygon' && (
                                                 <Button variant="ghost" onClick={() => (editingPolygonId ? cancelPolygonEditing() : setDraftPolygonPoints([]))}>
                                                     {editingPolygonId ? 'Thoát chỉnh polygon' : 'Xóa điểm nháp'}
                                                 </Button>
@@ -2110,12 +1971,12 @@ export default function AdminVenues() {
                                         </div>
                                     }
                                     footerLeft={null}
-                                    footerRight={`${venueSeats.length} ghế · ${venuePolygons.length} vùng · zoom ${viewport.scale.toFixed(2)}x`}
+                                    footerRight={`${venueSeats.length} ghế · zoom ${viewport.scale.toFixed(2)}x`}
                                 >
                                         {selectedVenueBackground && (
                                             isSvgMarkup(selectedVenueBackground) ? (
                                                 <div
-                                                    className="absolute inset-0 opacity-70 [&>svg]:h-full [&>svg]:w-full"
+                                                    className="pointer-events-none absolute inset-0 opacity-70 [&>svg]:h-full [&>svg]:w-full"
                                                     dangerouslySetInnerHTML={{ __html: selectedVenueBackground }}
                                                 />
                                             ) : (
@@ -2127,7 +1988,7 @@ export default function AdminVenues() {
                                             )
                                         )}
 
-                                        {venuePolygons.map((polygon) => {
+                                        {false && venuePolygons.map((polygon) => {
                                             const polySection = polygon.section_id ? sectionMap.get(polygon.section_id) : undefined
                                             const polyColor = polySection?.color ?? '#fbbf24'
                                             const polyPts = editingPolygonId === polygon.id ? draftPolygonPoints : polygon.points
@@ -2158,7 +2019,7 @@ export default function AdminVenues() {
                                             )
                                         })}
 
-                                        {draftPolygonPoints.length >= 1 && (
+                                        {false && draftPolygonPoints.length >= 1 && (
                                             <svg className="absolute inset-0 h-full w-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
                                                 <polyline
                                                     points={draftPolygonPoints.map((point) => `${point.x},${point.y}`).join(' ')}
@@ -2169,7 +2030,7 @@ export default function AdminVenues() {
                                             </svg>
                                         )}
 
-                                        {draftPolygonPoints.map((point, index) => (
+                                        {false && draftPolygonPoints.map((point, index) => (
                                             <button
                                                 key={`${point.x}-${point.y}-${index}`}
                                                 type="button"
@@ -2251,7 +2112,7 @@ export default function AdminVenues() {
                                     </CardHeader>
                                     <CardContent className="space-y-3">
                                         <p className="text-sm text-slate-500">Đã chọn {selectedSeatIds.length} ghế.</p>
-                                        <div>
+                                        <div className="hidden">
                                             <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Đổi khu vực cho nhóm ghế</label>
                                             <select
                                                 className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 px-3 customer-text-body  outline-none"
@@ -2299,7 +2160,7 @@ export default function AdminVenues() {
                                         <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Nhãn ghế</label>
                                         <Input placeholder="Ví dụ A1" value={singleSeatForm.label} onChange={(event) => setSingleSeatForm({ ...singleSeatForm, label: event.target.value })} />
                                     </div>
-                                    <div>
+                                    <div className="hidden">
                                         <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Khu vực ghế</label>
                                         <select
                                             className="h-11 w-full rounded-lg border border-white/10 customer-bg-page px-3 customer-text-body  outline-none"
@@ -2360,18 +2221,7 @@ export default function AdminVenues() {
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     <div className="grid grid-cols-2 gap-3">
-                                        <select
-                                            className="h-11 rounded-lg border border-white/10 bg-slate-900 px-3 customer-text-body  outline-none"
-                                            value={bulkSeatForm.section_id}
-                                            onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, section_id: event.target.value })}
-                                        >
-                                            <option value="">Chưa gán khu vực</option>
-                                            {sections.map((section) => (
-                                                <option key={section.id} value={section.id}>
-                                                    {section.code} · {section.name}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        <Input placeholder="Tiền tố nhãn ghế" value={bulkSeatForm.label_prefix} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, label_prefix: event.target.value })} />
                                         <select
                                             className="h-11 rounded-lg border border-white/10 bg-slate-900 px-3 customer-text-body  outline-none"
                                             value={bulkSeatForm.pattern}
@@ -2394,7 +2244,6 @@ export default function AdminVenues() {
                                         <Input type="number" step="0.01" placeholder="Điểm bắt đầu X" value={bulkSeatForm.start_x} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, start_x: event.target.value })} />
                                         <Input type="number" step="0.01" placeholder="Điểm bắt đầu Y" value={bulkSeatForm.start_y} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, start_y: event.target.value })} />
                                     </div>
-                                    <Input placeholder="Tiền tố nhãn ghế" value={bulkSeatForm.label_prefix} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, label_prefix: event.target.value })} />
                                     {bulkSeatForm.pattern === 'arc' && (
                                         <div className="space-y-3 rounded-xl border border-white/10 customer-bg-page p-3">
                                             <div className="grid grid-cols-2 gap-3">
@@ -2414,7 +2263,7 @@ export default function AdminVenues() {
                                 </CardContent>
                             </Card>
 
-                            <Card className={`bg-space-900/90 border-white/10 ${activeBuilderPanel === 'polygon' ? '' : 'hidden'}`}>
+                            <Card className="hidden">
                                 <CardHeader>
                                     <CardTitle className="customer-text-body ">POLYGON</CardTitle>
                                 </CardHeader>
@@ -2486,7 +2335,7 @@ export default function AdminVenues() {
                             </CardContent>
                         </Card>
 
-                        <Card className="bg-space-900/90 border-white/10">
+                        <Card className="hidden">
                             <CardHeader>
                                 <CardTitle className="customer-text-body ">Danh sách vùng đa giác</CardTitle>
                             </CardHeader>

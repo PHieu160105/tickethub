@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.seat import Seat
+from app.models.order import Ticket
 from app.services import booking_service
 from app.services.booking_service import checkout_locked_seats, lock_seats
 from app.services.dashboard_service import dump_dashboard_stream, get_dashboard_stream
@@ -54,10 +54,10 @@ async def test_checkout_triggers_dashboard_broadcast_after_commit(
     monkeypatch.setattr(booking_service, "_schedule_lock_expiration", lambda _: None)
 
     user1, _ = customer_users
-    seat = await db_session.scalar(select(Seat).where(Seat.show_id == sample_show.id).order_by(Seat.id.asc()))
-    assert seat is not None
+    ticket = await db_session.scalar(select(Ticket).where(Ticket.show_id == sample_show.id).order_by(Ticket.id.asc()))
+    assert ticket is not None
 
-    await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[seat.id], queue_token=None)
+    await lock_seats(db_session, user_id=user1.id, show_id=sample_show.id, seat_ids=[ticket.id], queue_token=None)
     broadcast_calls = 0
 
     await checkout_locked_seats(db_session, user_id=user1.id, show_id=sample_show.id, queue_token=None)

@@ -12,9 +12,9 @@ import { Listbox } from '@headlessui/react';
 
 const PAGE_SIZE = 10
 
-function roleVariant(role: string): 'success' | 'warning' | 'info' {
-  if (role === 'ADMIN') return 'success'
-  return role === 'CUSTOMER' ? 'info' : 'warning'
+function roleVariant(userType: string): 'success' | 'warning' | 'info' {
+  if (userType === 'SYSTEM_ADMIN') return 'success'
+  return userType === 'CUSTOMER' ? 'info' : 'warning'
 }
 
 function genderLabel(gender: string) {
@@ -36,7 +36,8 @@ interface RoleSelectProps {
 function RoleSelect({ roleFilter, setRoleFilter }: RoleSelectProps) {
   const roles: Role[] = [
     { value: 'all', label: 'Tất cả vai trò' },
-    { value: 'ADMIN', label: 'Quản trị viên' },
+    { value: 'SYSTEM_ADMIN', label: 'Quản trị hệ thống' },
+    { value: 'EVENT_STAFF', label: 'Nhân viên sự kiện' },
     { value: 'CUSTOMER', label: 'Khách hàng' },
   ];
 
@@ -82,7 +83,7 @@ export default function AdminUsers() {
     try {
       const response = await adminApi.users({
         search: searchTerm || undefined,
-        role: roleFilter === 'all' ? undefined : roleFilter,
+        user_type: roleFilter === 'all' ? undefined : roleFilter,
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
       })
@@ -201,7 +202,7 @@ export default function AdminUsers() {
                         </div>
                       </td>
                       <td className="py-4">
-                        <Badge variant={roleVariant(user.role)} size="sm">{user.role}</Badge>
+                        <Badge variant={roleVariant(user.user_type)} size="sm">{user.user_type}</Badge>
                       </td>
                       <td className="py-4 admin-text-body">{genderLabel(user.gender)} / {user.age}</td>
                       <td className="py-4 admin-text-body">{user.total_tickets}</td>
@@ -237,7 +238,7 @@ export default function AdminUsers() {
               </div>
               <div>
                 <p className="text-white font-semibold">{selectedUser.full_name}</p>
-                <Badge variant={roleVariant(selectedUser.role)} size="sm">{selectedUser.role}</Badge>
+                <Badge variant={roleVariant(selectedUser.user_type)} size="sm">{selectedUser.user_type}</Badge>
               </div>
             </div>
             <div className="space-y-2 text-sm text-gray-300">

@@ -1,8 +1,8 @@
-"""ORM models for events, shows, tiers, and planner overlays."""
+"""ORM models for events, shows, tiers, and event assignments."""
 
 from datetime import date, datetime, time, timezone
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
 from app.models.base import Base, TimestampMixin
@@ -22,21 +22,24 @@ class Event(TimestampMixin, Base):
     end_date: Mapped[date] = mapped_column(Date, nullable=False, index=True, default=date.today)
     status: Mapped[EventStatus] = mapped_column(sa_enum(EventStatus), default=EventStatus.DRAFT, nullable=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    created_by_staff_id: Mapped[int] = mapped_column(ForeignKey("event_staff.user_id"), nullable=False, index=True)
 
-    # Legacy event-level fields are kept for compatibility with older services and data backfill.
-    venue: Mapped[str] = mapped_column(String(200), default="", nullable=False)
-    start_at_legacy: Mapped[datetime | None] = mapped_column("start_at", DateTime(timezone=True), nullable=True)
-    end_at_legacy: Mapped[datetime | None] = mapped_column("end_at", DateTime(timezone=True), nullable=True)
-    hold_minutes: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
-    venue_id: Mapped[int | None] = mapped_column(ForeignKey("venues.id", ondelete="SET NULL"), nullable=True, index=True)
-    venue_layout_id: Mapped[int | None] = mapped_column(ForeignKey("venue_layouts.id", ondelete="SET NULL"), nullable=True, index=True)
-
-    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-
-    created_by = relationship("User", back_populates="events_created")
-    venue_obj = relationship("Venue", back_populates="events")
-    venue_layout = relationship("VenueLayout", back_populates="events")
+    created_by_staff = relationship(
+        "User",
+        back_populates="created_events",
+        foreign_keys=[created_by_staff_id],
+        primaryjoin="User.id == foreign(Event.created_by_staff_id)",
+    )
+    assignments = relationship("EventAssignment", back_populates="event", cascade="all,delete-orphan")
     shows = relationship("Show", back_populates="event", cascade="all,delete")
+
+    @property
+    def created_by_user_id(self) -> int:
+        return self.created_by_staff_id
+
+    @property
+    def venue_id(self) -> int | None:
+        return self.venue_layout.venue_id if self.venue_layout else None
 
     @property
     def start_at(self) -> datetime:
@@ -61,32 +64,33 @@ class Show(TimestampMixin, Base):
     seat_source: Mapped[SeatSource] = mapped_column(sa_enum(SeatSource), default=SeatSource.LAYOUT, nullable=False)
     hold_minutes: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-
-    venue_id: Mapped[int | None] = mapped_column(ForeignKey("venues.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_by_staff_id: Mapped[int] = mapped_column(ForeignKey("event_staff.user_id"), nullable=False, index=True)
     venue_layout_id: Mapped[int | None] = mapped_column(ForeignKey("venue_layouts.id", ondelete="SET NULL"), nullable=True, index=True)
 
     location = synonym("venue")
 
     event = relationship("Event", back_populates="shows")
-    created_by = relationship("User", back_populates="shows_created")
-    venue_obj = relationship("Venue")
+    created_by_staff = relationship(
+        "User",
+        back_populates="created_shows",
+        foreign_keys=[created_by_staff_id],
+        primaryjoin="User.id == foreign(Show.created_by_staff_id)",
+    )
     venue_layout = relationship("VenueLayout")
     zones = relationship("TicketTier", back_populates="show", cascade="all,delete")
-    seats = relationship("Seat", back_populates="show", cascade="all,delete")
     tickets = relationship("Ticket", back_populates="show", cascade="all,delete")
-    polygons = relationship("ShowPolygon", back_populates="show", cascade="all,delete")
     orders = relationship("Order", back_populates="show", cascade="all,delete")
-    queue_entries = relationship("QueueEntry", back_populates="show", cascade="all,delete")
     show_performers = relationship("ShowPerformer", back_populates="show", cascade="all,delete-orphan")
+    @property
+    def created_by_user_id(self) -> int:
+        return self.created_by_staff_id
 
 
 class TicketTier(TimestampMixin, Base):
     __tablename__ = "ticket_tiers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    event_id: Mapped[int | None] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), index=True, nullable=True)
-    show_id: Mapped[int | None] = mapped_column(ForeignKey("shows.id", ondelete="CASCADE"), index=True, nullable=True)
+    show_id: Mapped[int] = mapped_column(ForeignKey("shows.id", ondelete="CASCADE"), index=True, nullable=False)
     code: Mapped[str] = mapped_column(String(30), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -94,14 +98,8 @@ class TicketTier(TimestampMixin, Base):
     color: Mapped[str] = mapped_column(String(20), default="#024ddf", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    # Legacy planner fields; still used by show-planner matrix generation until routes move fully to v2.
-    row_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    seats_per_row: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-
     show = relationship("Show", back_populates="zones")
-    seats = relationship("Seat", back_populates="zone", cascade="all,delete")
     tickets = relationship("Ticket", back_populates="ticket_tier")
-    polygons = relationship("ShowPolygon", back_populates="zone", cascade="all,delete")
 
     @property
     def price(self) -> float:
@@ -115,14 +113,18 @@ class TicketTier(TimestampMixin, Base):
 SeatZone = TicketTier
 
 
-class ShowPolygon(TimestampMixin, Base):
-    __tablename__ = "show_polygons"
+class EventAssignment(TimestampMixin, Base):
+    __tablename__ = "event_assignments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    show_id: Mapped[int] = mapped_column(ForeignKey("shows.id", ondelete="CASCADE"), nullable=False, index=True)
-    zone_id: Mapped[int | None] = mapped_column(ForeignKey("ticket_tiers.id", ondelete="SET NULL"), nullable=True, index=True)
-    label: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    points: Mapped[list[dict[str, float]]] = mapped_column(JSON, nullable=False)
+    event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+    staff_id: Mapped[int] = mapped_column(ForeignKey("event_staff.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    show = relationship("Show", back_populates="polygons")
-    zone = relationship("TicketTier", back_populates="polygons")
+    event = relationship("Event", back_populates="assignments")
+    staff = relationship(
+        "User",
+        back_populates="event_assignments",
+        foreign_keys=[staff_id],
+        primaryjoin="User.id == foreign(EventAssignment.staff_id)",
+    )

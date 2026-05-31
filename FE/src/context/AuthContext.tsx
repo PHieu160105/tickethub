@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
 
   const isAuthenticated = Boolean(user && authStorage.getToken())
-  const isAdmin = user?.role === 'ADMIN'
+  const isAdmin = user?.user_type === 'EVENT_STAFF' || user?.user_type === 'SYSTEM_ADMIN'
 
   useEffect(() => {
     const bootstrap = async () => {

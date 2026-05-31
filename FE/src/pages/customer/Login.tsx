@@ -43,7 +43,7 @@ export default function Login() {
       const parsedUser = JSON.parse(userParam) as ApiUser
       const user = acceptExternalAuth({ access_token: accessToken, refresh_token: refreshToken, user: parsedUser })
       setSearchParams({}, { replace: true })
-      navigate(user.role === 'ADMIN' ? '/admin' : '/', { replace: true })
+      navigate(user.user_type === 'CUSTOMER' ? '/' : '/admin', { replace: true })
     } catch {
       setErrorMessage('Đăng nhập ngoài đã hoàn tất nhưng hệ thống không xử lý được phản hồi.')
       setSearchParams({}, { replace: true })
@@ -56,7 +56,7 @@ export default function Login() {
     setErrorMessage('')
     try {
       const user = await login(email, password)
-      navigate(user.role === 'ADMIN' ? '/admin' : '/', { replace: true })
+      navigate(user.user_type === 'CUSTOMER' ? '/' : '/admin', { replace: true })
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Đăng nhập thất bại. Vui lòng thử lại.')
     } finally {
@@ -171,7 +171,7 @@ export default function Login() {
                     setErrorMessage('')
                     try {
                       const user = await loginWithGoogle()
-                      navigate(user.role === 'ADMIN' ? '/admin' : '/', { replace: true })
+                      navigate(user.user_type === 'CUSTOMER' ? '/' : '/admin', { replace: true })
                     } catch (error) {
                       setErrorMessage(error instanceof Error ? error.message : 'Đăng nhập Google thất bại. Vui lòng thử lại.')
                     } finally {

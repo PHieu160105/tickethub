@@ -439,7 +439,7 @@ export const adminApi = {
   async occupancy() {
     return withRetry(() => api.get<OccupancyItem[]>('/admin/dashboard/occupancy'))
   },
-  async users(params?: { search?: string; role?: string; limit?: number; offset?: number }) {
+  async users(params?: { search?: string; user_type?: string; limit?: number; offset?: number }) {
     return withRetry(() => api.get<PaginatedAdminUsersResponse>('/admin/users', { params }))
   },
   async ticketSales(params?: { event_id?: number; status_filter?: string; limit?: number; offset?: number }) {
@@ -457,8 +457,6 @@ export const adminApi = {
   async createVenue(payload: {
     name: string
     address?: string | null
-    city?: string | null
-    venue_type?: string
   }) {
     const response = await api.post<VenueDetail>('/admin/venues', payload)
     return response.data
@@ -468,8 +466,6 @@ export const adminApi = {
     payload: Partial<{
       name: string
       address: string | null
-      city: string | null
-      venue_type: string
       is_active: boolean
     }>,
   ) {
@@ -489,26 +485,24 @@ export const adminApi = {
     )
     return response.data
   },
-  async uploadVenueSvg(venueId: number, file: File) {
-    return this.uploadVenueBackground(venueId, file)
-  },
-  async processVenueSvg(venueId: number) {
-    const response = await api.post<{ venue_id: number; seat_count: number; sections_detected: number; width: number; height: number; seats: unknown[]; sections: unknown[] }>(`/admin/venues/${venueId}/process`)
-    return response.data
-  },
   async listLayouts(venueId: number) {
     return withRetry(() => api.get<VenueLayoutItem[]>(`/admin/venues/${venueId}/layouts`))
   },
+  async listVenueSeats(venueId: number, layoutId?: number | null) {
+    return withRetry(() => api.get<VenueSeatItem[]>(`/admin/venues/${venueId}/seats`, {
+      params: { layout_id: layoutId ?? undefined },
+    }))
+  },
   async createLayout(
     venueId: number,
-    payload: { name: string; description?: string | null; svg_data?: string | null; sort_order?: number },
+    payload: { name: string; description?: string | null },
   ) {
     const response = await api.post<VenueLayoutItem>(`/admin/venues/${venueId}/layouts`, payload)
     return response.data
   },
   async updateLayout(
     layoutId: number,
-    payload: { name?: string; description?: string | null; svg_data?: string | null; sort_order?: number },
+    payload: { name?: string; description?: string | null },
   ) {
     const response = await api.patch<VenueLayoutItem>(`/admin/layouts/${layoutId}`, payload)
     return response.data
@@ -538,16 +532,9 @@ export const adminApi = {
     const response = await api.delete(`/admin/sections/${sectionId}`)
     return response.data
   },
-  async listVenueSeats(venueId: number, layoutId?: number | null) {
-    return withRetry(() =>
-      api.get<VenueSeatItem[]>(`/admin/venues/${venueId}/seats`, {
-        params: { layout_id: layoutId ?? undefined },
-      }),
-    )
-  },
   async createVenueSeatSingle(
     venueId: number,
-    payload: { layout_id?: number | null; label: string; x: number; y: number; rotation?: number; section_id?: number | null; is_admin_locked?: boolean },
+    payload: { layout_id?: number | null; label: string; row_label?: string | null; seat_number?: number | null; x: number; y: number },
   ) {
     const response = await api.post<VenueSeatItem>(`/admin/venues/${venueId}/seats/single`, payload)
     return response.data
@@ -556,7 +543,6 @@ export const adminApi = {
     venueId: number,
     payload: {
       layout_id?: number | null
-      section_id?: number | null
       pattern: 'straight' | 'arc' | 'zigzag'
       rows: number
       cols: number
@@ -573,7 +559,7 @@ export const adminApi = {
   },
   async updateVenueSeat(
     seatId: number,
-    payload: Partial<{ label: string; x: number; y: number; rotation: number; section_id: number | null; is_admin_locked: boolean }>,
+    payload: Partial<{ label: string; row_label: string | null; seat_number: number | null; x: number; y: number }>,
   ) {
     const response = await api.patch<VenueSeatItem>(`/admin/seats/${seatId}`, payload)
     return response.data
@@ -582,8 +568,8 @@ export const adminApi = {
     venueId: number,
     payload: {
       layout_id?: number | null
-      create: Array<{ client_id: number; label: string; row_label: string; seat_number: number; x: number; y: number; rotation: number; section_id: number | null; is_admin_locked: boolean }>
-      update: Array<{ id: number; label: string; row_label: string; seat_number: number; x: number; y: number; rotation: number; section_id: number | null; is_admin_locked: boolean }>
+      create: Array<{ client_id: number; label: string; row_label: string | null; seat_number: number | null; x: number; y: number }>
+      update: Array<{ id: number; label: string; row_label: string | null; seat_number: number | null; x: number; y: number }>
       delete_ids: number[]
     },
   ) {

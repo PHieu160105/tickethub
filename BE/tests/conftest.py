@@ -1,32 +1,28 @@
-"""Fixture pytest cho các kiểm thử dịch vụ bất đồng bộ có dùng cơ sở dữ liệu."""
+"""Shared async test fixtures."""
 
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, time, timedelta
 
-import pytest
 import pytest_asyncio
 from redis.exceptions import RedisError
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-import sqlalchemy as sa
-
 from app.core.redis_client import get_redis_client
 from app.core.security import hash_password
 from app.models import Base
 from app.models.enums import EventCategory, EventStatus, Gender, UserRole
-from app.models.user import User
 from app.models.event import Event, Show
+from app.models.user import Customer, EventStaff, User
 from app.schemas.event import EventCreateRequest, SeatZoneCreate, ShowCreateRequest
 from app.services.event_service import create_event, create_show_with_inventory
-from app.services.queue_service import _memory_active_sessions
+from app.services.queue_service import _memory_active_sessions, _runtime_queue
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def clean_queue_runtime_state() -> AsyncGenerator[None, None]:
-    """Dọn trạng thái Redis/memory của hàng đợi để mỗi test chạy độc lập."""
-
     _memory_active_sessions.clear()
+    _runtime_queue.clear()
     try:
         redis = get_redis_client()
         keys = [key async for key in redis.scan_iter("queue:show:*")]
@@ -36,14 +32,12 @@ async def clean_queue_runtime_state() -> AsyncGenerator[None, None]:
         pass
 
     yield
-
     _memory_active_sessions.clear()
+    _runtime_queue.clear()
 
 
 @pytest_asyncio.fixture()
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Tạo cơ sở dữ liệu SQLite cô lập cho từng test."""
-
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", future=True)
 
     @event.listens_for(engine.sync_engine, "connect")
@@ -65,16 +59,15 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 @pytest_asyncio.fixture()
 async def admin_user(db_session: AsyncSession) -> User:
-    """Tạo sẵn một tài khoản admin cho test."""
-
     admin = User(
         full_name="Admin",
         email="admin@test.local",
         password_hash=hash_password("Admin@123"),
-        role=UserRole.ADMIN,
+        role=UserRole.EVENT_STAFF,
         gender=Gender.OTHER,
         age=30,
     )
+    admin.event_staff_profile = EventStaff(staff_code="TEST-STAFF-001", is_active=True)
     db_session.add(admin)
     await db_session.commit()
     await db_session.refresh(admin)
@@ -83,8 +76,6 @@ async def admin_user(db_session: AsyncSession) -> User:
 
 @pytest_asyncio.fixture()
 async def customer_users(db_session: AsyncSession) -> tuple[User, User]:
-    """Tạo sẵn hai tài khoản khách hàng để kiểm thử tranh chấp giữ ghế."""
-
     user1 = User(
         full_name="User One",
         email="u1@test.local",
@@ -93,6 +84,7 @@ async def customer_users(db_session: AsyncSession) -> tuple[User, User]:
         gender=Gender.FEMALE,
         age=22,
     )
+    user1.customer_profile = Customer()
     user2 = User(
         full_name="User Two",
         email="u2@test.local",
@@ -101,6 +93,7 @@ async def customer_users(db_session: AsyncSession) -> tuple[User, User]:
         gender=Gender.MALE,
         age=28,
     )
+    user2.customer_profile = Customer()
     db_session.add_all([user1, user2])
     await db_session.commit()
     await db_session.refresh(user1)
@@ -110,8 +103,6 @@ async def customer_users(db_session: AsyncSession) -> tuple[User, User]:
 
 @pytest_asyncio.fixture()
 async def sample_event_with_show(db_session: AsyncSession, admin_user: User) -> tuple[Event, Show]:
-    """Tạo một sự kiện cha và một buổi diễn bán vé với ma trận ghế nhỏ."""
-
     show_date = (datetime.now(UTC) + timedelta(days=1)).date()
     event_payload = EventCreateRequest(
         title="Test Event",
@@ -144,15 +135,11 @@ async def sample_event_with_show(db_session: AsyncSession, admin_user: User) -> 
 
 @pytest_asyncio.fixture()
 async def sample_event(sample_event_with_show: tuple[Event, Show]) -> Event:
-    """Trả fixture sự kiện cha cho test chỉ cần thông tin mô tả sự kiện."""
-
     event, _ = sample_event_with_show
     return event
 
 
 @pytest_asyncio.fixture()
 async def sample_show(sample_event_with_show: tuple[Event, Show]) -> Show:
-    """Trả fixture buổi diễn bán vé cho test đặt vé và hàng đợi."""
-
     _, show = sample_event_with_show
     return show

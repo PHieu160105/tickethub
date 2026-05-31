@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import timezone, datetime, timedelta
+from datetime import timezone, datetime
 from time import perf_counter
 from typing import Literal
 
 from fastapi import HTTPException, Request, status
 from redis.exceptions import RedisError
-from sqlalchemy import select, text, update
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.redis_client import get_redis_client
-from app.models.enums import QueueStatus, UserRole
+from app.models.enums import UserType
 from app.models.event import Show
-from app.models.queue import QueueEntry
 from app.models.user import User
+from app.services.queue_service import expire_inactive_admitted_tokens, has_valid_admitted_queue_token
 
 settings = get_settings()
 redis_client = get_redis_client()
@@ -101,20 +101,8 @@ def read_queue_token(request: Request, explicit_token: str | None = None) -> str
 
 
 async def _has_admitted_queue_token(session: AsyncSession, show_id: int, user_id: int, token: str | None) -> bool:
-    if not token:
-        return False
-
-    entry = await session.scalar(
-        select(QueueEntry.id).where(
-            QueueEntry.show_id == show_id,
-            QueueEntry.user_id == user_id,
-            QueueEntry.token == token,
-            QueueEntry.status == QueueStatus.ADMITTED,
-            QueueEntry.expires_at.is_not(None),
-            QueueEntry.expires_at > datetime.now(timezone.utc),
-        )
-    )
-    return entry is not None
+    _ = session
+    return has_valid_admitted_queue_token(show_id, user_id, token, now=datetime.now(timezone.utc))
 
 
 async def ensure_admission_for_show(
@@ -137,7 +125,7 @@ async def ensure_admission_for_show(
 
     if not current_user:
         raise _waiting_room_required(show.id)
-    if current_user.role == UserRole.ADMIN:
+    if current_user.user_type in {UserType.EVENT_STAFF, UserType.SYSTEM_ADMIN}:
         return
 
     if not await _has_admitted_queue_token(session, show.id, current_user.id, queue_token):
@@ -161,7 +149,7 @@ async def reject_before_show_lookup_if_waiting_room(
 
     if not current_user:
         raise _waiting_room_required(show_id)
-    if current_user.role == UserRole.ADMIN:
+    if current_user.user_type in {UserType.EVENT_STAFF, UserType.SYSTEM_ADMIN}:
         return
     if not queue_token:
         raise _waiting_room_required(show_id)
@@ -221,21 +209,3 @@ async def evaluate_waiting_room_health(session: AsyncSession) -> WaitingRoomStat
     return "normal"
 
 
-async def expire_inactive_admitted_tokens(session: AsyncSession) -> int:
-    """Thu hồi token admitted đã hết TTL hoặc mất heartbeat quá lâu."""
-
-    now = datetime.now(timezone.utc)
-    inactive_cutoff = now - timedelta(seconds=settings.queue_inactive_grace_seconds)
-    result = await session.execute(
-        update(QueueEntry)
-        .where(
-            QueueEntry.status == QueueStatus.ADMITTED,
-            (
-                (QueueEntry.expires_at.is_not(None) & (QueueEntry.expires_at < now))
-                | (QueueEntry.last_seen_at.is_not(None) & (QueueEntry.last_seen_at < inactive_cutoff))
-            ),
-        )
-        .values(status=QueueStatus.EXPIRED)
-    )
-    await session.commit()
-    return result.rowcount or 0

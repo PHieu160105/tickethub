@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_optional_current_user
 from app.core.cache import public_api_cache, show_seat_cache_namespace
 from app.core.db import get_db_session
-from app.models.enums import EventStatus, UserRole
+from app.models.enums import EventStatus, UserType
 from app.models.event import Event
 from app.models.user import User
 from app.schemas.event import SeatMatrixResponse
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/shows", tags=["seatmap"])
 
 
 def _is_admin(user: User | None) -> bool:
-    return bool(user and user.role == UserRole.ADMIN)
+    return bool(user and user.user_type in {UserType.EVENT_STAFF, UserType.SYSTEM_ADMIN})
 
 
 async def _ensure_show_visible_to_user(session: AsyncSession, show_id: int, current_user: User | None):

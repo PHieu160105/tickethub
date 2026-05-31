@@ -3,15 +3,13 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import EventCategory, EventStatus, QueueStatus
-from app.models.queue import QueueEntry
 from app.schemas.event import EventCreateRequest, SeatZoneCreate, ShowCreateRequest
 from app.services import queue_service
 from app.services.event_service import create_event, create_show_with_inventory
-from app.services.queue_service import get_queue_status, join_show_queue, process_virtual_queue
+from app.services.queue_service import QueueRuntimeEntry, _runtime_queue, get_queue_status, join_show_queue, process_virtual_queue
 
 
 @pytest.mark.asyncio
@@ -67,10 +65,8 @@ async def test_virtual_queue_batches_users(
     assert second_status.status == QueueStatus.WAITING
     assert second_status.position == 1
 
-    first_entry = await db_session.scalar(select(QueueEntry).where(QueueEntry.token == first_join.token))
-    assert first_entry is not None
+    first_entry = _runtime_queue[show.id][first_join.token]
     first_entry.expires_at = datetime.now(UTC) - timedelta(seconds=1)
-    await db_session.commit()
 
     await process_virtual_queue(db_session)
     queue_service.settings.queue_max_active_tokens_default = previous_max_active
@@ -115,21 +111,17 @@ async def test_virtual_queue_releases_exact_batch_of_fifty(
     show = await create_show_with_inventory(db_session, event, admin_user.id, show_payload)
 
     created_base = datetime.now(UTC) - timedelta(minutes=10)
-    waiting_entries = [
-        QueueEntry(
-            event_id=event.id,
+    entries = _runtime_queue.setdefault(show.id, {})
+    for index in range(60):
+        token = f"batch-50-token-{index}"
+        entries[token] = QueueRuntimeEntry(
             show_id=show.id,
-            user_id=user1.id if index % 2 == 0 else user2.id,
-            token=f"batch-50-token-{index}",
+            user_id=10_000 + index,
+            token=token,
             status=QueueStatus.WAITING,
             position_hint=index + 1,
             created_at=created_base + timedelta(seconds=index),
-            updated_at=created_base + timedelta(seconds=index),
         )
-        for index in range(60)
-    ]
-    db_session.add_all(waiting_entries)
-    await db_session.commit()
 
     previous_max_active = queue_service.settings.queue_max_active_tokens_default
     previous_batch_size = queue_service.settings.queue_batch_size_default
@@ -139,19 +131,13 @@ async def test_virtual_queue_releases_exact_batch_of_fifty(
     queue_service.settings.queue_max_active_tokens_default = previous_max_active
     queue_service.settings.queue_batch_size_default = previous_batch_size
 
-    admitted_entries = list(
-        await db_session.scalars(
-            select(QueueEntry)
-            .where(QueueEntry.show_id == show.id, QueueEntry.status == QueueStatus.ADMITTED)
-            .order_by(QueueEntry.created_at.asc())
-        )
+    admitted_entries = sorted(
+        [entry for entry in _runtime_queue[show.id].values() if entry.status == QueueStatus.ADMITTED],
+        key=lambda entry: entry.created_at,
     )
-    remaining_entries = list(
-        await db_session.scalars(
-            select(QueueEntry)
-            .where(QueueEntry.show_id == show.id, QueueEntry.status == QueueStatus.WAITING)
-            .order_by(QueueEntry.created_at.asc())
-        )
+    remaining_entries = sorted(
+        [entry for entry in _runtime_queue[show.id].values() if entry.status == QueueStatus.WAITING],
+        key=lambda entry: entry.created_at,
     )
 
     assert changed_count == 50
@@ -195,20 +181,17 @@ async def test_existing_admitted_token_does_not_force_queue_when_below_threshold
 
     event = await create_event(db_session, admin_user.id, event_payload)
     show = await create_show_with_inventory(db_session, event, admin_user.id, show_payload)
-    db_session.add(
-        QueueEntry(
-            event_id=event.id,
-            show_id=show.id,
-            user_id=user1.id,
-            token="existing-admitted-token",
-            status=QueueStatus.ADMITTED,
-            position_hint=0,
-            admitted_at=datetime.now(UTC),
-            expires_at=datetime.now(UTC) + timedelta(minutes=15),
-            last_seen_at=datetime.now(UTC),
-        )
+    _runtime_queue.setdefault(show.id, {})["existing-admitted-token"] = QueueRuntimeEntry(
+        show_id=show.id,
+        user_id=user1.id,
+        token="existing-admitted-token",
+        status=QueueStatus.ADMITTED,
+        position_hint=0,
+        created_at=datetime.now(UTC),
+        admitted_at=datetime.now(UTC),
+        expires_at=datetime.now(UTC) + timedelta(minutes=15),
+        last_seen_at=datetime.now(UTC),
     )
-    await db_session.commit()
 
     previous_max_active = queue_service.settings.queue_max_active_tokens_default
     queue_service.settings.queue_max_active_tokens_default = 50

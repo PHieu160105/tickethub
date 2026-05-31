@@ -5,7 +5,7 @@ class AdminUserResponse(BaseModel):
     id: int
     full_name: str
     email: str
-    role: str
+    user_type: str
     gender: str
     age: int
     total_tickets: int

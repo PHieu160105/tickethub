@@ -344,7 +344,7 @@ export default function Register() {
                     setErrorMessage('')
                     try {
                       const user = await loginWithGoogle()
-                      navigate(user.role === 'ADMIN' ? '/admin' : '/', { replace: true })
+                      navigate(user.user_type === 'CUSTOMER' ? '/' : '/admin', { replace: true })
                     } catch (error) {
                       setErrorMessage(error instanceof Error ? error.message : 'Đăng nhập Google thất bại. Vui lòng thử lại.')
                     } finally {

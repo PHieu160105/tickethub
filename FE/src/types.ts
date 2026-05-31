@@ -1,4 +1,4 @@
-export type UserRole = 'CUSTOMER' | 'ADMIN'
+export type UserType = 'CUSTOMER' | 'EVENT_STAFF' | 'SYSTEM_ADMIN'
 export type Gender = 'MALE' | 'FEMALE' | 'OTHER'
 export type EventStatus = 'DRAFT' | 'LIVE' | 'CLOSED'
 export type EventCategory = 'MUSIC' | 'THEATER' | 'DANCE' | 'TRADITIONAL' | 'COMEDY' | 'CIRCUS' | 'OTHER'
@@ -11,7 +11,7 @@ export interface User {
   id: number
   full_name: string
   email: string
-  role: UserRole
+  user_type: UserType
   gender: Gender
   age: number
 }
@@ -93,8 +93,6 @@ export interface PerformerDetail {
 export interface VenueSummary {
   id: number
   name: string
-  city: string | null
-  venue_type: string
   is_active: boolean
   created_at: string
 }
@@ -104,12 +102,8 @@ export interface VenueDetail extends VenueSummary {
   width: number
   height: number
   background_source: string | null
-  background_processed: string | null
   background_type: 'svg' | 'raster' | 'unknown' | null
-  can_parse_background: boolean
-  svg_source: string | null
-  svg_processed: string | null
-  created_by_user_id: number
+  created_by_staff_id: number | null
   updated_at: string
 }
 
@@ -118,8 +112,6 @@ export interface VenueLayoutItem {
   venue_id: number
   name: string
   description: string | null
-  svg_data: string | null
-  sort_order: number
   created_at: string
   updated_at: string
 }
@@ -139,15 +131,15 @@ export interface VenueSectionItem {
 export interface VenueSeatItem {
   id: number
   venue_layout_id: number | null
-  section_id?: number | null
-  section_name?: string | null
   label: string
-  row_label: string
-  seat_number: number
+  row_label: string | null
+  seat_number: number | null
   x: number | null
   y: number | null
-  rotation: number
-  is_admin_locked: boolean
+  rotation?: number
+  is_admin_locked?: boolean
+  section_id?: number | null
+  section_name?: string | null
 }
 
 export interface VenuePolygonPoint {
@@ -462,7 +454,7 @@ export interface AdminUserItem {
   id: number
   full_name: string
   email: string
-  role: string
+  user_type: string
   gender: string
   age: number
   total_tickets: number

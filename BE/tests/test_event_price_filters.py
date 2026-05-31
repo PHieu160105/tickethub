@@ -9,8 +9,8 @@ from sqlalchemy import select
 
 from app.main import app
 from app.models.enums import EventStatus, QueueStatus, SeatStatus
-from app.models.queue import QueueEntry
-from app.models.seat import Seat
+from app.models.order import Ticket
+from app.services.queue_service import QueueRuntimeEntry, _runtime_queue
 
 
 @pytest.mark.asyncio
@@ -205,7 +205,7 @@ async def test_admin_drafting_live_show_interrupts_active_booking_sessions(db_se
     from app.api.deps import get_current_active_admin, get_current_customer, get_current_user, get_db_session
 
     customer, _ = customer_users
-    seats = list(await db_session.scalars(select(Seat).where(Seat.show_id == sample_show.id).order_by(Seat.id.asc()).limit(3)))
+    seats = list(await db_session.scalars(select(Ticket).where(Ticket.show_id == sample_show.id).order_by(Ticket.id.asc()).limit(3)))
     assert len(seats) == 3
 
     user_locked_seat = seats[0]
@@ -213,32 +213,36 @@ async def test_admin_drafting_live_show_interrupts_active_booking_sessions(db_se
     sold_seat = seats[2]
 
     user_locked_seat.status = SeatStatus.LOCKED
-    user_locked_seat.locked_by_user_id = customer.id
+    user_locked_seat.locked_by_customer_id = customer.id
     user_locked_seat.lock_expires_at = datetime.now(UTC) + timedelta(minutes=10)
     user_locked_seat.is_admin_locked = False
 
     admin_locked_seat.status = SeatStatus.LOCKED
-    admin_locked_seat.locked_by_user_id = None
+    admin_locked_seat.locked_by_customer_id = None
     admin_locked_seat.lock_expires_at = None
     admin_locked_seat.is_admin_locked = True
 
     sold_seat.status = SeatStatus.SOLD
-    sold_seat.locked_by_user_id = None
+    sold_seat.locked_by_customer_id = None
     sold_seat.lock_expires_at = None
     sold_seat.is_admin_locked = False
 
-    waiting_entry = QueueEntry(event_id=sample_event.id, show_id=sample_show.id, user_id=customer.id, token="waiting-token", status=QueueStatus.WAITING)
-    admitted_entry = QueueEntry(
-        event_id=sample_event.id,
+    _runtime_queue.setdefault(sample_show.id, {})["waiting-token"] = QueueRuntimeEntry(
+        show_id=sample_show.id,
+        user_id=customer.id,
+        token="waiting-token",
+        status=QueueStatus.WAITING,
+        created_at=datetime.now(UTC),
+    )
+    _runtime_queue[sample_show.id]["admitted-token"] = QueueRuntimeEntry(
         show_id=sample_show.id,
         user_id=customer.id,
         token="admitted-token",
         status=QueueStatus.ADMITTED,
+        created_at=datetime.now(UTC),
         admitted_at=datetime.now(UTC),
         expires_at=datetime.now(UTC) + timedelta(minutes=5),
     )
-    db_session.add_all([waiting_entry, admitted_entry])
-    await db_session.commit()
 
     async def override_get_db():
         yield db_session
@@ -273,20 +277,17 @@ async def test_admin_drafting_live_show_interrupts_active_booking_sessions(db_se
         await db_session.refresh(user_locked_seat)
         await db_session.refresh(admin_locked_seat)
         await db_session.refresh(sold_seat)
-        await db_session.refresh(waiting_entry)
-        await db_session.refresh(admitted_entry)
-
         assert user_locked_seat.status == SeatStatus.AVAILABLE
-        assert user_locked_seat.locked_by_user_id is None
+        assert user_locked_seat.locked_by_customer_id is None
         assert user_locked_seat.lock_expires_at is None
 
         assert admin_locked_seat.status == SeatStatus.LOCKED
         assert admin_locked_seat.is_admin_locked is True
-        assert admin_locked_seat.locked_by_user_id is None
+        assert admin_locked_seat.locked_by_customer_id is None
 
         assert sold_seat.status == SeatStatus.SOLD
-        assert waiting_entry.status == QueueStatus.EXPIRED
-        assert admitted_entry.status == QueueStatus.EXPIRED
+        assert _runtime_queue[sample_show.id]["waiting-token"].status == QueueStatus.EXPIRED
+        assert _runtime_queue[sample_show.id]["admitted-token"].status == QueueStatus.EXPIRED
     finally:
         app.dependency_overrides.clear()
 

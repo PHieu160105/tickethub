@@ -1,7 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.core.db import AsyncSessionLocal
-from app.models.enums import UserRole
+from app.models.enums import UserType
 from app.services.dashboard_service import dump_dashboard_stream, get_dashboard_stream
 from app.ws.connection_manager import admin_ws_manager
 
@@ -17,7 +17,7 @@ async def admin_dashboard_ws(websocket: WebSocket, token: str | None = None) -> 
         return
 
     user = await resolve_ws_user(token)
-    if not user or user.role != UserRole.ADMIN:
+    if not user or user.user_type not in {UserType.EVENT_STAFF, UserType.SYSTEM_ADMIN}:
         await websocket.close(code=1008, reason="Yeu cau quyen admin")
         return
 

@@ -54,20 +54,12 @@ def _ticket_change_payload(ticket: Ticket) -> dict[str, int | str | None]:
         "id": ticket.id,
         "status": ticket.status.value,
         "lock_expires_at": ticket.lock_expires_at.isoformat() if ticket.lock_expires_at else None,
-        "locked_by_user_id": ticket.locked_by_user_id,
+        "locked_by_user_id": ticket.locked_by_customer_id,
     }
 
 
 def _sync_legacy_seat_from_ticket(ticket: Ticket) -> None:
-    seat = ticket.seat
-    if seat is None:
-        return
-    seat.zone_id = ticket.ticket_tier_id
-    seat.locked_by_user_id = ticket.locked_by_user_id
-    seat.lock_expires_at = ticket.lock_expires_at
-    seat.price = ticket.price
-    seat.status = ticket.status
-    seat.is_admin_locked = ticket.is_admin_locked
+    _ = ticket
 
 
 async def _release_expired_locks_at(expires_at: datetime) -> None:
@@ -143,14 +135,14 @@ async def lock_seats(
             lock_expires = _as_utc(ticket.lock_expires_at)
             if (
                 ticket.status == SeatStatus.LOCKED
-                and ticket.locked_by_user_id != user_id
+                and ticket.locked_by_customer_id != user_id
                 and (lock_expires is None or lock_expires > now)
             ):
                 failed_ids.append(ticket.id)
                 continue
 
             ticket.status = SeatStatus.LOCKED
-            ticket.locked_by_user_id = user_id
+            ticket.locked_by_customer_id = user_id
             ticket.lock_expires_at = expires_at
             _sync_legacy_seat_from_ticket(ticket)
             locked_ids.append(ticket.id)
@@ -188,10 +180,10 @@ async def release_seats(session: AsyncSession, user_id: int, show_id: int, seat_
 
         count = 0
         for ticket in tickets:
-            if ticket.status != SeatStatus.LOCKED or ticket.locked_by_user_id != user_id:
+            if ticket.status != SeatStatus.LOCKED or ticket.locked_by_customer_id != user_id:
                 continue
             ticket.status = SeatStatus.AVAILABLE
-            ticket.locked_by_user_id = None
+            ticket.locked_by_customer_id = None
             ticket.lock_expires_at = None
             _sync_legacy_seat_from_ticket(ticket)
             count += 1
@@ -231,7 +223,7 @@ async def checkout_locked_seats(
                 select(Ticket)
                 .where(
                     Ticket.show_id == show_id,
-                    Ticket.locked_by_user_id == user_id,
+                    Ticket.locked_by_customer_id == user_id,
                     Ticket.status == SeatStatus.LOCKED,
                 )
                 .order_by(Ticket.id.asc())
@@ -244,7 +236,7 @@ async def checkout_locked_seats(
             lock_expires = _as_utc(ticket.lock_expires_at)
             if lock_expires and lock_expires < now:
                 ticket.status = SeatStatus.AVAILABLE
-                ticket.locked_by_user_id = None
+                ticket.locked_by_customer_id = None
                 ticket.lock_expires_at = None
                 _sync_legacy_seat_from_ticket(ticket)
                 changed_tickets.append(_ticket_change_payload(ticket))
@@ -263,8 +255,7 @@ async def checkout_locked_seats(
         total_amount = subtotal_amount - discount_amount
 
         order = Order(
-            user_id=user_id,
-            event_id=show.event_id,
+            customer_id=user_id,
             show_id=show_id,
             order_code=f"ORD-{now.strftime('%Y%m%d')}-{uuid4().hex[:10].upper()}",
             status=OrderStatus.PAID,
@@ -283,7 +274,7 @@ async def checkout_locked_seats(
             ticket.qr_payload = qr_payload
             ticket.issued_at = now
             ticket.status = SeatStatus.SOLD
-            ticket.locked_by_user_id = None
+            ticket.locked_by_customer_id = None
             ticket.lock_expires_at = None
             _sync_legacy_seat_from_ticket(ticket)
             changed_tickets.append(_ticket_change_payload(ticket))
@@ -339,7 +330,7 @@ async def fetch_my_tickets(
         .join(Event, Show.event_id == Event.id)
         .outerjoin(SeatZone, Ticket.ticket_tier_id == SeatZone.id)
         .outerjoin(Seat, Ticket.seat_id == Seat.id)
-        .where(Order.user_id == user_id, Ticket.ticket_code.is_not(None))
+        .where(Order.customer_id == user_id, Ticket.ticket_code.is_not(None))
         .order_by(Ticket.issued_at.desc())
     )
 
@@ -408,7 +399,7 @@ async def release_expired_locks(session: AsyncSession) -> dict[int, list[dict[st
     try:
         for ticket in tickets:
             ticket.status = SeatStatus.AVAILABLE
-            ticket.locked_by_user_id = None
+            ticket.locked_by_customer_id = None
             ticket.lock_expires_at = None
             _sync_legacy_seat_from_ticket(ticket)
             show_payloads.setdefault(ticket.show_id or 0, []).append(_ticket_change_payload(ticket))
