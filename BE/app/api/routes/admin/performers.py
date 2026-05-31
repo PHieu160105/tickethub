@@ -17,6 +17,7 @@ from app.schemas.performer import (
     ShowPerformerBulkUpdateRequest,
 )
 from app.services.event_query_service import get_show_by_id
+from app.services.audit_service import add_audit_log
 from app.services.performer_service import (
     list_admin_show_performers,
     suggest_performers,
@@ -43,11 +44,13 @@ async def save_admin_show_performers(
     show_id: int,
     payload: ShowPerformerBulkUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_show_event_staff),
+    staff_user: User = Depends(get_current_show_event_staff),
 ) -> list[AdminShowPerformerResponse]:
     show = await get_show_by_id(session, show_id)
+    old_value = [item.model_dump(mode="json") for item in await list_admin_show_performers(session, show_id)]
     rows = await update_show_performer_lineup(session, show, payload.performers)
     try:
+        add_audit_log(session, staff_user, "UPDATE_SHOW_PERFORMERS", "shows", show.id, old_value=old_value, new_value=[item.model_dump(mode="json") for item in rows])
         await session.commit()
     except Exception:
         await session.rollback()

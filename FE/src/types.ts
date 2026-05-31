@@ -464,3 +464,24 @@ export interface EventAssignmentOverviewItem {
   event_status: EventStatus
   assigned_staff: AssignedEventStaffItem[]
 }
+
+export interface AdminAuditLogItem {
+  id: number
+  actor_user_id: number
+  actor_name: string
+  actor_email: string
+  actor_user_type: UserType
+  action: string
+  target_table: string
+  target_id: string
+  old_value: string | null
+  new_value: string | null
+  created_at: string
+}
+
+export interface PaginatedAdminAuditLogsResponse {
+  items: AdminAuditLogItem[]
+  total: number
+  limit: number
+  offset: number
+}

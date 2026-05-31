@@ -14,6 +14,7 @@ from app.schemas.admin import UploadImageResponse
 from app.schemas.common import APIMessage
 from app.schemas.event import EventCardResponse, EventCreateRequest, EventDetailResponse, EventUpdateRequest
 from app.services.dashboard_service import broadcast_dashboard_update
+from app.services.audit_service import add_audit_log, model_snapshot
 from app.services.event_lifecycle_service import create_event
 from app.services.event_query_service import (
     build_event_card_response,
@@ -36,6 +37,7 @@ async def create_admin_event(
 ) -> EventDetailResponse:
     event = await create_event(session, admin_user.id, payload)
     try:
+        add_audit_log(session, admin_user, "CREATE_EVENT", "events", event.id, new_value=model_snapshot(event, "title", "category", "start_date", "end_date", "status"))
         await session.commit()
     except Exception:
         await session.rollback()
@@ -98,10 +100,11 @@ async def update_event(
     event_key: str,
     payload: EventUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_assigned_event_staff),
+    staff_user: User = Depends(get_current_assigned_event_staff),
 ) -> EventDetailResponse:
     event = await get_event_by_slug_or_id(session, event_key)
     updates = payload.model_dump(exclude_unset=True)
+    old_value = {field: getattr(event, field) for field in updates}
     next_start = updates.get("start_date", event.start_date)
     next_end = updates.get("end_date", event.end_date)
     if next_end < next_start:
@@ -114,6 +117,7 @@ async def update_event(
     event.end_at_legacy = datetime.combine(event.end_date, datetime.max.time(), tzinfo=timezone.utc)
 
     try:
+        add_audit_log(session, staff_user, "UPDATE_EVENT", "events", event.id, old_value=old_value, new_value={field: getattr(event, field) for field in updates})
         await session.commit()
         await session.refresh(event)
     except Exception:
@@ -131,7 +135,7 @@ async def update_event(
 async def delete_event(
     event_key: str,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_assigned_event_staff),
+    staff_user: User = Depends(get_current_assigned_event_staff),
 ) -> APIMessage:
     event = await get_event_by_slug_or_id(session, event_key)
     if event.status != EventStatus.DRAFT:
@@ -142,6 +146,7 @@ async def delete_event(
         event.is_deleted = True
         for show in shows:
             show.is_deleted = True
+        add_audit_log(session, staff_user, "DELETE_EVENT", "events", event.id, old_value={"is_deleted": False}, new_value={"is_deleted": True})
         await session.commit()
     except Exception:
         await session.rollback()

@@ -24,6 +24,7 @@ import type {
   OccupancyItem,
   PerformerSuggestionItem,
   PaginatedAdminTicketSalesResponse,
+  PaginatedAdminAuditLogsResponse,
   PaginatedAdminUsersResponse,
   QueueJoinResponse,
   QueueRequirementResponse,
@@ -465,6 +466,9 @@ export const adminApi = {
   async updateEventAssignments(eventId: number, staffIds: number[]) {
     const response = await api.put<EventAssignmentOverviewItem>(`/admin/staff/assignments/${eventId}`, { staff_ids: staffIds })
     return response.data
+  },
+  async auditLogs(params?: { actor_user_id?: number; action?: string; target_table?: string; limit?: number; offset?: number }) {
+    return withRetry(() => api.get<PaginatedAdminAuditLogsResponse>('/admin/audit-logs', { params }))
   },
   async ticketSales(params?: { event_id?: number; status_filter?: string; limit?: number; offset?: number }) {
     return withRetry(() => api.get<PaginatedAdminTicketSalesResponse>('/admin/tickets/sales', { params }))

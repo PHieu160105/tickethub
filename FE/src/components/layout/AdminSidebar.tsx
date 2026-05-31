@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { BarChart3, Building2, CalendarDays, IdCard, LayoutDashboard, LogOut, Settings, Ticket, Users } from 'lucide-react'
+import { BarChart3, Building2, CalendarDays, IdCard, LayoutDashboard, LogOut, ScrollText, Settings, Ticket, Users } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { useAuth } from '../../context/AuthContext'
@@ -16,6 +16,7 @@ const systemAdminLinks = [
   { label: 'Thống kê', href: '/admin/analytics', icon: BarChart3, exact: false },
   { label: 'Người dùng', href: '/admin/users', icon: Users, exact: false },
   { label: 'Nhân viên sự kiện', href: '/admin/staff', icon: IdCard, exact: false },
+  { label: 'Nhật ký quản trị', href: '/admin/audit-logs', icon: ScrollText, exact: false },
   { label: 'Cài đặt', href: '/admin/settings', icon: Settings, exact: false },
 ]
 

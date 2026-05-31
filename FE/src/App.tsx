@@ -11,6 +11,7 @@ import { LoadingProvider } from './context/LoadingContext'
 import { ThemeProvider } from './context/ThemeContext'
 
 import AdminAnalytics from './pages/admin/Analytics'
+import AdminAuditLogs from './pages/admin/AuditLogs'
 import AdminDashboard from './pages/admin/Dashboard'
 import AdminEvents from './pages/admin/Events'
 import AdminSettings from './pages/admin/Settings'
@@ -100,6 +101,7 @@ function AppRoutes() {
           <Route path="analytics" element={<RequireRole role="SYSTEM_ADMIN"><AdminAnalytics /></RequireRole>} />
           <Route path="users" element={<RequireRole role="SYSTEM_ADMIN"><AdminUsers /></RequireRole>} />
           <Route path="staff" element={<RequireRole role="SYSTEM_ADMIN"><AdminStaff /></RequireRole>} />
+          <Route path="audit-logs" element={<RequireRole role="SYSTEM_ADMIN"><AdminAuditLogs /></RequireRole>} />
           <Route path="settings" element={<RequireRole role="SYSTEM_ADMIN"><AdminSettings /></RequireRole>} />
         </Route>
 

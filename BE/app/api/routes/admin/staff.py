@@ -1,5 +1,3 @@
-import json
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +7,7 @@ from app.core.db import get_db_session
 from app.core.security import hash_password
 from app.models.enums import UserType
 from app.models.event import Event, EventAssignment
-from app.models.user import AdminAuditLog, EventStaff, User
+from app.models.user import EventStaff, User
 from app.schemas.admin import (
     AssignedEventStaffResponse,
     EventAssignmentOverviewResponse,
@@ -18,6 +16,7 @@ from app.schemas.admin import (
     EventStaffResponse,
     EventStaffStatusRequest,
 )
+from app.services.audit_service import add_audit_log
 
 router = APIRouter()
 
@@ -98,7 +97,14 @@ async def create_event_staff(
     user.event_staff_profile = profile
     session.add(user)
     await session.flush()
-    session.add(AdminAuditLog(actor_admin_id=system_admin.id, action="CREATE_EVENT_STAFF", target_table="event_staff", target_id=str(user.id)))
+    add_audit_log(
+        session,
+        system_admin,
+        "CREATE_EVENT_STAFF",
+        "event_staff",
+        user.id,
+        new_value={"full_name": user.full_name, "email": user.email, "staff_code": profile.staff_code, "is_active": True},
+    )
     await session.commit()
     await session.refresh(user)
     await session.refresh(profile)
@@ -125,15 +131,14 @@ async def update_event_staff_status(
             )
     old_status = profile.is_active
     profile.is_active = payload.is_active
-    session.add(
-        AdminAuditLog(
-            actor_admin_id=system_admin.id,
-            action="UPDATE_EVENT_STAFF_STATUS",
-            target_table="event_staff",
-            target_id=str(staff_user_id),
-            old_value=str(old_status),
-            new_value=str(payload.is_active),
-        )
+    add_audit_log(
+        session,
+        system_admin,
+        "UPDATE_EVENT_STAFF_STATUS",
+        "event_staff",
+        staff_user_id,
+        old_value={"is_active": old_status},
+        new_value={"is_active": payload.is_active},
     )
     await session.commit()
     await session.refresh(user)
@@ -203,15 +208,14 @@ async def update_event_assignments(
     for staff_id in requested_staff_ids - current_by_staff_id.keys():
         session.add(EventAssignment(event_id=event.id, staff_id=staff_id, is_active=True))
 
-    session.add(
-        AdminAuditLog(
-            actor_admin_id=system_admin.id,
-            action="UPDATE_EVENT_ASSIGNMENT",
-            target_table="events",
-            target_id=str(event.id),
-            old_value=json.dumps(old_staff_ids),
-            new_value=json.dumps(sorted(requested_staff_ids)),
-        )
+    add_audit_log(
+        session,
+        system_admin,
+        "UPDATE_EVENT_ASSIGNMENT",
+        "events",
+        event.id,
+        old_value={"staff_ids": old_staff_ids},
+        new_value={"staff_ids": sorted(requested_staff_ids)},
     )
     await session.commit()
     overviews = await list_event_assignments(session=session, _=system_admin)
