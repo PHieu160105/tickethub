@@ -1,4 +1,4 @@
-"""Khai báo các route đặt vé: giữ ghế, trả ghế, thanh toán và xem vé của khách hàng."""
+"""Customer booking routes: seat locks, payment checkout, and ticket history."""
 
 from datetime import datetime
 
@@ -16,11 +16,13 @@ from app.schemas.booking import (
     LockSeatsRequest,
     LockSeatsResponse,
     MyTicketResponse,
+    OrderStatusResponse,
     ReleaseSeatsRequest,
 )
 from app.schemas.common import APIMessage
-from app.services.booking_service import checkout_locked_seats, fetch_my_tickets, lock_seats, release_seats
 from app.services.admission_service import ensure_admission_for_show, read_queue_token
+from app.services.booking_payment_service import build_order_status_response, create_checkout_payment
+from app.services.booking_service import fetch_my_tickets, lock_seats, release_seats
 from app.services.event_query_service import get_show_by_id
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
@@ -56,7 +58,7 @@ async def release_event_seats(
         show_id=payload.show_id,
         seat_ids=payload.seat_ids,
     )
-    return APIMessage(detail=f"Đã trả lại {released_count} ghế")
+    return APIMessage(detail=f"Da tra lai {released_count} ghe")
 
 
 @router.post("/checkout", response_model=CheckoutResponse, dependencies=[Depends(rate_limit("bookings-checkout", times=10, seconds=60))])
@@ -68,13 +70,25 @@ async def checkout(
 ) -> CheckoutResponse:
     show = await get_show_by_id(session, payload.show_id)
     await ensure_admission_for_show(session, show, current_user, read_queue_token(request, payload.queue_token))
-    return await checkout_locked_seats(
+    return await create_checkout_payment(
         session=session,
         user_id=current_user.id,
         show_id=payload.show_id,
         queue_token=payload.queue_token,
-        discount_code=payload.discount_code,
+        buyer_name=payload.buyer_name,
+        buyer_email=payload.buyer_email,
+        buyer_phone=payload.buyer_phone,
+        client_ip=request.client.host if request.client and request.client.host else "127.0.0.1",
     )
+
+
+@router.get("/orders/{order_id}", response_model=OrderStatusResponse)
+async def get_order_status(
+    order_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_customer),
+) -> OrderStatusResponse:
+    return await build_order_status_response(session, current_user.id, order_id)
 
 
 @router.get("/my-tickets", response_model=list[MyTicketResponse])

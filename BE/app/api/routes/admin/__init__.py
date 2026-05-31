@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from . import dashboard, events, performers, settings, show_planner, shows, tickets, users, venue_layouts, venue_seats, venues
+from . import dashboard, events, performers, refunds, settings, show_planner, shows, tickets, users, venue_layouts, venue_seats, venues
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 router.include_router(events.router)
@@ -12,5 +12,6 @@ router.include_router(venue_layouts.router)
 router.include_router(venue_seats.router)
 router.include_router(users.router)
 router.include_router(tickets.router)
+router.include_router(refunds.router)
 router.include_router(dashboard.router)
 router.include_router(settings.router)

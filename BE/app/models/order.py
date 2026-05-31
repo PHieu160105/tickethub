@@ -21,7 +21,14 @@ class Order(TimestampMixin, Base):
     buyer_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[OrderStatus] = mapped_column(sa_enum(OrderStatus), default=OrderStatus.PENDING, nullable=False)
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    payment_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    gateway_order_ref: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    gateway_transaction_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    payment_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    payment_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    refund_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user_id = synonym("customer_id")
 

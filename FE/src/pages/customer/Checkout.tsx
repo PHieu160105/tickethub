@@ -10,7 +10,7 @@ import { useCheckout, useReleaseSeats } from '@/features/booking/hooks/useBookin
 import { useShowSeats } from '@/features/events/hooks/useEvents'
 import { useWebSocketHeartbeat } from '@/hooks/useWebSocketHeartbeat'
 import { bookingApi, eventApi, extractApiErrorMessage, isWaitingRoomRequiredError, postAuthorizedJsonKeepalive } from '@/lib/api'
-import { authStorage, checkoutReturnSeatStorage, flashNoticeStorage, queueStorage } from '@/lib/storage'
+import { authStorage, checkoutReturnSeatStorage, flashNoticeStorage, pendingPaymentStorage, queueStorage } from '@/lib/storage'
 import { formatCurrencyVnd } from '@/lib/utils'
 import type { Seat } from '@/types'
 import { AlertCircle, CreditCard, MapPin, QrCode, Rocket, Timer } from 'lucide-react'
@@ -52,7 +52,6 @@ export default function Checkout() {
     phone: '',
   })
   const [errorMessage, setErrorMessage] = useState<string>('')
-  const [selectedDiscountCode] = useState<string>('')
   const [currentTimestampMs, setCurrentTimestampMs] = useState<number>(() => Date.now())
 
   const stateLockedSeats = useMemo(() => state.lockedSeats ?? [], [state.lockedSeats])
@@ -353,23 +352,34 @@ export default function Checkout() {
         return
       }
 
-      const result = await checkout(showId, queueToken, selectedDiscountCode || undefined)
+      const result = await checkout({
+        show_id: showId,
+        queue_token: queueToken,
+        buyer_name: formData.fullName.trim(),
+        buyer_email: formData.email.trim(),
+        buyer_phone: formData.phone.trim(),
+      })
       checkoutCompletedRef.current = true
       locksReleasedRef.current = true
       checkoutReturnSeatStorage.clear(showId)
-      queueStorage.clearToken(showId)
-      navigate('/confirmation', {
-        state: {
-          order: result,
-          eventKey,
-          showId,
-          showTitle: matrix?.show_title,
-          eventTitle: matrix?.event_title,
-          showStartAt: null,
-          profile: formData,
-          lockedSeats,
-        },
+      pendingPaymentStorage.set({
+        orderId: result.order_id,
+        showId,
+        eventKey,
+        showTitle: matrix?.show_title,
+        eventTitle: matrix?.event_title,
+        profile: formData,
+        lockedSeats: lockedSeats.map((seat) => ({
+          id: seat.id,
+          seat_label: seat.seat_label,
+          price: Number(seat.price),
+        })),
       })
+      if (result.payment_url) {
+        window.location.assign(result.payment_url)
+        return
+      }
+      navigate('/payment/result', { replace: true })
     } catch (error) {
       if (isShowUnavailableError(error)) {
         handleShowInterrupted(eventKey ?? matrix?.event_slug)
@@ -428,9 +438,9 @@ export default function Checkout() {
             <section className="backdrop-blur-xl customer-bg-surface p-6 rounded-2xl border border-[var(--customer-bg-opp)]">
               <div className="flex items-center gap-2 mb-4 customer-text-body">
                 <CreditCard className="w-5 h-5 text-primary" />
-                <p className="font-semibold">Thanh toán mô phỏng</p>
+                <p className="font-semibold">Thanh toán VNPAY Sandbox</p>
               </div>
-              <p className="text-sm text-slate-500">Luồng demo này chỉ xác nhận thanh toán ở phía server, không xử lý thẻ thật.</p>
+              <p className="text-sm text-slate-500">Bạn sẽ được chuyển sang cổng thanh toán sandbox của VNPAY sau khi xác nhận.</p>
             </section>
 
             {errorMessage && (

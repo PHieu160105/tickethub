@@ -21,6 +21,7 @@ import AdminVenues from './pages/admin/Venues'
 import Checkout from './pages/customer/Checkout'
 import Confirmation from './pages/customer/Confirmation'
 import CustomerProfile from './pages/customer/CustomerProfile'
+import PaymentResult from './pages/customer/PaymentResult'
 import CustomerSettings from './pages/customer/Setting'
 import CustomerTicket from './pages/customer/CustomerTicket'
 import ErrorPage from './pages/customer/Error'
@@ -73,6 +74,7 @@ function AppRoutes() {
             }
           />
           <Route path="checkout" element={<RequireCustomerAuth><Checkout /></RequireCustomerAuth>} />
+          <Route path="payment/result" element={<RequireCustomerAuth><PaymentResult /></RequireCustomerAuth>} />
           <Route path="confirmation" element={<RequireCustomerAuth><Confirmation /></RequireCustomerAuth>} />
           <Route path="tickets" element={<RequireCustomerAuth><CustomerTicket /></RequireCustomerAuth>} />
           <Route path="profile" element={<RequireCustomerAuth><CustomerProfile /></RequireCustomerAuth>} />

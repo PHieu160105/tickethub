@@ -6,11 +6,30 @@ const USER_KEY = 'ticketrush_user'
 const QUEUE_TOKEN_PREFIX = 'ticketrush_queue_'
 const CHECKOUT_RETURN_SEATS_PREFIX = 'ticketrush_checkout_return_seats_'
 const FLASH_NOTICE_KEY = 'ticketrush_flash_notice'
+const PENDING_PAYMENT_KEY = 'ticketrush_pending_payment'
 
 export interface FlashNotice {
   variant?: 'default' | 'success' | 'error' | 'warning' | 'info'
   title: string
   description?: string
+}
+
+export interface PendingPaymentContext {
+  orderId: number
+  showId: number
+  eventKey?: string
+  showTitle?: string
+  eventTitle?: string
+  profile: {
+    fullName: string
+    email: string
+    phone: string
+  }
+  lockedSeats: Array<{
+    id: number
+    seat_label: string
+    price: number
+  }>
 }
 
 function clearAllQueueTokensFromSessionStorage() {
@@ -173,5 +192,23 @@ export const flashNoticeStorage = {
   },
   clear() {
     sessionStorage.removeItem(FLASH_NOTICE_KEY)
+  },
+}
+
+export const pendingPaymentStorage = {
+  get(): PendingPaymentContext | null {
+    const raw = sessionStorage.getItem(PENDING_PAYMENT_KEY)
+    if (!raw) return null
+    try {
+      return JSON.parse(raw) as PendingPaymentContext
+    } catch {
+      return null
+    }
+  },
+  set(payload: PendingPaymentContext) {
+    sessionStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify(payload))
+  },
+  clear() {
+    sessionStorage.removeItem(PENDING_PAYMENT_KEY)
   },
 }
