@@ -1,4 +1,4 @@
-"""Admin venue, layout, and reusable seat builder routes."""
+﻿"""Admin venue, layout, and reusable seat builder routes."""
 
 import base64
 import math
@@ -10,11 +10,10 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_active_admin
+from app.api.deps import get_current_active_event_staff
 from app.core.db import get_db_session
 from app.models.seat import Seat
 from app.models.user import User
-from app.models.enums import UserType
 from app.models.venue import Venue, VenueLayout
 from app.schemas.common import APIMessage
 from app.schemas.venue import (
@@ -170,10 +169,8 @@ def _derive_layout_seat_identity(label: str, row_label: str | None, seat_number:
 async def create_venue(
     payload: VenueCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    admin_user: User = Depends(get_current_active_admin),
+    admin_user: User = Depends(get_current_active_event_staff),
 ) -> VenueDetailResponse:
-    if admin_user.user_type != UserType.EVENT_STAFF:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Chi event staff moi duoc tao venue")
     venue = Venue(name=payload.name, address=payload.address, created_by_staff_id=admin_user.id)
     session.add(venue)
     await session.commit()
@@ -187,7 +184,7 @@ async def list_venues(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> list[VenueListResponse]:
     stmt = select(Venue).where(Venue.is_active.is_(True)).order_by(Venue.created_at.desc())
     if search:
@@ -201,7 +198,7 @@ async def list_venues(
 async def get_venue(
     venue_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> VenueDetailResponse:
     venue = await _get_venue_or_404(session, venue_id)
     return VenueDetailResponse.model_validate(venue)
@@ -212,7 +209,7 @@ async def update_venue(
     venue_id: int,
     payload: VenueUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> VenueDetailResponse:
     venue = await _get_venue_or_404(session, venue_id)
     for field_name, field_value in payload.model_dump(exclude_unset=True).items():
@@ -226,7 +223,7 @@ async def update_venue(
 async def delete_venue(
     venue_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> None:
     venue = await _get_venue_or_404(session, venue_id)
     await session.delete(venue)
@@ -238,7 +235,7 @@ async def upload_venue_background(
     venue_id: int,
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> dict:
     venue = await _get_venue_or_404(session, venue_id)
     background_type, content_type = await _store_venue_background(venue, file)
@@ -259,7 +256,7 @@ async def upload_venue_svg(
     venue_id: int,
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> dict:
     return await upload_venue_background(venue_id=venue_id, file=file, session=session, _=_)
 
@@ -268,7 +265,7 @@ async def upload_venue_svg(
 async def list_layouts(
     venue_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> list[LayoutDetailResponse]:
     await _get_venue_or_404(session, venue_id)
     layouts = list(await session.scalars(select(VenueLayout).where(VenueLayout.venue_id == venue_id).order_by(VenueLayout.id.asc())))
@@ -280,7 +277,7 @@ async def create_layout(
     venue_id: int,
     payload: LayoutCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> LayoutDetailResponse:
     await _get_venue_or_404(session, venue_id)
     layout = VenueLayout(venue_id=venue_id, name=payload.name, description=payload.description)
@@ -295,7 +292,7 @@ async def update_layout(
     layout_id: int,
     payload: LayoutUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> LayoutDetailResponse:
     layout = await session.scalar(select(VenueLayout).where(VenueLayout.id == layout_id))
     if not layout:
@@ -311,7 +308,7 @@ async def update_layout(
 async def list_layout_sections(
     layout_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> list[dict]:
     layout = await session.scalar(select(VenueLayout).where(VenueLayout.id == layout_id))
     if not layout:
@@ -323,7 +320,7 @@ async def list_layout_sections(
 async def create_layout_section(
     layout_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> APIMessage:
     _ = layout_id
     raise HTTPException(status_code=status.HTTP_410_GONE, detail="Section da bi loai khoi he thong")
@@ -333,7 +330,7 @@ async def create_layout_section(
 async def delete_layout(
     layout_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> None:
     layout = await session.scalar(select(VenueLayout).where(VenueLayout.id == layout_id))
     if not layout:
@@ -347,7 +344,7 @@ async def list_venue_seats(
     venue_id: int,
     layout_id: int | None = Query(default=None, ge=1),
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> list[VenueSeatResponse]:
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, layout_id)
@@ -360,7 +357,7 @@ async def list_venue_polygons(
     venue_id: int,
     layout_id: int | None = Query(default=None, ge=1),
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> list[dict]:
     await _get_venue_or_404(session, venue_id)
     if layout_id is not None:
@@ -372,7 +369,7 @@ async def list_venue_polygons(
 async def create_venue_polygon(
     venue_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> APIMessage:
     _ = venue_id
     raise HTTPException(status_code=status.HTTP_410_GONE, detail="Polygon da bi loai khoi he thong")
@@ -383,7 +380,7 @@ async def create_venue_seat_single(
     venue_id: int,
     payload: VenueSeatSingleCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> VenueSeatResponse:
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, payload.layout_id)
@@ -413,7 +410,7 @@ async def create_venue_seat_bulk(
     venue_id: int,
     payload: VenueSeatBulkCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> VenueSeatBulkCreateResponse:
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, payload.layout_id)
@@ -464,7 +461,7 @@ async def sync_venue_seats(
     venue_id: int,
     payload: VenueSeatSyncRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> VenueSeatSyncResponse:
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, payload.layout_id)
@@ -552,7 +549,7 @@ async def update_venue_seat(
     seat_id: int,
     payload: VenueSeatUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> VenueSeatResponse:
     seat = await session.scalar(select(Seat).where(Seat.id == seat_id))
     if not seat:
@@ -589,7 +586,7 @@ async def update_venue_seat(
 async def delete_venue_seat(
     seat_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> APIMessage:
     seat = await session.scalar(select(Seat).where(Seat.id == seat_id))
     if not seat:

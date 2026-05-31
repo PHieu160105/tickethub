@@ -10,6 +10,7 @@ import { useWebSocketHeartbeat } from '@/hooks/useWebSocketHeartbeat'
 import { WS_BASE_URL } from '@/constants'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
 import { authStorage } from '@/lib/storage'
+import { useAuth } from '@/context/AuthContext'
 import type { DashboardRealtimePayload, DashboardSummary, OccupancyItem, RevenuePoint } from '@/types'
 
 const DEFAULT_SUMMARY: DashboardSummary = {
@@ -28,6 +29,8 @@ function formatCurrency(amount: number) {
 }
 
 export default function AdminDashboard() {
+  const { user } = useAuth()
+  const isSystemAdmin = user?.user_type === 'SYSTEM_ADMIN'
   const [summary, setSummary] = useState<DashboardSummary>(DEFAULT_SUMMARY)
   const [revenue, setRevenue] = useState<RevenuePoint[]>([])
   const [occupancy, setOccupancy] = useState<OccupancyItem[]>([])
@@ -37,7 +40,7 @@ export default function AdminDashboard() {
   const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
 
   const authToken = authStorage.getToken()
-  const dashboardWsUrl = authToken ? `${WS_BASE_URL}/admin/dashboard?token=${encodeURIComponent(authToken)}` : null
+  const dashboardWsUrl = authToken && isSystemAdmin ? `${WS_BASE_URL}/admin/dashboard?token=${encodeURIComponent(authToken)}` : null
 
   const maxRevenue = useMemo(
     () => revenue.reduce((max, point) => (point.revenue > max ? point.revenue : max), 0),
@@ -102,13 +105,15 @@ export default function AdminDashboard() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-display font-bold admin-text-header">Tổng quan hệ thống</h2>
-          <p className="admin-text-body mt-1">Dashboard realtime từ backend admin</p>
+          <h2 className="text-2xl font-display font-bold admin-text-header">{isSystemAdmin ? 'Báo cáo tổng thể hệ thống' : 'Tổng quan sự kiện được phân công'}</h2>
+          <p className="admin-text-body mt-1">{isSystemAdmin ? 'Dữ liệu tổng hợp toàn hệ thống.' : 'Dữ liệu chỉ bao gồm các sự kiện bạn đang tham gia.'}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant={realtimeStatus === 'connected' ? 'success' : 'warning'} size="sm">
-            {realtimeStatus === 'connected' ? 'Realtime đang bật' : realtimeStatus === 'connecting' ? 'Đang kết nối' : 'Mất realtime'}
-          </Badge>
+          {isSystemAdmin ? (
+            <Badge variant={realtimeStatus === 'connected' ? 'success' : 'warning'} size="sm">
+              {realtimeStatus === 'connected' ? 'Realtime đang bật' : realtimeStatus === 'connecting' ? 'Đang kết nối' : 'Mất realtime'}
+            </Badge>
+          ) : null}
           <Button variant="outline" onClick={() => void loadDashboardData(true)} isLoading={refreshing}>
             <RefreshCcw className="h-4 w-4" />
             Làm mới
@@ -219,7 +224,8 @@ export default function AdminDashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {!isSystemAdmin ? (
         <Card>
           <CardContent className="pt-3 flex items-center gap-3">
             <Ticket className="h-5 w-5 text-red-400" />
@@ -228,6 +234,8 @@ export default function AdminDashboard() {
             </Link>
           </CardContent>
         </Card>
+        ) : null}
+        {isSystemAdmin ? (
         <Card>
           <CardContent className="pt-3 flex items-center gap-3">
             <BarChart3 className="h-5 w-5 text-green-400" />
@@ -236,6 +244,8 @@ export default function AdminDashboard() {
             </Link>
           </CardContent>
         </Card>
+        ) : null}
+        {isSystemAdmin ? (
         <Card>
           <CardContent className="pt-3 flex items-center gap-3">
             <Users className="h-5 w-5 text-cyan-400" />
@@ -244,11 +254,12 @@ export default function AdminDashboard() {
             </Link>
           </CardContent>
         </Card>
+        ) : null}
       </div>
 
       <div className="text-xs text-gray-500 flex items-center gap-2">
         <CalendarDays className="h-4 w-4" />
-        Dữ liệu tự cập nhật khi backend phát sinh thay đổi; nút Làm mới dùng làm fallback.
+        {isSystemAdmin ? 'Dữ liệu tự cập nhật khi backend phát sinh thay đổi; nút Làm mới dùng làm fallback.' : 'Dữ liệu được giới hạn theo assignment; dùng Làm mới để lấy trạng thái mới nhất.'}
       </div>
     </div>
   )

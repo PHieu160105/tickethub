@@ -40,6 +40,8 @@ type AutocompleteProps = {
 
 const DEFAULT_PERFORMER_IMAGE =
   'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=400&q=80'
+const MAX_PERFORMER_IMAGE_BYTES = 10 * 1024 * 1024
+const SUPPORTED_PERFORMER_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 function createLocalId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -221,6 +223,7 @@ export function ShowPerformersModal({ isOpen, show, onClose, onSaved }: ShowPerf
   const [rows, setRows] = useState<DraftPerformer[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [uploadingImageLocalId, setUploadingImageLocalId] = useState<string | null>(null)
   const [requestError, setRequestError] = useState<string | null>(null)
   const [hasAttemptedSave, setHasAttemptedSave] = useState(false)
 
@@ -325,6 +328,15 @@ export function ShowPerformersModal({ isOpen, show, onClose, onSaved }: ShowPerf
   async function handleImageUpload(localId: string, file: File | null) {
     if (!file) return
     clearRequestError()
+    if (!SUPPORTED_PERFORMER_IMAGE_TYPES.has(file.type)) {
+      setRequestError('Ảnh nghệ sĩ chỉ hỗ trợ JPG, JPEG, PNG hoặc WEBP.')
+      return
+    }
+    if (file.size > MAX_PERFORMER_IMAGE_BYTES) {
+      setRequestError('Ảnh nghệ sĩ phải có dung lượng không quá 10MB.')
+      return
+    }
+    setUploadingImageLocalId(localId)
     try {
       const uploaded = await adminApi.uploadPerformerImage(file)
       setRows((previous) =>
@@ -332,6 +344,8 @@ export function ShowPerformersModal({ isOpen, show, onClose, onSaved }: ShowPerf
       )
     } catch (errorValue) {
       setRequestError(extractApiErrorMessage(errorValue, 'Không thể upload ảnh nghệ sĩ.'))
+    } finally {
+      setUploadingImageLocalId(null)
     }
   }
 
@@ -419,14 +433,18 @@ export function ShowPerformersModal({ isOpen, show, onClose, onSaved }: ShowPerf
                           alt={item.stage_name || 'Performer preview'}
                           className="h-20 w-20 rounded-xl border border-white/10 object-cover"
                         />
-                        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/10 px-2 py-2 text-xs text-gray-300 transition hover:bg-white/10">
+                        <label className={`flex items-center justify-center gap-2 rounded-lg border border-white/10 px-2 py-2 text-xs text-gray-300 transition ${uploadingImageLocalId === item.local_id ? 'cursor-wait opacity-60' : 'cursor-pointer hover:bg-white/10'}`}>
                           <ImagePlus className="h-3.5 w-3.5" />
-                          Ảnh
+                          {uploadingImageLocalId === item.local_id ? 'Đang tải...' : 'Ảnh'}
                           <input
                             type="file"
-                            accept="image/*"
+                            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
                             className="hidden"
-                            onChange={(event) => void handleImageUpload(item.local_id, event.target.files?.[0] ?? null)}
+                            disabled={uploadingImageLocalId !== null}
+                            onChange={(event) => {
+                              void handleImageUpload(item.local_id, event.target.files?.[0] ?? null)
+                              event.target.value = ''
+                            }}
                           />
                         </label>
                       </div>

@@ -14,6 +14,7 @@ import AdminAnalytics from './pages/admin/Analytics'
 import AdminDashboard from './pages/admin/Dashboard'
 import AdminEvents from './pages/admin/Events'
 import AdminSettings from './pages/admin/Settings'
+import AdminStaff from './pages/admin/Staff'
 import AdminSeatPlanner from './pages/admin/SeatPlanner'
 import AdminTickets from './pages/admin/Tickets'
 import AdminUsers from './pages/admin/Users'
@@ -47,6 +48,13 @@ function RequireCustomerAuth({ children }: { children: ReactNode }) {
   if (isLoading) return null
   if (!isAuthenticated) return <Navigate to="/login" replace />
   if (isAdmin) return <Navigate to="/admin" replace />
+  return <>{children}</>
+}
+
+function RequireRole({ role, children }: { role: 'EVENT_STAFF' | 'SYSTEM_ADMIN'; children: ReactNode }) {
+  const { user, isLoading } = useAuth()
+  if (isLoading) return null
+  if (user?.user_type !== role) return <Navigate to="/admin" replace />
   return <>{children}</>
 }
 
@@ -85,13 +93,14 @@ function AppRoutes() {
 
         <Route path="/admin" element={<RequireAdmin><AdminLayout title="Quản trị hệ thống" /></RequireAdmin>}>
           <Route index element={<AdminDashboard />} />
-          <Route path="events" element={<AdminEvents />} />
-          <Route path="events/:eventKey/shows/:showId/seating" element={<AdminSeatPlanner />} />
-          <Route path="venues" element={<AdminVenues />} />
-          <Route path="tickets" element={<AdminTickets />} />
-          <Route path="analytics" element={<AdminAnalytics />} />
-          <Route path="users" element={<AdminUsers />} />
-          <Route path="settings" element={<AdminSettings />} />
+          <Route path="events" element={<RequireRole role="EVENT_STAFF"><AdminEvents /></RequireRole>} />
+          <Route path="events/:eventKey/shows/:showId/seating" element={<RequireRole role="EVENT_STAFF"><AdminSeatPlanner /></RequireRole>} />
+          <Route path="venues" element={<RequireRole role="EVENT_STAFF"><AdminVenues /></RequireRole>} />
+          <Route path="tickets" element={<RequireRole role="EVENT_STAFF"><AdminTickets /></RequireRole>} />
+          <Route path="analytics" element={<RequireRole role="SYSTEM_ADMIN"><AdminAnalytics /></RequireRole>} />
+          <Route path="users" element={<RequireRole role="SYSTEM_ADMIN"><AdminUsers /></RequireRole>} />
+          <Route path="staff" element={<RequireRole role="SYSTEM_ADMIN"><AdminStaff /></RequireRole>} />
+          <Route path="settings" element={<RequireRole role="SYSTEM_ADMIN"><AdminSettings /></RequireRole>} />
         </Route>
 
         <Route path="/error" element={<ErrorPage />} />

@@ -1,23 +1,29 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { BarChart3, Building2, CalendarDays, LayoutDashboard, LogOut, Settings, Ticket, Users } from 'lucide-react'
+import { BarChart3, Building2, CalendarDays, IdCard, LayoutDashboard, LogOut, Settings, Ticket, Users } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { useAuth } from '../../context/AuthContext'
 
-const adminLinks = [
+const eventStaffLinks = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, exact: true },
   { label: 'Sự kiện', href: '/admin/events', icon: CalendarDays, exact: false },
   { label: 'Venue Studio', href: '/admin/venues', icon: Building2, exact: false },
   { label: 'Vé và doanh thu', href: '/admin/tickets', icon: Ticket, exact: false },
+]
+
+const systemAdminLinks = [
+  { label: 'Báo cáo hệ thống', href: '/admin', icon: LayoutDashboard, exact: true },
   { label: 'Thống kê', href: '/admin/analytics', icon: BarChart3, exact: false },
   { label: 'Người dùng', href: '/admin/users', icon: Users, exact: false },
+  { label: 'Nhân viên sự kiện', href: '/admin/staff', icon: IdCard, exact: false },
   { label: 'Cài đặt', href: '/admin/settings', icon: Settings, exact: false },
 ]
 
 export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const adminLinks = user?.user_type === 'SYSTEM_ADMIN' ? systemAdminLinks : eventStaffLinks
 
   const handleLogout = () => {
     logout()
@@ -35,7 +41,9 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div className="border-b admin-border p-4">
         <span className="flex items-start text-lg font-display font-bold">
           <p className="text-lg">TICKETHUB</p>
-          <span className="relative top-0.9 ml-1 px-1 py-0.5 rounded bg-brand-red/20 text-brand-red text-s">Admin</span>
+          <span className="relative top-0.9 ml-1 px-1 py-0.5 rounded bg-brand-red/20 text-brand-red text-xs">
+            {user?.user_type === 'SYSTEM_ADMIN' ? 'System Admin' : 'Event Staff'}
+          </span>
         </span>
       </div>
 

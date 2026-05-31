@@ -1,16 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type WheelEvent } from 'react'
+import { useEffect, useMemo, useState, type ComponentProps } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Calendar,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   MapPin,
   Ticket,
   Users,
 } from 'lucide-react'
 
+import { PerformerCarouselModal } from '@/components/customer/PerformerCarouselModal'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
@@ -23,12 +21,6 @@ import type { EventStatus, ShowSummary } from '@/types'
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80'
-const FALLBACK_PERFORMER_IMAGE =
-  'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=400&q=80'
-const PERFORMER_PANEL_MAX_WIDTH = 720
-
-type PerformerFilter = 'all' | 'MAIN' | 'GUEST'
-
 function formatDate(date: string) {
   return new Date(date).toLocaleString('vi-VN', {
     weekday: 'short',
@@ -62,12 +54,6 @@ function canBookShow(show: Pick<ShowSummary, 'status' | 'end_at'>) {
   return show.status === 'LIVE' && new Date(show.end_at).getTime() > Date.now()
 }
 
-function performerRoleLabel(role: PerformerFilter | 'BACKUP') {
-  if (role === 'MAIN') return 'Main'
-  if (role === 'GUEST') return 'Guest'
-  return 'Backup'
-}
-
 export default function EventDetail() {
   const { eventKey } = useParams<{ eventKey: string }>()
   const navigate = useNavigate()
@@ -77,18 +63,6 @@ export default function EventDetail() {
   const [flashNotice, setFlashNotice] = useState<FlashNotice | null>(null)
   const [checkingQueueShowId, setCheckingQueueShowId] = useState<number | null>(null)
   const [activePerformerShowId, setActivePerformerShowId] = useState<number | null>(null)
-  const [activePerformerFilter, setActivePerformerFilter] = useState<PerformerFilter>('all')
-  const [performerPanelPosition, setPerformerPanelPosition] = useState({
-    top: 88,
-    left: 12,
-    width: PERFORMER_PANEL_MAX_WIDTH,
-  })
-
-  const showSectionRef = useRef<HTMLDivElement | null>(null)
-  const showCardRefs = useRef<Record<number, HTMLDivElement | null>>({})
-  const showButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({})
-  const performerPanelRef = useRef<HTMLDivElement | null>(null)
-  const performerStripRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     setFlashNotice(flashNoticeStorage.consume())
@@ -96,88 +70,12 @@ export default function EventDetail() {
 
   useEffect(() => {
     setActivePerformerShowId(null)
-    setActivePerformerFilter('all')
   }, [eventKey])
 
   const activePerformerShow = useMemo(
     () => event?.shows.find((show) => show.id === activePerformerShowId) ?? null,
     [activePerformerShowId, event],
   )
-
-  const filteredPerformers = useMemo(() => {
-    if (!activePerformerShow) return []
-    if (activePerformerFilter === 'all') return activePerformerShow.performers
-    return activePerformerShow.performers.filter((performer) => performer.role === activePerformerFilter)
-  }, [activePerformerFilter, activePerformerShow])
-
-  const updatePerformerPanelPosition = useCallback((showId: number) => {
-    const sectionNode = showSectionRef.current
-    const cardNode = showCardRefs.current[showId]
-    if (!sectionNode || !cardNode) return
-
-    const sectionRect = sectionNode.getBoundingClientRect()
-    const cardRect = cardNode.getBoundingClientRect()
-    const sectionWidth = sectionRect.width
-    const horizontalPadding = sectionWidth < 768 ? 12 : 18
-    const panelWidth = Math.min(PERFORMER_PANEL_MAX_WIDTH, Math.max(sectionWidth - horizontalPadding * 2, 300))
-    const rawLeft = cardRect.left - sectionRect.left + cardRect.width / 2 - panelWidth / 2
-    const maxLeft = Math.max(sectionWidth - panelWidth - horizontalPadding, horizontalPadding)
-    const left = Math.min(Math.max(rawLeft, horizontalPadding), maxLeft)
-    const top = Math.max(cardRect.top - sectionRect.top + 80, 88)
-
-    setPerformerPanelPosition({ top, left, width: panelWidth })
-  }, [])
-
-  const togglePerformerPanel = useCallback((showId: number) => {
-    setActivePerformerFilter('all')
-    setActivePerformerShowId((previous) => (previous === showId ? null : showId))
-  }, [])
-
-  const scrollPerformerStrip = useCallback((direction: 'left' | 'right') => {
-    const node = performerStripRef.current
-    if (!node) return
-    node.scrollBy({ left: direction === 'left' ? -240 : 240, behavior: 'smooth' })
-  }, [])
-
-  const handlePerformerStripWheel = useCallback((eventValue: WheelEvent<HTMLDivElement>) => {
-    const node = performerStripRef.current
-    if (!node) return
-    if (node.scrollWidth <= node.clientWidth) return
-    if (Math.abs(eventValue.deltaY) <= Math.abs(eventValue.deltaX)) return
-
-    eventValue.preventDefault()
-    node.scrollBy({ left: eventValue.deltaY, behavior: 'auto' })
-  }, [])
-
-  useEffect(() => {
-    if (!activePerformerShowId) return
-
-    const updatePosition = () => updatePerformerPanelPosition(activePerformerShowId)
-    updatePosition()
-
-    const handleEscape = (eventValue: KeyboardEvent) => {
-      if (eventValue.key === 'Escape') {
-        setActivePerformerShowId(null)
-      }
-    }
-
-    const handlePointerDown = (eventValue: PointerEvent) => {
-      const target = eventValue.target as Node | null
-      if (!target) return
-      if (performerPanelRef.current?.contains(target)) return
-      if (Object.values(showButtonRefs.current).some((button) => button?.contains(target))) return
-      setActivePerformerShowId(null)
-    }
-
-    window.addEventListener('resize', updatePosition)
-    document.addEventListener('keydown', handleEscape)
-    document.addEventListener('pointerdown', handlePointerDown)
-    return () => {
-      window.removeEventListener('resize', updatePosition)
-      document.removeEventListener('keydown', handleEscape)
-      document.removeEventListener('pointerdown', handlePointerDown)
-    }
-  }, [activePerformerShowId, updatePerformerPanelPosition])
 
   const handleBookShow = async (showId: number) => {
     if (!isAuthenticated) {
@@ -261,8 +159,7 @@ export default function EventDetail() {
 
           <div
             id="shows"
-            ref={showSectionRef}
-            className="relative overflow-visible rounded-xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6"
+            className="rounded-xl border border-[var(--customer-bg-opp)] customer-bg-surface p-6"
           >
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-xl font-bold customer-text-body">Show diễn</h2>
@@ -273,16 +170,13 @@ export default function EventDetail() {
               <p className="text-sm text-gray-500">Sự kiện này chưa có show mở bán.</p>
             ) : (
               <>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4">
                   {event.shows.map((show) => {
                     const isBookable = canBookShow(show)
 
                     return (
                       <div
                         key={show.id}
-                        ref={(node) => {
-                          showCardRefs.current[show.id] = node
-                        }}
                         className="rounded-lg border border-white/10 customer-bg-page p-4"
                       >
                         <div className="mb-2 flex items-start justify-between gap-3">
@@ -296,11 +190,8 @@ export default function EventDetail() {
                             {show.performers.length > 0 ? (
                               <button
                                 type="button"
-                                ref={(node) => {
-                                  showButtonRefs.current[show.id] = node
-                                }}
-                                onClick={() => togglePerformerPanel(show.id)}
-                                className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10"
+                                onClick={() => setActivePerformerShowId(show.id)}
+                                className="inline-flex items-center gap-2 rounded-lg border border-[var(--customer-border)] px-3 py-2 text-sm customer-text-body transition hover:bg-[var(--customer-bg-soft)]"
                               >
                                 <Users className="h-4 w-4" />
                                 Nghệ sĩ
@@ -341,95 +232,6 @@ export default function EventDetail() {
                   })}
                 </div>
 
-                {activePerformerShow ? (
-                  <div
-                    ref={performerPanelRef}
-                    className="absolute z-20 overflow-hidden rounded-2xl border border-white/12 bg-[color:color-mix(in_srgb,var(--customer-bg-surface-strong)_82%,black)] shadow-2xl backdrop-blur-xl"
-                    style={{
-                      top: performerPanelPosition.top,
-                      left: performerPanelPosition.left,
-                      width: performerPanelPosition.width,
-                      maxWidth: 'calc(100% - 24px)',
-                    }}
-                  >
-                    <div className="border-b border-white/10 px-4 py-4 sm:px-5">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Lineup công khai</p>
-                          <h3 className="mt-2 text-lg font-semibold text-white">{activePerformerShow.title}</h3>
-                        </div>
-                        <div className="relative min-w-[124px]">
-                          <select
-                            value={activePerformerFilter}
-                            onChange={(eventValue) => setActivePerformerFilter(eventValue.target.value as PerformerFilter)}
-                            className="h-10 w-full appearance-none rounded-lg border border-white/10 bg-[var(--customer-bg-page)] px-3 pr-10 text-sm customer-text-body outline-none transition focus:border-[var(--customer-bg-opt)] focus:ring-1 focus:ring-[var(--customer-bg-opt)]"
-                            aria-label="Lọc lineup nghệ sĩ"
-                          >
-                            <option value="all">Tất cả</option>
-                            <option value="MAIN">Main</option>
-                            <option value="GUEST">Guest</option>
-                          </select>
-                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="relative px-12 py-5 sm:px-14">
-                      {filteredPerformers.length > 1 ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => scrollPerformerStrip('left')}
-                            className="absolute left-3 top-1/2 z-10 inline-flex h-10 min-w-11 -translate-y-1/2 items-center justify-center px-3 text-slate-300 transition hover:text-white"
-                            aria-label="Cuộn danh sách nghệ sĩ sang trái"
-                          >
-                            <ChevronLeft className="h-5 w-5 stroke-[1.6]" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => scrollPerformerStrip('right')}
-                            className="absolute right-3 top-1/2 z-10 inline-flex h-10 min-w-11 -translate-y-1/2 items-center justify-center px-3 text-slate-300 transition hover:text-white"
-                            aria-label="Cuộn danh sách nghệ sĩ sang phải"
-                          >
-                            <ChevronRight className="h-5 w-5 stroke-[1.6]" />
-                          </button>
-                        </>
-                      ) : null}
-
-                      {filteredPerformers.length === 0 ? (
-                        <div className="rounded-xl border border-white/8 bg-white/5 px-4 py-8 text-center text-sm text-slate-400">
-                          Không có nghệ sĩ thuộc nhóm này trong lineup công khai.
-                        </div>
-                      ) : (
-                        <div
-                          ref={performerStripRef}
-                          onWheel={handlePerformerStripWheel}
-                          className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                        >
-                          {filteredPerformers.map((performer) => (
-                            <article
-                              key={`${activePerformerShow.id}-${performer.performer_id}-${performer.role}`}
-                              className="w-[158px] shrink-0 snap-start rounded-xl border border-white/10 bg-black/20 p-3"
-                            >
-                              <img
-                                src={performer.image_url || FALLBACK_PERFORMER_IMAGE}
-                                alt={performer.stage_name}
-                                className="h-28 w-full rounded-lg object-cover"
-                              />
-                              <p className="mt-3 line-clamp-2 font-semibold text-white">{performer.stage_name}</p>
-                              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">
-                                {performerRoleLabel(performer.role)}
-                              </p>
-                              {performer.artist_type ? (
-                                <p className="mt-2 line-clamp-2 text-xs text-slate-500">{performer.artist_type}</p>
-                              ) : null}
-                            </article>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
               </>
             )}
           </div>
@@ -473,6 +275,10 @@ export default function EventDetail() {
           </div>
         </aside>
       </main>
+
+      {activePerformerShow ? (
+        <PerformerCarouselModal show={activePerformerShow} onClose={() => setActivePerformerShowId(null)} />
+      ) : null}
     </div>
   )
 }

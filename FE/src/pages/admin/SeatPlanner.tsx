@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { adminApi, eventApi, extractApiErrorMessage, seatmapApi } from '@/lib/api'
-import type { Seat, SeatMapPolygon, SeatMapResponse, SeatMapSeat, SeatZone, SeatMatrixResponse, ShowDetail } from '@/types'
+import type { Seat, SeatMapPolygon, SeatMapResponse, SeatMapSeat, TicketTier, SeatMatrixResponse, ShowDetail } from '@/types'
 
 const DEFAULT_SINGLE_FORM = {
     seat_label: '',
@@ -45,10 +45,10 @@ const DEFAULT_POLYGON_FORM = {
 const DEFAULT_ZONE_FORM = {
     code: '',
     name: '',
-    row_count: '1',
-    seats_per_row: '1',
-    price: '0',
+    description: '',
+    base_price: '0',
     color: '#ef4444',
+    is_active: true,
 }
 
 function computeCentroid(points: { x: number; y: number }[]) {
@@ -59,14 +59,14 @@ function computeCentroid(points: { x: number; y: number }[]) {
     }
 }
 
-function zoneFormFromZone(zone: SeatZone) {
+function zoneFormFromZone(zone: TicketTier) {
     return {
         code: zone.code,
         name: zone.name,
-        row_count: String(zone.row_count),
-        seats_per_row: String(zone.seats_per_row),
-        price: String(zone.price),
+        description: zone.description ?? '',
+        base_price: String(zone.base_price),
         color: zone.color,
+        is_active: zone.is_active,
     }
 }
 
@@ -100,7 +100,7 @@ export default function AdminSeatPlanner() {
     const [showDetail, setShowDetail] = useState<ShowDetail | null>(null)
     const [matrix, setMatrix] = useState<SeatMatrixResponse | null>(null)
     const [seatMap, setSeatMap] = useState<SeatMapResponse | null>(null)
-    const [zones, setZones] = useState<SeatZone[]>([])
+    const [zones, setZones] = useState<TicketTier[]>([])
     const [loading, setLoading] = useState(true)
     const [busySingle, setBusySingle] = useState(false)
     const [busyBulk] = useState(false)
@@ -159,7 +159,6 @@ export default function AdminSeatPlanner() {
     }, [seatMap?.seats])
     const selectedSeat = useMemo(() => seatMap?.seats.find((seat) => seat.id === selectedSeatIds[0]) ?? null, [seatMap?.seats, selectedSeatIds])
     const canEditPolygons = zones.length > 0
-    const canCreateInitialZone = showDetail?.venue_layout_id == null
     const seatPositionMap = useMemo(() => {
         const next = new Map<number, { x: number; y: number }>()
         seatMap?.seats.forEach((seat) => {
@@ -261,7 +260,7 @@ export default function AdminSeatPlanner() {
         setDraftPolygonPoints(polygon.points.map((point) => ({ x: point.x, y: point.y })))
     }
 
-    function startEditZone(zone: SeatZone) {
+    function startEditZone(zone: TicketTier) {
         setEditingZoneId(zone.id)
         setSelectedZoneId(zone.id)
         setZoneForm(zoneFormFromZone(zone))
@@ -290,10 +289,15 @@ export default function AdminSeatPlanner() {
     async function handleSaveZone() {
         if (!eventKey || !showId) return
         if (!zoneForm.code.trim() || !zoneForm.name.trim()) {
-            pushNotice('error', 'Zone cần có code và tên.')
+            pushNotice('error', 'Hạng vé cần có mã và tên.')
             return
         }
-        if (plannerDirty && !window.confirm('Lưu zone sẽ tải lại planner. Các thay đổi ghế chưa lưu sẽ bị mất. Tiếp tục?')) {
+        const basePrice = Number(zoneForm.base_price)
+        if (!Number.isFinite(basePrice) || basePrice <= 0) {
+            pushNotice('error', 'Giá cơ bản của hạng vé phải lớn hơn 0.')
+            return
+        }
+        if (plannerDirty && !window.confirm('Lưu hạng vé sẽ tải lại planner. Các thay đổi ghế chưa lưu sẽ bị mất. Tiếp tục?')) {
             return
         }
 
@@ -304,19 +308,19 @@ export default function AdminSeatPlanner() {
             const payload = {
                 code: zoneForm.code.trim(),
                 name: zoneForm.name.trim(),
-                row_count: Math.max(1, Number(zoneForm.row_count) || 1),
-                seats_per_row: Math.max(1, Number(zoneForm.seats_per_row) || 1),
-                price: Math.max(0, Number(zoneForm.price) || 0),
+                description: zoneForm.description.trim() || null,
+                base_price: basePrice,
                 color: zoneForm.color.trim() || '#ef4444',
+                is_active: zoneForm.is_active,
             }
             if (editingZoneId) {
-                await adminApi.updateZone(eventKey, showId, editingZoneId, { ...payload, regenerate_seats: false })
-                pushNotice('success', 'Đã cập nhật zone.')
+                await adminApi.updateZone(eventKey, showId, editingZoneId, payload)
+                pushNotice('success', 'Đã cập nhật hạng vé.')
                 await loadData()
                 setSelectedZoneId(editingZoneId)
             } else {
-                const created = await adminApi.createZone(eventKey, showId, { ...payload, generate_seats: false })
-                pushNotice('success', 'Đã tạo zone mới.')
+                const created = await adminApi.createZone(eventKey, showId, payload)
+                pushNotice('success', 'Đã tạo hạng vé mới.')
                 await loadData()
                 setSelectedZoneId(created.id)
                 setSingleForm((previous) => ({ ...previous, zone_id: String(created.id) }))
@@ -324,47 +328,7 @@ export default function AdminSeatPlanner() {
             }
             resetZoneForm()
         } catch (errorValue) {
-            pushNotice('error', extractApiErrorMessage(errorValue, 'Không thể lưu zone.'))
-        } finally {
-            setBusySingle(false)
-        }
-    }
-
-    async function handleCreateInitialZone() {
-        if (!eventKey || !showId) return
-        if (!zoneForm.code.trim() || !zoneForm.name.trim()) {
-            pushNotice('error', 'Zone cần có code và tên.')
-            return
-        }
-        if (!canCreateInitialZone) {
-            pushNotice('error', 'Zone khởi tạo chỉ áp dụng cho show dạng chỗ tự do.')
-            return
-        }
-        if (plannerDirty && !window.confirm('Tạo zone khởi tạo sẽ tải lại planner. Các thay đổi ghế hoặc polygon chưa lưu sẽ bị mất. Tiếp tục?')) {
-            return
-        }
-
-        setBusySingle(true)
-        setError(null)
-        setMessage(null)
-        try {
-            const payload = {
-                code: zoneForm.code.trim(),
-                name: zoneForm.name.trim(),
-                row_count: Math.max(1, Number(zoneForm.row_count) || 1),
-                seats_per_row: Math.max(1, Number(zoneForm.seats_per_row) || 1),
-                price: Math.max(0, Number(zoneForm.price) || 0),
-                color: zoneForm.color.trim() || '#ef4444',
-            }
-            const created = await adminApi.createInitialZone(eventKey, showId, payload)
-            pushNotice('success', 'Đã tạo zone khởi tạo cùng ghế mặc định và polygon bao quanh.')
-            await loadData()
-            setSelectedZoneId(created.id)
-            setSingleForm((previous) => ({ ...previous, zone_id: String(created.id) }))
-            setBulkForm((previous) => ({ ...previous, zone_id: String(created.id) }))
-            resetZoneForm()
-        } catch (errorValue) {
-            pushNotice('error', extractApiErrorMessage(errorValue, 'Không thể tạo zone khởi tạo.'))
+            pushNotice('error', extractApiErrorMessage(errorValue, 'Không thể lưu hạng vé.'))
         } finally {
             setBusySingle(false)
         }
@@ -372,8 +336,8 @@ export default function AdminSeatPlanner() {
 
     async function handleDeleteZone(zoneId: number) {
         if (!eventKey || !showId) return
-        if (!window.confirm('Xóa zone này?')) return
-        if (plannerDirty && !window.confirm('Xóa zone sẽ tải lại planner. Các thay đổi ghế chưa lưu sẽ bị mất. Tiếp tục?')) {
+        if (!window.confirm('Xóa hạng vé này?')) return
+        if (plannerDirty && !window.confirm('Xóa hạng vé sẽ tải lại planner. Các thay đổi ghế chưa lưu sẽ bị mất. Tiếp tục?')) {
             return
         }
 
@@ -382,14 +346,14 @@ export default function AdminSeatPlanner() {
         setMessage(null)
         try {
             await adminApi.deleteZone(eventKey, showId, zoneId)
-            pushNotice('success', 'Đã xóa zone.')
+            pushNotice('success', 'Đã xóa hạng vé.')
             await loadData()
             resetZoneForm()
             if (selectedZoneId === zoneId) {
                 setSelectedZoneId(null)
             }
         } catch (errorValue) {
-            pushNotice('error', extractApiErrorMessage(errorValue, 'Không thể xóa zone.'))
+            pushNotice('error', extractApiErrorMessage(errorValue, 'Không thể xóa hạng vé.'))
         } finally {
             setBusySingle(false)
         }
@@ -604,7 +568,7 @@ export default function AdminSeatPlanner() {
                             zone_name: zone.name,
                             section_id: nextSectionId,
                             section_name: nextSectionName,
-                            price: singleForm.price ? Number(singleForm.price) : zone.price,
+                            price: singleForm.price ? Number(singleForm.price) : zone.base_price,
                             status: singleForm.is_admin_locked ? 'LOCKED' : 'AVAILABLE',
                             lock_expires_at: null,
                             is_locked_by_me: false,
@@ -627,7 +591,7 @@ export default function AdminSeatPlanner() {
                             row_label: '',
                             seat_number: 0,
                             seat_label: created.seat_label,
-                            price: singleForm.price ? Number(singleForm.price) : zone.price,
+                            price: singleForm.price ? Number(singleForm.price) : zone.base_price,
                             status: singleForm.is_admin_locked ? 'LOCKED' : 'AVAILABLE',
                             lock_expires_at: null,
                             is_locked_by_me: false,
@@ -661,7 +625,7 @@ export default function AdminSeatPlanner() {
                             zone_name: zone.name,
                             section_id: nextSectionId,
                             section_name: nextSectionName,
-                            price: zone.price,
+                            price: zone.base_price,
                             status: 'AVAILABLE' as const,
                             lock_expires_at: null,
                             is_locked_by_me: false,
@@ -684,7 +648,7 @@ export default function AdminSeatPlanner() {
                             row_label: '',
                             seat_number: 0,
                             seat_label: seat.seat_label,
-                            price: zone.price,
+                            price: zone.base_price,
                             status: 'AVAILABLE' as const,
                             lock_expires_at: null,
                             is_locked_by_me: false,
@@ -721,7 +685,7 @@ export default function AdminSeatPlanner() {
                                     zone_name: zone.name,
                                     section_id: nextSectionId,
                                     section_name: nextSectionName,
-                                    price: singleForm.price ? Number(singleForm.price) : zone.price,
+                                    price: singleForm.price ? Number(singleForm.price) : zone.base_price,
                                     is_admin_locked: singleForm.is_admin_locked,
                                     status: nextStatus,
                                     lock_expires_at: singleForm.is_admin_locked ? null : seat.lock_expires_at,
@@ -741,7 +705,7 @@ export default function AdminSeatPlanner() {
                                     ...seat,
                                     seat_label: singleForm.seat_label.trim(),
                                     zone_id: zone.id,
-                                    price: singleForm.price ? Number(singleForm.price) : zone.price,
+                                    price: singleForm.price ? Number(singleForm.price) : zone.base_price,
                                     is_admin_locked: singleForm.is_admin_locked,
                                     status: nextStatus,
                                     lock_expires_at: singleForm.is_admin_locked ? null : seat.lock_expires_at,
@@ -1050,7 +1014,7 @@ export default function AdminSeatPlanner() {
                                 section_id: nextSectionId ?? seat.section_id,
                                 section_name: nextSectionName ?? seat.section_name,
                                 rotation: Number.isNaN(nextRotation) ? seat.rotation : nextRotation,
-                                price: zone ? zone.price : seat.price,
+                                price: zone ? zone.base_price : seat.price,
                                 is_admin_locked: singleForm.is_admin_locked,
                                 status: seat.status === 'SOLD' ? 'SOLD' : (singleForm.is_admin_locked ? 'LOCKED' : 'AVAILABLE'),
                                 lock_expires_at: singleForm.is_admin_locked ? null : seat.lock_expires_at,
@@ -1069,7 +1033,7 @@ export default function AdminSeatPlanner() {
                             ? {
                                 ...seat,
                                 zone_id: zone?.id ?? seat.zone_id,
-                                price: zone ? zone.price : seat.price,
+                                price: zone ? zone.base_price : seat.price,
                                 is_admin_locked: singleForm.is_admin_locked,
                                 status: seat.status === 'SOLD' ? 'SOLD' : (singleForm.is_admin_locked ? 'LOCKED' : 'AVAILABLE'),
                                 lock_expires_at: singleForm.is_admin_locked ? null : seat.lock_expires_at,
@@ -1548,7 +1512,7 @@ export default function AdminSeatPlanner() {
                                         key={seat.id}
                                         type="button"
                                         onMouseDown={(event) => handleSeatPointerDown(event, seat)}
-                                        onMouseEnter={(event) => setTooltip({ x: event.clientX, y: event.clientY, content: `${seat.label} · ${seat.zone_name ?? seat.section_name ?? 'Chưa gán khu'} · ${seat.is_admin_locked ? 'Admin khóa' : Number(seat.price).toLocaleString('vi-VN')}` })}
+                                        onMouseEnter={(event) => setTooltip({ x: event.clientX, y: event.clientY, content: `${seat.label} · ${seat.zone_name ?? seat.section_name ?? 'Chưa gán hạng vé'} · ${seat.is_admin_locked ? 'Admin khóa' : Number(seat.price).toLocaleString('vi-VN')}` })}
                                         onMouseMove={(event) => setTooltip((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current)}
                                         onMouseLeave={() => setTooltip(null)}
                                         className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-lg ${seatColor(seat)}`}
@@ -1589,46 +1553,46 @@ export default function AdminSeatPlanner() {
                 <Card className="hidden bg-space-900/90 border-white/10 xl:block">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 customer-text-body">
-                            <MapPin className="h-5 w-5 text-sky-400" /> Zone management
+                            <MapPin className="h-5 w-5 text-sky-400" /> Quản lý hạng vé
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Code</label>
+                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Mã hạng</label>
                                 <Input value={zoneForm.code} onChange={(event) => setZoneForm({ ...zoneForm, code: event.target.value })} placeholder="VIP-A" />
                             </div>
                             <div>
-                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Tên zone</label>
-                                <Input value={zoneForm.name} onChange={(event) => setZoneForm({ ...zoneForm, name: event.target.value })} placeholder="Khu A" />
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-3">
-                            <div>
-                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Rows</label>
-                                <Input type="number" min={1} value={zoneForm.row_count} onChange={(event) => setZoneForm({ ...zoneForm, row_count: event.target.value })} />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Seats / row</label>
-                                <Input type="number" min={1} value={zoneForm.seats_per_row} onChange={(event) => setZoneForm({ ...zoneForm, seats_per_row: event.target.value })} />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Price</label>
-                                <Input type="number" min={0} step="0.01" value={zoneForm.price} onChange={(event) => setZoneForm({ ...zoneForm, price: event.target.value })} />
+                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Tên hạng vé</label>
+                                <Input value={zoneForm.name} onChange={(event) => setZoneForm({ ...zoneForm, name: event.target.value })} placeholder="VIP" />
                             </div>
                         </div>
                         <div>
-                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Color</label>
-                            <div className="grid grid-cols-[68px_1fr] gap-3">
-                                <input
-                                    type="color"
-                                    value={zoneForm.color}
-                                    onChange={(event) => setZoneForm({ ...zoneForm, color: event.target.value })}
-                                    className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 p-1"
-                                />
-                                <Input value={zoneForm.color} onChange={(event) => setZoneForm({ ...zoneForm, color: event.target.value })} />
+                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Mô tả</label>
+                            <Input value={zoneForm.description} onChange={(event) => setZoneForm({ ...zoneForm, description: event.target.value })} placeholder="Quyền lợi hoặc ghi chú cho hạng vé" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Giá cơ bản</label>
+                                <Input type="number" min={1} step="0.01" value={zoneForm.base_price} onChange={(event) => setZoneForm({ ...zoneForm, base_price: event.target.value })} />
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Màu hiển thị</label>
+                                <div className="grid grid-cols-[52px_1fr] gap-2">
+                                    <input
+                                        type="color"
+                                        value={zoneForm.color}
+                                        onChange={(event) => setZoneForm({ ...zoneForm, color: event.target.value })}
+                                        className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 p-1"
+                                    />
+                                    <Input value={zoneForm.color} onChange={(event) => setZoneForm({ ...zoneForm, color: event.target.value })} />
+                                </div>
                             </div>
                         </div>
+                        <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-500">
+                            <input type="checkbox" checked={zoneForm.is_active} onChange={(event) => setZoneForm({ ...zoneForm, is_active: event.target.checked })} />
+                            Đang hoạt động
+                        </label>
                         <div className="flex gap-2">
                             {editingZoneId && (
                                 <Button variant="outline" onClick={() => resetZoneForm(selectedZoneId)} disabled={busySingle}>
@@ -1636,20 +1600,15 @@ export default function AdminSeatPlanner() {
                                 </Button>
                             )}
                             <Button className="flex-1" onClick={() => void handleSaveZone()} isLoading={busySingle}>
-                                <Save className="h-4 w-4" /> {editingZoneId ? 'Cập nhật zone' : 'Tạo zone'}
+                                <Save className="h-4 w-4" /> {editingZoneId ? 'Cập nhật hạng vé' : 'Tạo hạng vé'}
                             </Button>
                         </div>
-                        {!editingZoneId && (
-                            <Button variant="outline" className="w-full" onClick={() => void handleCreateInitialZone()} disabled={busySingle || !canCreateInitialZone}>
-                                <Wand2 className="h-4 w-4" /> Tạo zone khởi tạo
-                            </Button>
-                        )}
                         <div className="text-xs text-slate-400">
-                            Show chỗ tự do có thể dùng zone khởi tạo để sinh nhanh ghế mặc định và polygon bao quanh. Để tạo stage, hãy tạo zone không sinh ghế rồi vẽ polygon riêng.
+                            Hạng vé xác định mức giá mặc định. Số hàng và số ghế được cấu hình riêng trong công cụ tạo ghế hàng loạt.
                         </div>
                         <div className="space-y-2 border-t border-white/10 pt-3">
                             {zones.length === 0 ? (
-                                <p className="text-sm text-slate-400">Show này chưa có zone. Hãy tạo zone trước khi thêm ghế hoặc polygon.</p>
+                                <p className="text-sm text-slate-400">Show này chưa có hạng vé. Hãy tạo hạng vé trước khi thêm ghế.</p>
                             ) : (
                                 zones.map((zone) => (
                                     <div key={zone.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
@@ -1658,7 +1617,7 @@ export default function AdminSeatPlanner() {
                                                 <span className="h-3 w-3 rounded-full border border-white/20" style={{ backgroundColor: zone.color }} />
                                                 <p className="truncate font-semibold customer-text-body">{zone.name}</p>
                                             </div>
-                                            <p className="text-xs text-slate-400">{zone.code} · {Number(zone.price).toLocaleString('vi-VN')} · {zone.row_count} x {zone.seats_per_row}</p>
+                                            <p className="text-xs text-slate-400">{zone.code} · {Number(zone.base_price).toLocaleString('vi-VN')} · {zone.is_active ? 'Đang hoạt động' : 'Tạm ẩn'}</p>
                                         </div>
                                         <div className="flex gap-1">
                                             <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={() => startEditZone(zone)}>
@@ -1689,7 +1648,7 @@ export default function AdminSeatPlanner() {
                                 <span className="customer-text-body">{showDetail.event_title}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span>Số khu</span>
+                                <span>Số hạng vé</span>
                                 <span className="customer-text-body">{formatSeatCount(matrix.zones.length)}</span>
                             </div>
                             <div className="flex items-center justify-between">
@@ -1697,7 +1656,7 @@ export default function AdminSeatPlanner() {
                                 <span className="customer-text-body">{formatSeatCount(seatMap.seat_count)}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span>Khu đang chọn</span>
+                                <span>Hạng vé đang chọn</span>
                                 <span className="customer-text-body">{currentZone ? `${currentZone.code} · ${currentZone.name}` : 'Chưa chọn'}</span>
                             </div>
                             {selectedSeatIds.length > 1 && (
@@ -1708,15 +1667,15 @@ export default function AdminSeatPlanner() {
                                             {selectedSeat && <p className="text-xs text-slate-400">Ghế đầu tiên: {selectedSeat.label} · X {selectedSeat.x ?? 0}% · Y {selectedSeat.y ?? 0}%</p>}
                                         </div>
                                         <div>
-                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Khu bán vé</label>
+                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Hạng vé</label>
                                             <select
                                                 className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 px-3 customer-text-body outline-none"
                                                 value={singleForm.zone_id}
                                                 onChange={(event) => setSingleForm({ ...singleForm, zone_id: event.target.value })}
                                             >
-                                                <option value="">Giữ nguyên khu hiện tại</option>
+                                                <option value="">Giữ nguyên hạng vé hiện tại</option>
                                                 {zones.map((zone) => (
-                                                    <option key={zone.id} value={zone.id}>
+                                                    <option key={zone.id} value={zone.id} disabled={!zone.is_active}>
                                                         {zone.code} · {zone.name}
                                                     </option>
                                                 ))}
@@ -1754,46 +1713,46 @@ export default function AdminSeatPlanner() {
                     <Card className="bg-space-900/90 border-white/10 xl:hidden">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 customer-text-body">
-                                <MapPin className="h-5 w-5 text-sky-400" /> Zone management
+                                <MapPin className="h-5 w-5 text-sky-400" /> Quản lý hạng vé
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Code</label>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Mã hạng</label>
                                     <Input value={zoneForm.code} onChange={(event) => setZoneForm({ ...zoneForm, code: event.target.value })} placeholder="VIP-A" />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Tên zone</label>
-                                    <Input value={zoneForm.name} onChange={(event) => setZoneForm({ ...zoneForm, name: event.target.value })} placeholder="Khu A" />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-3">
-                                <div>
-                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Rows</label>
-                                    <Input type="number" min={1} value={zoneForm.row_count} onChange={(event) => setZoneForm({ ...zoneForm, row_count: event.target.value })} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Seats / row</label>
-                                    <Input type="number" min={1} value={zoneForm.seats_per_row} onChange={(event) => setZoneForm({ ...zoneForm, seats_per_row: event.target.value })} />
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Price</label>
-                                    <Input type="number" min={0} step="0.01" value={zoneForm.price} onChange={(event) => setZoneForm({ ...zoneForm, price: event.target.value })} />
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Tên hạng vé</label>
+                                    <Input value={zoneForm.name} onChange={(event) => setZoneForm({ ...zoneForm, name: event.target.value })} placeholder="VIP" />
                                 </div>
                             </div>
                             <div>
-                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Color</label>
-                                <div className="grid grid-cols-[68px_1fr] gap-3">
-                                    <input
-                                        type="color"
-                                        value={zoneForm.color}
-                                        onChange={(event) => setZoneForm({ ...zoneForm, color: event.target.value })}
-                                        className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 p-1"
-                                    />
-                                    <Input value={zoneForm.color} onChange={(event) => setZoneForm({ ...zoneForm, color: event.target.value })} />
+                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Mô tả</label>
+                                <Input value={zoneForm.description} onChange={(event) => setZoneForm({ ...zoneForm, description: event.target.value })} placeholder="Quyền lợi hoặc ghi chú cho hạng vé" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Giá cơ bản</label>
+                                    <Input type="number" min={1} step="0.01" value={zoneForm.base_price} onChange={(event) => setZoneForm({ ...zoneForm, base_price: event.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Màu hiển thị</label>
+                                    <div className="grid grid-cols-[52px_1fr] gap-2">
+                                        <input
+                                            type="color"
+                                            value={zoneForm.color}
+                                            onChange={(event) => setZoneForm({ ...zoneForm, color: event.target.value })}
+                                            className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 p-1"
+                                        />
+                                        <Input value={zoneForm.color} onChange={(event) => setZoneForm({ ...zoneForm, color: event.target.value })} />
+                                    </div>
                                 </div>
                             </div>
+                            <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-500">
+                                <input type="checkbox" checked={zoneForm.is_active} onChange={(event) => setZoneForm({ ...zoneForm, is_active: event.target.checked })} />
+                                Đang hoạt động
+                            </label>
                             <div className="flex gap-2">
                                 {editingZoneId && (
                                     <Button variant="outline" onClick={() => resetZoneForm(selectedZoneId)} disabled={busySingle}>
@@ -1801,20 +1760,15 @@ export default function AdminSeatPlanner() {
                                     </Button>
                                 )}
                                 <Button className="flex-1" onClick={() => void handleSaveZone()} isLoading={busySingle}>
-                                    <Save className="h-4 w-4" /> {editingZoneId ? 'Cập nhật zone' : 'Tạo zone'}
+                                    <Save className="h-4 w-4" /> {editingZoneId ? 'Cập nhật hạng vé' : 'Tạo hạng vé'}
                                 </Button>
                             </div>
-                            {!editingZoneId && (
-                                <Button variant="outline" className="w-full" onClick={() => void handleCreateInitialZone()} disabled={busySingle || !canCreateInitialZone}>
-                                    <Wand2 className="h-4 w-4" /> Tạo zone khởi tạo
-                                </Button>
-                            )}
                             <div className="text-xs text-slate-400">
-                                Show chỗ tự do có thể dùng zone khởi tạo để sinh nhanh ghế mặc định và polygon bao quanh. Để tạo stage, hãy tạo zone không sinh ghế rồi vẽ polygon riêng.
+                                Hạng vé xác định mức giá mặc định. Số hàng và số ghế được cấu hình riêng trong công cụ tạo ghế hàng loạt.
                             </div>
                             <div className="space-y-2 border-t border-white/10 pt-3">
                                 {zones.length === 0 ? (
-                                    <p className="text-sm text-slate-400">Show này chưa có zone. Hãy tạo zone trước khi thêm ghế hoặc polygon.</p>
+                                    <p className="text-sm text-slate-400">Show này chưa có hạng vé. Hãy tạo hạng vé trước khi thêm ghế.</p>
                                 ) : (
                                     zones.map((zone) => (
                                         <div key={zone.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
@@ -1823,7 +1777,7 @@ export default function AdminSeatPlanner() {
                                                     <span className="h-3 w-3 rounded-full border border-white/20" style={{ backgroundColor: zone.color }} />
                                                     <p className="truncate font-semibold customer-text-body">{zone.name}</p>
                                                 </div>
-                                                <p className="text-xs text-slate-400">{zone.code} · {Number(zone.price).toLocaleString('vi-VN')} · {zone.row_count} x {zone.seats_per_row}</p>
+                                                <p className="text-xs text-slate-400">{zone.code} · {Number(zone.base_price).toLocaleString('vi-VN')} · {zone.is_active ? 'Đang hoạt động' : 'Tạm ẩn'}</p>
                                             </div>
                                             <div className="flex gap-1">
                                                 <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={() => startEditZone(zone)}>
@@ -1853,15 +1807,15 @@ export default function AdminSeatPlanner() {
                                     <Input placeholder="Ví dụ A1" value={singleForm.seat_label} onChange={(event) => setSingleForm({ ...singleForm, seat_label: event.target.value })} />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Khu bán vé</label>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Hạng vé</label>
                                     <select
                                         className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 px-3 customer-text-body outline-none"
                                         value={singleForm.zone_id}
                                         onChange={(event) => setSingleForm({ ...singleForm, zone_id: event.target.value })}
                                     >
-                                        <option value="">Chọn khu</option>
+                                        <option value="">Chọn hạng vé</option>
                                         {zones.map((zone) => (
-                                            <option key={zone.id} value={zone.id}>
+                                            <option key={zone.id} value={zone.id} disabled={!zone.is_active}>
                                                 {zone.code} · {zone.name}
                                             </option>
                                         ))}
@@ -1917,15 +1871,15 @@ export default function AdminSeatPlanner() {
                         <CardContent className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Khu bán vé</label>
+                                    <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Hạng vé</label>
                                     <select
                                         className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 px-3 customer-text-body outline-none"
                                         value={bulkForm.zone_id}
                                         onChange={(event) => setBulkForm({ ...bulkForm, zone_id: event.target.value })}
                                     >
-                                        <option value="">Chọn khu</option>
+                                        <option value="">Chọn hạng vé</option>
                                         {zones.map((zone) => (
-                                            <option key={zone.id} value={zone.id}>
+                                            <option key={zone.id} value={zone.id} disabled={!zone.is_active}>
                                                 {zone.code} · {zone.name}
                                             </option>
                                         ))}
@@ -2010,15 +1964,15 @@ export default function AdminSeatPlanner() {
                         <CardContent className="space-y-3">
                             <Input placeholder="Tên vùng" value={polygonForm.label} onChange={(event) => setPolygonForm({ ...polygonForm, label: event.target.value })} />
                             <div>
-                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Gán zone</label>
+                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-400">Gán hạng vé</label>
                                 <select
                                     className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 px-3 customer-text-body outline-none"
                                     value={polygonForm.zone_id}
                                     onChange={(event) => setPolygonForm({ ...polygonForm, zone_id: event.target.value })}
                                 >
-                                    <option value="">Chưa gán zone</option>
+                                    <option value="">Chưa gán hạng vé</option>
                                     {zones.map((zone) => (
-                                        <option key={zone.id} value={zone.id}>
+                                        <option key={zone.id} value={zone.id} disabled={!zone.is_active}>
                                             {zone.code} · {zone.name}
                                         </option>
                                     ))}
@@ -2050,7 +2004,7 @@ export default function AdminSeatPlanner() {
                                         <div key={polygon.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                                             <div>
                                                 <p className="font-semibold customer-text-body">{polygon.label || `Vùng #${polygon.id}`}</p>
-                                                <p className="text-xs text-slate-400">{polygon.zone_name ?? polygon.section_name ?? 'Chưa gán zone'} · {polygon.points.length} điểm</p>
+                                                <p className="text-xs text-slate-400">{polygon.zone_name ?? polygon.section_name ?? 'Chưa gán hạng vé'} · {polygon.points.length} điểm</p>
                                             </div>
                                             <div className="flex gap-1">
                                                 <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={() => startEditPolygon(polygon)}>
@@ -2071,7 +2025,7 @@ export default function AdminSeatPlanner() {
 
             <Card className="bg-space-900/90 border-white/10">
                 <CardHeader>
-                    <CardTitle className="customer-text-body">Seat inventory by zone</CardTitle>
+                    <CardTitle className="customer-text-body">Danh sách ghế theo hạng vé</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -2082,9 +2036,9 @@ export default function AdminSeatPlanner() {
                                     <div className="mb-3 flex items-center justify-between gap-3">
                                         <div>
                                             <p className="font-semibold customer-text-body">{zone.name}</p>
-                                            <p className="text-xs text-slate-400">{zone.code} · {Number(zone.price).toLocaleString('vi-VN')}</p>
+                                            <p className="text-xs text-slate-400">{zone.code} · {Number(zone.base_price).toLocaleString('vi-VN')}</p>
                                         </div>
-                                        <span className="text-xs text-slate-400">{zoneSeats.length} seats</span>
+                                        <span className="text-xs text-slate-400">{zoneSeats.length} ghế</span>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         {zoneSeats.slice(0, 20).map((seat) => (
@@ -2092,7 +2046,7 @@ export default function AdminSeatPlanner() {
                                                 {seat.seat_label}
                                             </span>
                                         ))}
-                                        {zoneSeats.length > 20 && <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] text-slate-400">+{zoneSeats.length - 20} more</span>}
+                                        {zoneSeats.length > 20 && <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] text-slate-400">+{zoneSeats.length - 20} ghế khác</span>}
                                     </div>
                                 </div>
                             )

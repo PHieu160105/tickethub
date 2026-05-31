@@ -439,8 +439,14 @@ async def cleanup_expired_queue_entries(session: AsyncSession) -> int:
     return deleted
 
 
-def get_waiting_queue_user_count() -> int:
-    return sum(1 for show_entries in _runtime_queue.values() for entry in show_entries.values() if entry.status == QueueStatus.WAITING)
+def get_waiting_queue_user_count(show_ids: set[int] | None = None) -> int:
+    return sum(
+        1
+        for show_id, show_entries in _runtime_queue.items()
+        if show_ids is None or show_id in show_ids
+        for entry in show_entries.values()
+        if entry.status == QueueStatus.WAITING
+    )
 
 
 async def expire_active_show_queue_entries(show_id: int) -> int:

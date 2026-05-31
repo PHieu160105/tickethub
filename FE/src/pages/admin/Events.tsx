@@ -33,15 +33,15 @@ interface ShowFormState {
   status: EventStatus
   hold_minutes: string
   seat_source: SeatSource
-  create_seed_zone: boolean
+  create_seed_tier: boolean
   venue_id: string
   venue_layout_id: string
-  zone_code: string
-  zone_name: string
-  row_count: string
-  seats_per_row: string
-  zone_price: string
-  zone_color: string
+  tier_code: string
+  tier_name: string
+  tier_description: string
+  tier_base_price: string
+  tier_color: string
+  tier_is_active: boolean
 }
 
 const EVENT_CATEGORY_OPTIONS = [
@@ -76,15 +76,15 @@ const INITIAL_SHOW_FORM: ShowFormState = {
 
   hold_minutes: '10',
   seat_source: 'FREE_FORM',
-  create_seed_zone: false,
+  create_seed_tier: false,
   venue_id: '',
   venue_layout_id: '',
-  zone_code: 'A',
-  zone_name: 'Khu tiêu chuẩn',
-  row_count: '10',
-  seats_per_row: '20',
-  zone_price: '500000',
-  zone_color: '#024ddf',
+  tier_code: 'GA',
+  tier_name: 'Phổ thông',
+  tier_description: '',
+  tier_base_price: '500000',
+  tier_color: '#024ddf',
+  tier_is_active: true,
 }
 
 const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh'
@@ -399,16 +399,16 @@ export default function AdminEvents() {
       end_time: formatVietnamTimeInput(detail.end_at),
       status: detail.status,
       seat_source: detail.seat_source,
-      create_seed_zone: false,
+      create_seed_tier: false,
       venue_id: '',
       venue_layout_id: detail.venue_layout_id ? String(detail.venue_layout_id) : '',
       hold_minutes: String(detail.hold_minutes),
-      zone_code: 'A',
-      zone_name: 'Khu tiêu chuẩn',
-      row_count: '10',
-      seats_per_row: '20',
-      zone_price: '500000',
-      zone_color: '#024ddf',
+      tier_code: 'GA',
+      tier_name: 'Phổ thông',
+      tier_description: '',
+      tier_base_price: '500000',
+      tier_color: '#024ddf',
+      tier_is_active: true,
     }
 
     setShowForm(nextForm)
@@ -471,8 +471,8 @@ export default function AdminEvents() {
       setFormError('Vui lòng chọn venue và layout cho show này.')
       return
     }
-    if (showForm.seat_source === 'FREE_FORM' && !editingShow && showForm.create_seed_zone && (!showForm.zone_code || !showForm.zone_name)) {
-      setFormError('Vui lòng cấu hình zone khởi tạo cho show chọn chỗ tự do.')
+    if (showForm.seat_source === 'FREE_FORM' && !editingShow && showForm.create_seed_tier && (!showForm.tier_code || !showForm.tier_name)) {
+      setFormError('Vui lòng cấu hình hạng vé ban đầu cho show chọn chỗ tự do.')
       return
     }
 
@@ -500,16 +500,15 @@ export default function AdminEvents() {
                 zones: [],
               }
             : {
-                zones: showForm.create_seed_zone
+                zones: showForm.create_seed_tier
                   ? [
                       {
-                        code: showForm.zone_code,
-                        name: showForm.zone_name,
-                        row_count: Number(showForm.row_count),
-                        seats_per_row: Number(showForm.seats_per_row),
-                        price: Number(showForm.zone_price),
-                        color: showForm.zone_color,
-                        generate_seats: true,
+                        code: showForm.tier_code,
+                        name: showForm.tier_name,
+                        description: showForm.tier_description || null,
+                        base_price: Number(showForm.tier_base_price),
+                        color: showForm.tier_color,
+                        is_active: showForm.tier_is_active,
                       },
                     ]
                   : [],
@@ -913,49 +912,49 @@ export default function AdminEvents() {
                   <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
                     <input
                       type="checkbox"
-                      checked={showForm.create_seed_zone}
-                      onChange={(event) => setShowForm((prev) => ({ ...prev, create_seed_zone: event.target.checked }))}
+                      checked={showForm.create_seed_tier}
+                      onChange={(event) => setShowForm((prev) => ({ ...prev, create_seed_tier: event.target.checked }))}
                     />
-                    Tạo zone mẫu khi khởi tạo show
+                    Tạo hạng vé ban đầu
                   </label>
-                  {showForm.create_seed_zone && (
+                  {showForm.create_seed_tier && (
                     <>
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-gray-300">Zone code</label>
-                      <Input className="text-white" value={showForm.zone_code} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_code: event.target.value }))} />
+                      <label className="mb-2 block text-sm font-medium text-gray-300">Mã hạng vé</label>
+                      <Input className="text-white" value={showForm.tier_code} onChange={(event) => setShowForm((prev) => ({ ...prev, tier_code: event.target.value }))} />
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-gray-300">Tên khu</label>
-                      <Input className="text-white" value={showForm.zone_name} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_name: event.target.value }))} />
-                    </div>
-                  </div>
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-gray-300">Rows</label>
-                      <Input className="text-white" type="number" min={1} value={showForm.row_count} onChange={(event) => setShowForm((prev) => ({ ...prev, row_count: event.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-gray-300">Seats / row</label>
-                      <Input className="text-white" type="number" min={1} value={showForm.seats_per_row} onChange={(event) => setShowForm((prev) => ({ ...prev, seats_per_row: event.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-gray-300">Price</label>
-                      <Input className="text-white" type="number" min={1} value={showForm.zone_price} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_price: event.target.value }))} />
+                      <label className="mb-2 block text-sm font-medium text-gray-300">Tên hạng vé</label>
+                      <Input className="text-white" value={showForm.tier_name} onChange={(event) => setShowForm((prev) => ({ ...prev, tier_name: event.target.value }))} />
                     </div>
                   </div>
                       <div>
-                        <label className="mb-2 block text-sm font-medium text-gray-300">Zone color</label>
+                        <label className="mb-2 block text-sm font-medium text-gray-300">Mô tả</label>
+                        <Input className="text-white" value={showForm.tier_description} onChange={(event) => setShowForm((prev) => ({ ...prev, tier_description: event.target.value }))} />
+                      </div>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-gray-300">Giá cơ bản</label>
+                      <Input className="text-white" type="number" min={1} value={showForm.tier_base_price} onChange={(event) => setShowForm((prev) => ({ ...prev, tier_base_price: event.target.value }))} />
+                    </div>
+                    <div>
+                        <label className="mb-2 block text-sm font-medium text-gray-300">Màu hiển thị</label>
                         <div className="grid grid-cols-[68px_1fr] gap-3">
                           <input
                             type="color"
-                            value={showForm.zone_color}
-                            onChange={(event) => setShowForm((prev) => ({ ...prev, zone_color: event.target.value }))}
+                            value={showForm.tier_color}
+                            onChange={(event) => setShowForm((prev) => ({ ...prev, tier_color: event.target.value }))}
                             className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 p-1"
                           />
-                          <Input className="text-white" value={showForm.zone_color} onChange={(event) => setShowForm((prev) => ({ ...prev, zone_color: event.target.value }))} />
+                          <Input className="text-white" value={showForm.tier_color} onChange={(event) => setShowForm((prev) => ({ ...prev, tier_color: event.target.value }))} />
                         </div>
                       </div>
+                  </div>
+                      <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+                        <input type="checkbox" checked={showForm.tier_is_active} onChange={(event) => setShowForm((prev) => ({ ...prev, tier_is_active: event.target.checked }))} />
+                        Hạng vé đang hoạt động
+                      </label>
                     </>
                   )}
                 </div>

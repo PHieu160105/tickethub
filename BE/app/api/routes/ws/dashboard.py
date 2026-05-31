@@ -17,8 +17,8 @@ async def admin_dashboard_ws(websocket: WebSocket, token: str | None = None) -> 
         return
 
     user = await resolve_ws_user(token)
-    if not user or user.user_type not in {UserType.EVENT_STAFF, UserType.SYSTEM_ADMIN}:
-        await websocket.close(code=1008, reason="Yeu cau quyen admin")
+    if not user or user.user_type != UserType.SYSTEM_ADMIN:
+        await websocket.close(code=1008, reason="Yeu cau quyen system admin")
         return
 
     connected = await admin_ws_manager.connect(user.id, websocket)

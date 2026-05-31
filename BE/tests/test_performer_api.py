@@ -314,3 +314,33 @@ async def test_admin_performer_suggest_returns_saved_performer(db_session, admin
     data = response.json()
     assert data
     assert data[0]["stage_name"] == "Main Suggest"
+
+
+@pytest.mark.asyncio
+async def test_admin_can_upload_performer_image(db_session, admin_user):
+    """Endpoint upload anh performer phai nhan multipart va tra data URL."""
+
+    async with await _override_admin_client(db_session, admin_user) as client:
+        try:
+            response = await client.post(
+                "/api/admin/performers/upload-image",
+                files={"file": ("artist.png", b"\x89PNG\r\n\x1a\n" + b"x" * 16, "image/png")},
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["image_url"].startswith("data:image/png;base64,")
+
+
+def test_performer_payload_accepts_data_url_larger_than_old_two_mb_limit():
+    """Schema luu lineup phai chap nhan data URL cua anh hop le da upload."""
+
+    payload = ShowPerformerUpsertRequest(
+        stage_name="Main With Image",
+        image_url="data:image/png;base64," + "x" * 2_100_000,
+        role=PerformerRole.MAIN,
+    )
+
+    assert payload.image_url is not None
+    assert len(payload.image_url) > 2_000_000
