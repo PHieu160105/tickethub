@@ -26,7 +26,7 @@ function isRecoverableQueueTokenError(error: unknown): boolean {
   }
 
   const statusCode = error.response?.status
-  return statusCode === 403 || statusCode === 404 || statusCode === 410 || statusCode === 429
+  return statusCode === 403 || statusCode === 404 || statusCode === 410
 }
 
 function isShowUnavailableError(error: unknown): boolean {
