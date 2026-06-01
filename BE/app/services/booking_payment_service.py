@@ -26,6 +26,7 @@ from app.services.booking_service import (
 from app.services.dashboard_service import broadcast_dashboard_update
 from app.services.event_inventory_service import sync_show_ticket_inventory
 from app.services.queue_service import ensure_queue_access, mark_queue_completed
+from app.services.ticket_delivery_service import dispatch_paid_order_tickets
 from app.services.vnpay_service import VNPayTransactionStatusResult, get_vnpay_service
 from app.ws.connection_manager import seat_ws_manager
 
@@ -175,7 +176,7 @@ async def _finalize_paid_order(
 
     for ticket in tickets:
         ticket_code = f"TR-{now.strftime('%Y%m%d')}-{uuid4().hex[:12].upper()}"
-        qr_payload = f"ticketrush://ticket/{ticket_code}"
+        qr_payload = f"tickethub://ticket/{ticket_code}"
         ticket.ticket_code = ticket_code
         ticket.qr_payload = qr_payload
         ticket.issued_at = now
@@ -202,6 +203,8 @@ async def _finalize_paid_order(
     await session.commit()
 
     await _apply_order_side_effects(show_id=order.show_id, user_id=order.customer_id, changed_tickets=changed_tickets)
+    paid_items = await _build_paid_items(session, order.id)
+    await dispatch_paid_order_tickets(session, order=order, items=paid_items)
     return await build_order_status_response(session, order.customer_id, order.id)
 
 

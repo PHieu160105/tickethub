@@ -34,7 +34,7 @@ Lưu ý:
 ## 2) Tài khoản seed mặc định
 - Admin: `admin@ticketrush.com` / `Admin@123`
 - Customer: `customer@ticketrush.com` / `Customer@123`
-- VNPay test: 9704198526191432198 - NGUYEN VAN A - 07/15 - 123456
+- VNPay test: NCB bank - 9704198526191432198 - NGUYEN VAN A - 07/15 - 123456
 
 ## 3) Chạy local từng phần
 
