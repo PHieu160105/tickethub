@@ -1,5 +1,5 @@
 import { api, withRetry } from '../../../lib/api'
-import type { ApiMessage, CheckoutResponse, LockSeatResponse, TicketItem } from '../../../types'
+import type { ApiMessage, CheckoutResponse, LockSeatResponse, OrderStatusResponse, TicketItem } from '../../../types'
 
 export interface LockSeatsPayload {
   show_id: number
@@ -15,7 +15,9 @@ export interface ReleaseSeatsPayload {
 export interface CheckoutPayload {
   show_id: number
   queue_token?: string
-  discount_code?: string
+  buyer_name: string
+  buyer_email: string
+  buyer_phone: string
 }
 
 export interface MyTicketsParams {
@@ -49,8 +51,15 @@ export const bookingApi = {
     const response = await api.post<CheckoutResponse>('/bookings/checkout', {
       show_id: payload.show_id,
       queue_token: payload.queue_token,
-      discount_code: payload.discount_code,
+      buyer_name: payload.buyer_name,
+      buyer_email: payload.buyer_email,
+      buyer_phone: payload.buyer_phone,
     })
+    return response.data
+  },
+
+  async getOrderStatus(orderId: number): Promise<OrderStatusResponse> {
+    const response = await api.get<OrderStatusResponse>(`/bookings/orders/${orderId}`)
     return response.data
   },
 

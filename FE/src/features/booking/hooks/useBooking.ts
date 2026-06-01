@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { TicketItem } from '../../../types'
-import { bookingApi } from '../api/bookingApi'
+import { bookingApi, type CheckoutPayload } from '../api/bookingApi'
 
 interface UseBookingState {
   isLoading: boolean
@@ -63,10 +63,10 @@ export function useCheckout() {
     error: null,
   })
 
-  const checkout = useCallback(async (showId: number, queueToken?: string, discountCode?: string) => {
+  const checkout = useCallback(async (payload: CheckoutPayload) => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }))
     try {
-      const response = await bookingApi.checkout({ show_id: showId, queue_token: queueToken, discount_code: discountCode })
+      const response = await bookingApi.checkout(payload)
       setState({ isLoading: false, error: null })
       return response
     } catch (error) {

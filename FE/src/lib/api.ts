@@ -8,6 +8,7 @@ import type {
   AdminEventUpdatePayload,
   AdminShowPerformer,
   AdminEventRevenueItem,
+  AdminTicketTransactionHistory,
   AudienceDistribution,
   AuthResponse,
   CheckoutResponse,
@@ -463,6 +464,9 @@ export const adminApi = {
   },
   async ticketSales(params?: { event_id?: number; status_filter?: string; limit?: number; offset?: number }) {
     return withRetry(() => api.get<PaginatedAdminTicketSalesResponse>('/admin/tickets/sales', { params }))
+  },
+  async ticketTransactionHistory(ticketId: number) {
+    return withRetry(() => api.get<AdminTicketTransactionHistory>(`/admin/tickets/sales/${ticketId}/transaction-history`))
   },
   async revenueByEvent() {
     return withRetry(() => api.get<AdminEventRevenueItem[]>('/admin/tickets/revenue-by-show'))

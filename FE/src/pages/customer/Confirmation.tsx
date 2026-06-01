@@ -73,7 +73,7 @@ export default function Confirmation() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Thanh toán lúc</span>
-                  <span>{new Date(order.paid_at).toLocaleString('vi-VN')}</span>
+                  <span>{order.paid_at ? new Date(order.paid_at).toLocaleString('vi-VN') : '-'}</span>
                 </div>
               </div>
             </div>

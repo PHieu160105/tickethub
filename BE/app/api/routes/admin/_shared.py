@@ -60,6 +60,7 @@ async def _interrupt_active_show_sessions(session: AsyncSession, show: Show) -> 
         ticket.status = SeatStatus.AVAILABLE
         ticket.locked_by_customer_id = None
         ticket.lock_expires_at = None
+        ticket.order_id = None
         changed_seats.append(
             {
                 "id": ticket.id,

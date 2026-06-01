@@ -185,6 +185,7 @@ async def release_seats(session: AsyncSession, user_id: int, show_id: int, seat_
             ticket.status = SeatStatus.AVAILABLE
             ticket.locked_by_customer_id = None
             ticket.lock_expires_at = None
+            ticket.order_id = None
             _sync_legacy_seat_from_ticket(ticket)
             count += 1
             changed_tickets.append(_ticket_change_payload(ticket))
@@ -401,6 +402,7 @@ async def release_expired_locks(session: AsyncSession) -> dict[int, list[dict[st
             ticket.status = SeatStatus.AVAILABLE
             ticket.locked_by_customer_id = None
             ticket.lock_expires_at = None
+            ticket.order_id = None
             _sync_legacy_seat_from_ticket(ticket)
             show_payloads.setdefault(ticket.show_id or 0, []).append(_ticket_change_payload(ticket))
         await session.commit()

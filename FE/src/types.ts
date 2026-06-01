@@ -333,11 +333,26 @@ export interface CheckoutItem {
 
 export interface CheckoutResponse {
   order_id: number
-  order_status: 'PENDING' | 'PAID' | 'CANCELLED'
+  order_status: 'PENDING_PAYMENT' | 'PAID' | 'PAYMENT_FAILED' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED' | 'REFUND_FAILED'
   total_amount: number
-  discount_amount?: number
-  discount_code?: string | null
-  paid_at: string
+  payment_url: string
+  gateway_order_ref: string
+  payment_expires_at?: string | null
+  paid_at?: string | null
+  items: CheckoutItem[]
+}
+
+export interface OrderStatusResponse {
+  order_id: number
+  order_code?: string | null
+  order_status: 'PENDING_PAYMENT' | 'PAID' | 'PAYMENT_FAILED' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED' | 'REFUND_FAILED'
+  total_amount: number
+  payment_provider?: string | null
+  gateway_order_ref?: string | null
+  gateway_transaction_id?: string | null
+  payment_expires_at?: string | null
+  paid_at?: string | null
+  refunded_at?: string | null
   items: CheckoutItem[]
 }
 
@@ -477,6 +492,45 @@ export interface AdminTicketSaleItem {
   price: number
   purchased_at: string
   order_status: string
+}
+
+export interface AdminTransactionLogItem {
+  id: number
+  action: string
+  status: string
+  payment_method?: string | null
+  gateway_transaction_id?: string | null
+  gateway_response_code?: string | null
+  amount?: number | null
+  message?: string | null
+  raw_payload?: string | null
+  created_at: string
+}
+
+export interface AdminTicketTransactionHistory {
+  ticket_id: number
+  seat_label: string
+  zone_name: string
+  price: number
+  show_id: number
+  show_title: string
+  show_start_at: string
+  event_id: number
+  event_title: string
+  venue: string
+  order_id: number
+  order_code?: string | null
+  order_status: string
+  payment_provider?: string | null
+  gateway_order_ref?: string | null
+  gateway_transaction_id?: string | null
+  payment_started_at?: string | null
+  payment_expires_at?: string | null
+  paid_at?: string | null
+  buyer_name?: string | null
+  buyer_email?: string | null
+  buyer_phone?: string | null
+  logs: AdminTransactionLogItem[]
 }
 
 export interface AdminEventRevenueItem {
