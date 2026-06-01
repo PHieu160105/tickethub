@@ -122,7 +122,7 @@ export function PerformerCarouselModal({
             <div
               ref={stripRef}
               onWheel={handleWheel}
-              className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2"
             >
               {performers.map((performer) => (
                 <PerformerCard

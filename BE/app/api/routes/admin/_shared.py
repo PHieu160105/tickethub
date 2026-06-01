@@ -4,9 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import EVENT_DETAIL_CACHE_NAMESPACE, EVENT_LIST_CACHE_NAMESPACE, SHOW_DETAIL_CACHE_NAMESPACE, public_api_cache, show_seat_cache_namespace
 from app.models.enums import EventStatus, OrderStatus, SeatStatus
-from app.models.event import Event, SeatZone, Show
+from app.models.event import Event, TicketTier, Show
 from app.models.order import Order, Ticket
-from app.schemas.admin import EventDetailStatsResponse, EventZoneStatsResponse
+from app.schemas.admin import EventDetailStatsResponse, EventTicketTierStatsResponse
 from app.services.event_query_service import get_event_by_slug_or_id, get_show_by_id
 from app.services.queue_service import expire_active_show_queue_entries
 
@@ -118,30 +118,30 @@ async def _build_show_stats_response(session: AsyncSession, show: Show, event: E
         or 0
     )
 
-    zone_rows = (
+    tier_rows = (
         await session.execute(
             select(
-                SeatZone.id,
-                SeatZone.code,
-                SeatZone.name,
-                SeatZone.color,
+                TicketTier.id,
+                TicketTier.code,
+                TicketTier.name,
+                TicketTier.color,
                 func.count(Ticket.id).label("total_seats"),
                 func.sum(case((Ticket.status == SeatStatus.SOLD, 1), else_=0)).label("sold_seats"),
                 func.sum(case((Ticket.status == SeatStatus.LOCKED, 1), else_=0)).label("locked_seats"),
                 func.min(Ticket.price).label("price_min"),
                 func.max(Ticket.price).label("price_max"),
             )
-            .outerjoin(Ticket, Ticket.ticket_tier_id == SeatZone.id)
-            .where(SeatZone.show_id == show.id)
-            .group_by(SeatZone.id, SeatZone.code, SeatZone.name, SeatZone.color)
-            .order_by(SeatZone.id.asc())
+            .outerjoin(Ticket, Ticket.ticket_tier_id == TicketTier.id)
+            .where(TicketTier.show_id == show.id)
+            .group_by(TicketTier.id, TicketTier.code, TicketTier.name, TicketTier.color)
+            .order_by(TicketTier.id.asc())
         )
     ).all()
-    zone_stats = [
-        EventZoneStatsResponse(
-            zone_id=row.id,
-            zone_code=row.code,
-            zone_name=row.name,
+    ticket_tier_stats = [
+        EventTicketTierStatsResponse(
+            ticket_tier_id=row.id,
+            ticket_tier_code=row.code,
+            ticket_tier_name=row.name,
             color=row.color,
             total_seats=int(row.total_seats or 0),
             sold_seats=int(row.sold_seats or 0),
@@ -151,7 +151,7 @@ async def _build_show_stats_response(session: AsyncSession, show: Show, event: E
             min_price=float(row.price_min or 0),
             max_price=float(row.price_max or 0),
         )
-        for row in zone_rows
+        for row in tier_rows
     ]
 
     return EventDetailStatsResponse(
@@ -168,5 +168,5 @@ async def _build_show_stats_response(session: AsyncSession, show: Show, event: E
         occupancy_rate=occupancy_rate,
         tickets_issued=ticket_count,
         total_revenue=total_revenue,
-        zone_stats=zone_stats,
+        ticket_tier_stats=ticket_tier_stats,
     )

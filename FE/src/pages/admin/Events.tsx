@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Calendar, Edit, MapPin, Plus, Search, Ticket, Trash2 } from 'lucide-react'
 
@@ -497,10 +497,10 @@ export default function AdminEvents() {
             ? {
                 venue_id: Number(showForm.venue_id),
                 venue_layout_id: Number(showForm.venue_layout_id),
-                zones: [],
+                ticket_tiers: [],
               }
             : {
-                zones: showForm.create_seed_tier
+                ticket_tiers: showForm.create_seed_tier
                   ? [
                       {
                         code: showForm.tier_code,

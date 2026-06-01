@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 
-from app.models.enums import Gender
+from app.models.enums import EventStatus, Gender
 
 
 class EventStaffCreateRequest(BaseModel):
@@ -19,7 +19,25 @@ class EventStaffStatusRequest(BaseModel):
 class EventStaffResponse(BaseModel):
     user_id: int
     full_name: str
-    email: EmailStr
+    email: str
     staff_code: str
     is_active: bool
     created_at: str
+
+
+class AssignedEventStaffResponse(BaseModel):
+    user_id: int
+    full_name: str
+    staff_code: str
+
+
+class EventAssignmentOverviewResponse(BaseModel):
+    event_id: int
+    event_slug: str
+    event_title: str
+    event_status: EventStatus
+    assigned_staff: list[AssignedEventStaffResponse]
+
+
+class EventAssignmentUpdateRequest(BaseModel):
+    staff_ids: list[int] = Field(min_length=1)

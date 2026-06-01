@@ -71,7 +71,7 @@ def _find_user_entry(show_id: int, user_id: int) -> QueueRuntimeEntry | None:
     candidates = [
         entry
         for entry in _show_entries(show_id).values()
-        if entry.user_id == user_id and entry.status in {QueueStatus.WAITING, QueueStatus.ADMITTED, QueueStatus.COMPLETED}
+        if entry.user_id == user_id and entry.status in {QueueStatus.WAITING, QueueStatus.ADMITTED}
     ]
     if not candidates:
         return None
@@ -290,9 +290,6 @@ async def join_show_queue(session: AsyncSession, show: Show, user_id: int) -> Qu
         if existing:
             if existing.status == QueueStatus.WAITING:
                 _refresh_waiting_positions(show.id)
-            elif existing.status == QueueStatus.ADMITTED and existing.expires_at and existing.expires_at < now:
-                _expire_runtime_entry(existing, now)
-            else:
                 status_response = _entry_to_status_response(existing)
                 return QueueJoinResponse(
                     token=status_response.token,
@@ -301,6 +298,18 @@ async def join_show_queue(session: AsyncSession, show: Show, user_id: int) -> Qu
                     message=status_response.message,
                     admitted_until=status_response.admitted_until,
                 )
+            if existing.status == QueueStatus.ADMITTED:
+                if existing.expires_at and existing.expires_at < now:
+                    _expire_runtime_entry(existing, now)
+                else:
+                    status_response = _entry_to_status_response(existing)
+                    return QueueJoinResponse(
+                        token=status_response.token,
+                        status=status_response.status,
+                        position=status_response.position or 0,
+                        message=status_response.message,
+                        admitted_until=status_response.admitted_until,
+                    )
 
         entry = QueueRuntimeEntry(
             show_id=show.id,

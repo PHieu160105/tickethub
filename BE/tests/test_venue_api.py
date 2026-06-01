@@ -82,8 +82,6 @@ async def test_create_layout_and_seat_template(db_session, admin_user):
                 json={
                     "layout_id": layout["id"],
                     "label": "A1",
-                    "row_label": "A",
-                    "seat_number": 1,
                     "x": 25,
                     "y": 35,
                 },
@@ -97,20 +95,22 @@ async def test_create_layout_and_seat_template(db_session, admin_user):
         assert seat_response.status_code == status.HTTP_200_OK
         seat = seat_response.json()
         assert seat["label"] == "A1"
-        assert seat["row_label"] == "A"
-        assert seat["seat_number"] == 1
-        assert seat["section_id"] is None
+        assert "row_label" not in seat
+        assert "seat_number" not in seat
+        assert "section_id" not in seat
 
         stored_seat = await db_session.scalar(select(Seat).where(Seat.id == seat["id"]))
         assert stored_seat is not None
         assert stored_seat.venue_layout_id == layout["id"]
+        assert stored_seat.row_label == "A"
+        assert stored_seat.seat_number == 1
     finally:
         app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
-async def test_upload_svg_is_returned_as_background_source(db_session, admin_user):
-    venue = Venue(name="SVG Upload Venue", address="SVG Upload St", created_by_staff_id=admin_user.id)
+async def test_upload_raster_background_returns_derived_dimensions(db_session, admin_user):
+    venue = Venue(name="Raster Upload Venue", address="Raster Upload St", created_by_staff_id=admin_user.id)
     db_session.add(venue)
     await db_session.commit()
     await db_session.refresh(venue)
@@ -120,7 +120,45 @@ async def test_upload_svg_is_returned_as_background_source(db_session, admin_use
     try:
         from httpx import ASGITransport
 
-        svg = b"<?xml version='1.0'?><svg width='320' height='180'></svg>"
+        png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 8 + (320).to_bytes(4, "big") + (180).to_bytes(4, "big")
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            upload_response = await client.post(
+                f"/api/admin/venues/{venue.id}/upload-background",
+                files={"file": ("layout.png", png, "image/png")},
+            )
+            detail_response = await client.get(f"/api/admin/venues/{venue.id}")
+
+        assert upload_response.status_code == status.HTTP_200_OK
+        assert detail_response.status_code == status.HTTP_200_OK
+        detail = detail_response.json()
+        assert detail["background_source"].startswith("data:image/png;base64,")
+        assert detail["background_type"] == "raster"
+        assert detail["width"] == 320
+        assert detail["height"] == 180
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_upload_svg_background_keeps_existing_dimensions_without_parsing(db_session, admin_user):
+    venue = Venue(
+        name="SVG Upload Venue",
+        address="SVG Upload St",
+        width=1000,
+        height=600,
+        created_by_staff_id=admin_user.id,
+    )
+    db_session.add(venue)
+    await db_session.commit()
+    await db_session.refresh(venue)
+
+    await _override_admin_client(db_session, admin_user)
+
+    try:
+        from httpx import ASGITransport
+
+        svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"></svg>'
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             upload_response = await client.post(
@@ -130,11 +168,16 @@ async def test_upload_svg_is_returned_as_background_source(db_session, admin_use
             detail_response = await client.get(f"/api/admin/venues/{venue.id}")
 
         assert upload_response.status_code == status.HTTP_200_OK
+        uploaded = upload_response.json()
+        assert uploaded["background_type"] == "svg"
+        assert uploaded["width"] == 1000
+        assert uploaded["height"] == 600
+
         assert detail_response.status_code == status.HTTP_200_OK
         detail = detail_response.json()
-        assert detail["background_source"] == svg.decode("utf-8")
+        assert detail["background_source"].startswith("data:image/svg+xml;base64,")
         assert detail["background_type"] == "svg"
-        assert detail["width"] == 320
-        assert detail["height"] == 180
+        assert detail["width"] == 1000
+        assert detail["height"] == 600
     finally:
         app.dependency_overrides.clear()

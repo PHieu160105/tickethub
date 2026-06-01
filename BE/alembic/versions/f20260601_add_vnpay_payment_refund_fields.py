@@ -1,8 +1,8 @@
 """Add payment/refund fields and show cancellation metadata.
 
-Revision ID: c20260531
-Revises: b20260530
-Create Date: 2026-05-31 00:00:00.000000
+Revision ID: f20260601
+Revises: e20260601
+Create Date: 2026-06-01 00:00:00.000000
 """
 
 from typing import Sequence, Union
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "c20260531"
-down_revision: Union[str, Sequence[str], None] = "b20260530"
+revision: str = "f20260601"
+down_revision: Union[str, Sequence[str], None] = "e20260601"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

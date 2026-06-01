@@ -2,7 +2,7 @@
 
 from datetime import date, datetime, time, timezone
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
 from app.models.base import Base, TimestampMixin
@@ -36,10 +36,6 @@ class Event(TimestampMixin, Base):
     @property
     def created_by_user_id(self) -> int:
         return self.created_by_staff_id
-
-    @property
-    def venue_id(self) -> int | None:
-        return self.venue_layout.venue_id if self.venue_layout else None
 
     @property
     def start_at(self) -> datetime:
@@ -85,7 +81,7 @@ class Show(TimestampMixin, Base):
         primaryjoin="User.id == foreign(Show.cancelled_by_staff_id)",
     )
     venue_layout = relationship("VenueLayout")
-    zones = relationship("TicketTier", back_populates="show", cascade="all,delete")
+    ticket_tiers = relationship("TicketTier", back_populates="show", cascade="all,delete")
     tickets = relationship("Ticket", back_populates="show", cascade="all,delete")
     orders = relationship("Order", back_populates="show", cascade="all,delete")
     show_performers = relationship("ShowPerformer", back_populates="show", cascade="all,delete-orphan")
@@ -106,7 +102,7 @@ class TicketTier(TimestampMixin, Base):
     color: Mapped[str] = mapped_column(String(20), default="#024ddf", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    show = relationship("Show", back_populates="zones")
+    show = relationship("Show", back_populates="ticket_tiers")
     tickets = relationship("Ticket", back_populates="ticket_tier")
 
     @property
@@ -117,12 +113,9 @@ class TicketTier(TimestampMixin, Base):
     def price(self, value: float) -> None:
         self.base_price = value
 
-
-SeatZone = TicketTier
-
-
 class EventAssignment(TimestampMixin, Base):
     __tablename__ = "event_assignments"
+    __table_args__ = (UniqueConstraint("event_id", "staff_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)

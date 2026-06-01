@@ -6,10 +6,10 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import EventCategory, EventStatus, QueueStatus
-from app.schemas.event import EventCreateRequest, SeatZoneCreate, ShowCreateRequest
+from app.schemas.event import EventCreateRequest, TicketTierCreate, ShowCreateRequest
 from app.services import queue_service
 from app.services.event_service import create_event, create_show_with_inventory
-from app.services.queue_service import QueueRuntimeEntry, _runtime_queue, get_queue_status, join_show_queue, process_virtual_queue
+from app.services.queue_service import QueueRuntimeEntry, _runtime_queue, get_queue_status, join_show_queue, mark_queue_completed, process_virtual_queue
 
 
 @pytest.mark.asyncio
@@ -41,7 +41,7 @@ async def test_virtual_queue_batches_users(
         end_time=datetime.now(UTC).time().replace(hour=20, minute=0, second=0, microsecond=0),
         status=EventStatus.LIVE,
         hold_minutes=10,
-        zones=[SeatZoneCreate(code="GA", name="Khu phổ thông", base_price=500_000, color="#024ddf")],
+        ticket_tiers=[TicketTierCreate(code="GA", name="Khu phổ thông", base_price=500_000, color="#024ddf")],
     )
 
     event = await create_event(db_session, admin_user.id, event_payload)
@@ -104,7 +104,7 @@ async def test_virtual_queue_releases_exact_batch_of_fifty(
         end_time=datetime.now(UTC).time().replace(hour=20, minute=0, second=0, microsecond=0),
         status=EventStatus.LIVE,
         hold_minutes=10,
-        zones=[SeatZoneCreate(code="GA", name="Khu phổ thông", base_price=500_000, color="#024ddf")],
+        ticket_tiers=[TicketTierCreate(code="GA", name="Khu phổ thông", base_price=500_000, color="#024ddf")],
     )
 
     event = await create_event(db_session, admin_user.id, event_payload)
@@ -176,7 +176,7 @@ async def test_existing_admitted_token_does_not_force_queue_when_below_threshold
         end_time=datetime.now(UTC).time().replace(hour=20, minute=0, second=0, microsecond=0),
         status=EventStatus.LIVE,
         hold_minutes=10,
-        zones=[SeatZoneCreate(code="GA", name="Khu phổ thông", base_price=500_000, color="#024ddf")],
+        ticket_tiers=[TicketTierCreate(code="GA", name="Khu phổ thông", base_price=500_000, color="#024ddf")],
     )
 
     event = await create_event(db_session, admin_user.id, event_payload)
@@ -221,3 +221,51 @@ async def test_missing_queue_token_returns_expired_status_instead_of_404(
 
     assert status_payload.status == QueueStatus.EXPIRED
     assert status_payload.token == "stale-token-from-session-storage"
+
+
+@pytest.mark.asyncio
+async def test_completed_queue_token_is_replaced_when_customer_books_same_show_again(
+    db_session: AsyncSession,
+    sample_show,
+    customer_users,
+):
+    """Khách mua tiếp cùng show phải nhận lượt mới thay vì bị giữ lại ở token đã hoàn tất."""
+
+    user1, _ = customer_users
+
+    first_join = await join_show_queue(db_session, show=sample_show, user_id=user1.id)
+    assert first_join.status == QueueStatus.ADMITTED
+
+    await mark_queue_completed(db_session, show_id=sample_show.id, user_id=user1.id, queue_token=first_join.token)
+
+    second_join = await join_show_queue(db_session, show=sample_show, user_id=user1.id)
+
+    assert second_join.status == QueueStatus.ADMITTED
+    assert second_join.token != first_join.token
+    assert _runtime_queue[sample_show.id][first_join.token].status == QueueStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_rejoining_while_waiting_reuses_existing_queue_entry(
+    db_session: AsyncSession,
+    sample_show,
+    customer_users,
+):
+    """Refresh hoặc gọi join lại khi đang chờ không được tạo thêm entry trùng cho cùng khách."""
+
+    user1, user2 = customer_users
+    previous_max_active = queue_service.settings.queue_max_active_tokens_default
+    queue_service.settings.queue_max_active_tokens_default = 1
+    try:
+        first_join = await join_show_queue(db_session, show=sample_show, user_id=user1.id)
+        assert first_join.status == QueueStatus.ADMITTED
+
+        waiting_join = await join_show_queue(db_session, show=sample_show, user_id=user2.id)
+        second_waiting_join = await join_show_queue(db_session, show=sample_show, user_id=user2.id)
+
+        assert waiting_join.status == QueueStatus.WAITING
+        assert second_waiting_join.status == QueueStatus.WAITING
+        assert second_waiting_join.token == waiting_join.token
+        assert len([entry for entry in _runtime_queue[sample_show.id].values() if entry.user_id == user2.id]) == 1
+    finally:
+        queue_service.settings.queue_max_active_tokens_default = previous_max_active

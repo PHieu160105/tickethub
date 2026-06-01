@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.cache import public_api_cache, show_seat_cache_namespace, user_ticket_cache_namespace
 from app.core.config import get_settings
 from app.models.enums import OrderStatus, SeatStatus
-from app.models.event import SeatZone
+from app.models.event import TicketTier
 from app.models.order import Order, Ticket, TransactionLog
 from app.schemas.booking import CheckoutItemResponse, CheckoutResponse, OrderStatusResponse
 from app.services.booking_service import (
@@ -102,14 +102,14 @@ async def _build_paid_items(session: AsyncSession, order_id: int) -> list[Checko
             .order_by(Ticket.id.asc())
         )
     )
-    zone_ids = {ticket.ticket_tier_id for ticket in tickets if ticket.ticket_tier_id is not None}
-    zone_rows = await session.execute(select(SeatZone.id, SeatZone.name).where(SeatZone.id.in_(zone_ids))) if zone_ids else None
-    zone_map = {zone_id: zone_name for zone_id, zone_name in (zone_rows.all() if zone_rows else [])}
+    ticket_tier_ids = {ticket.ticket_tier_id for ticket in tickets if ticket.ticket_tier_id is not None}
+    ticket_tier_rows = await session.execute(select(TicketTier.id, TicketTier.name).where(TicketTier.id.in_(ticket_tier_ids))) if ticket_tier_ids else None
+    ticket_tier_map = {ticket_tier_id: ticket_tier_name for ticket_tier_id, ticket_tier_name in (ticket_tier_rows.all() if ticket_tier_rows else [])}
     return [
         CheckoutItemResponse(
             seat_id=ticket.id,
             seat_label=ticket.seat_label or f"Ticket #{ticket.id}",
-            zone_name=zone_map.get(ticket.ticket_tier_id, "Chua phan hang"),
+            ticket_tier_name=ticket_tier_map.get(ticket.ticket_tier_id, "Chưa phân hạng"),
             price=Decimal(str(ticket.price)),
             ticket_code=ticket.ticket_code or "",
             qr_payload=ticket.qr_payload or "",

@@ -3,7 +3,7 @@ import { Maximize2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
 import { formatCurrencyVnd } from '@/lib/utils'
-import type { SeatMapPolygon, SeatMapResponse, SeatMapSeat } from '@/types'
+import type { SeatMapResponse, SeatMapSeat } from '@/types'
 
 function isSeatBlocked(seat: SeatMapSeat) {
   return seat.status !== 'AVAILABLE'
@@ -53,18 +53,6 @@ function seatInlineStyle(seat: SeatMapSeat, zoneColor?: string, isSelected = fal
   }
 }
 
-function polygonPoints(points: SeatMapPolygon['points']) {
-  return points.map((point) => `${point.x},${point.y}`).join(' ')
-}
-
-function computeCentroid(points: SeatMapPolygon['points']) {
-  if (points.length === 0) return { x: 50, y: 50 }
-  return {
-    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
-    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
-  }
-}
-
 interface CustomerSeatMapProps {
   seatMap: SeatMapResponse
   selectedSeatIds: number[]
@@ -104,7 +92,6 @@ export function CustomerSeatMap({
   const hiddenSeatCount = seatMap.seat_count - visibleSeats.length
   const aspectRatio = `${seatMap.background?.width ?? 1000} / ${seatMap.background?.height ?? 600}`
   const backgroundSource = seatMap.background?.source
-  const isInlineSvg = Boolean(backgroundSource && backgroundSource.includes('<svg'))
   const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null)
 
   return (
@@ -158,55 +145,15 @@ export function CustomerSeatMap({
             />
             <div className="pointer-events-none absolute inset-0 border-2 border-dashed border-slate-400/70" />
 
-            {backgroundSource &&
-              (isInlineSvg ? (
-                <div className="absolute inset-0 opacity-70 [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: backgroundSource }} />
-              ) : (
-                <img src={backgroundSource} alt={`${seatMap.venue_name} layout`} className="absolute inset-0 h-full w-full object-contain opacity-80 pointer-events-none" />
-              ))}
-
-            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full pointer-events-none">
-              {seatMap.polygons.map((polygon) => {
-                const zone = seatMap.zones.find((item) => item.id === polygon.zone_id)
-                const stroke = zone?.color ?? '#94a3b8'
-                return (
-                  <polygon
-                    key={polygon.id}
-                    points={polygonPoints(polygon.points)}
-                    fill={`${stroke}22`}
-                    stroke={stroke}
-                    strokeWidth="0.35"
-                    strokeLinejoin="round"
-                  />
-                )
-              })}
-            </svg>
-
-            {seatMap.polygons.map((polygon) => {
-              const zone = seatMap.zones.find((item) => item.id === polygon.zone_id)
-              const centroid = computeCentroid(polygon.points)
-              if (!polygon.zone_name && !polygon.label) return null
-              return (
-                <div
-                  key={`clabel-${polygon.id}`}
-                  className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded px-2 py-0.5 text-[9px] font-bold whitespace-nowrap"
-                  style={{
-                    left: `${centroid.x}%`,
-                    top: `${centroid.y}%`,
-                    backgroundColor: zone?.color ? `${zone.color}cc` : 'rgba(0,0,0,0.6)',
-                    color: '#fff',
-                  }}
-                >
-                  {polygon.zone_name ?? polygon.label}
-                </div>
-              )
-            })}
+            {backgroundSource ? (
+              <img src={backgroundSource} alt={`${seatMap.venue_name} layout`} className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-80" />
+            ) : null}
 
             {visibleSeats.map((seat) => {
               const isSelected = selectedSeatIds.includes(seat.id)
-              const zoneColor = seatColorMap?.get(seat.id) ?? seatMap.zones.find((item) => item.id === seat.zone_id)?.color
+              const zoneColor = seatColorMap?.get(seat.id) ?? seatMap.ticket_tiers.find((item) => item.id === seat.ticket_tier_id)?.color
               const priceLabel = formatCurrencyVnd(seat.price)
-              const tooltipContent = `${seat.label} · ${seat.zone_name ?? 'Hạng vé phổ thông'} · ${priceLabel}`
+              const tooltipContent = `${seat.label} · ${seat.ticket_tier_name ?? 'Hạng vé phổ thông'} · ${priceLabel}`
               return (
                 <button
                   key={seat.id}
@@ -225,7 +172,7 @@ export function CustomerSeatMap({
                   style={{
                     left: `${seat.x}%`,
                     top: `${seat.y}%`,
-                    transform: `translate(-50%, -50%) rotate(${seat.rotation}deg)`,
+                    transform: 'translate(-50%, -50%)',
                     width: `${seatSize}%`,
                     aspectRatio: '1',
                     ...seatInlineStyle(seat, zoneColor, isSelected),

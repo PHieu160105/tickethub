@@ -8,8 +8,6 @@ Ghi chú:
 # FastAPI dùng `APIRouter` để gom route và `Depends` để inject dependency.
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-# SQLAlchemy dùng `select` để tạo câu SQL đọc section/venue layout.
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Các import dưới đây là module tự viết trong TicketRush.
@@ -78,7 +76,7 @@ async def show_seat_matrix(
             return cached
 
     # Service dựng dữ liệu ghế; `current_user_id=None` nghĩa là guest, không đánh dấu ghế của tôi.
-    zones, seats = await get_show_seat_matrix(
+    ticket_tiers, seats = await get_show_seat_matrix(
         session,
         show.id,
         current_user_id=current_user.id if current_user else None,
@@ -96,7 +94,7 @@ async def show_seat_matrix(
         event_slug=event.slug if event else "",
         event_title=event.title if event else show.title,
         queue_required=queue_required,
-        zones=zones,
+        ticket_tiers=ticket_tiers,
         seats=seats,
     )
     if current_user is None:
@@ -119,7 +117,7 @@ async def show_seatmap(
     - `current_user`: user nếu có token hợp lệ, hoặc `None` cho guest.
 
     Output:
-    - `SeatMapResponse` gồm ghế có tọa độ, khu vực, polygon và ảnh nền.
+    - `SeatMapResponse` gồm ghế có tọa độ, hạng vé và ảnh nền.
 
     Cách hoạt động:
     - Dùng route này cho canvas seat map của customer.
@@ -153,15 +151,3 @@ async def show_seatmap(
         # TTL ngắn để người xem đông không dồn toàn bộ request vào DB nhưng vẫn thấy trạng thái gần realtime.
         return await public_api_cache.set(show_seat_cache_namespace(show.id), "seatmap_anonymous", response, ttl_seconds=10)
     return response
-
-
-@router.get("/{show_id}/sections", response_model=list[dict])
-async def show_sections(
-    show_id: int,
-    session: AsyncSession = Depends(get_db_session),
-) -> list[dict]:
-    """Section của venue layout đã bị loại khỏi flow hiện tại."""
-
-    show, _ = await _ensure_show_visible_to_user(session, show_id, None)
-    _ = show
-    return []
