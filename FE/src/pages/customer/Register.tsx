@@ -5,6 +5,8 @@ import { ArrowLeft, Eye, EyeOff, Mail, Lock, User, Phone, Calendar, Users, Rocke
 import { useAuth } from '@/context/AuthContext'
 import LogoSVG from '@/assets/logo.svg'
 import { FcGoogle } from 'react-icons/fc'
+import { SiZalo } from 'react-icons/si'
+import { authApi } from '@/lib/api'
 
 export function Logo() {
   return (
@@ -335,7 +337,7 @@ export default function Register() {
               </div>
 
               {/* Nút đăng nhập/đăng ký bằng mạng xã hội. */}
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <button
                   className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc disabled:cursor-not-allowed disabled:opacity-60"
                   type="button"
@@ -356,6 +358,17 @@ export default function Register() {
                   <FcGoogle className="w-5 h-5" />
                   <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-slate-500">
                     Google
+                  </span>
+                </button>
+                <button
+                  className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc disabled:cursor-not-allowed disabled:opacity-60"
+                  type="button"
+                  onClick={() => authApi.startZaloLogin()}
+                  disabled={isLoading}
+                >
+                  <SiZalo className="h-5 w-5 text-[#0068ff]" />
+                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-slate-500">
+                    Zalo
                   </span>
                 </button>
               </div>

@@ -238,6 +238,9 @@ api.interceptors.response.use(
 )
 
 export const authApi = {
+  startZaloLogin() {
+    window.location.assign(`${apiBaseURL}/auth/zalo/login`)
+  },
   async login(email: string, password: string) {
     return withRetry(
       () => api.post<AuthResponse>('/auth/login', { email, password }, { timeout: 10000, skipAuthRefresh: true } as RetryableAuthRequestConfig),
