@@ -69,13 +69,8 @@ class ArcConfig(BaseModel):
 class VenueSeatSingleCreateRequest(BaseModel):
     layout_id: int | None = Field(default=None, ge=1)
     label: str = Field(min_length=1, max_length=100)
-    row_label: str | None = Field(default=None, min_length=1, max_length=20)
-    seat_number: int | None = Field(default=None, ge=0)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
-    rotation: float | None = None
-    section_id: int | None = None
-    is_admin_locked: bool = False
 
 
 class VenueSeatBulkCreateRequest(BaseModel):
@@ -89,32 +84,20 @@ class VenueSeatBulkCreateRequest(BaseModel):
     start_y: float = Field(default=0.0, ge=0.0, le=100.0)
     label_prefix: str = Field(default="A", min_length=1, max_length=12)
     arc_config: ArcConfig | None = None
-    section_id: int | None = None
 
 
 class VenueSeatUpdateRequest(BaseModel):
     label: str | None = Field(default=None, min_length=1, max_length=100)
-    row_label: str | None = Field(default=None, min_length=1, max_length=20)
-    seat_number: int | None = Field(default=None, ge=0)
     x: float | None = Field(default=None, ge=0.0, le=100.0)
     y: float | None = Field(default=None, ge=0.0, le=100.0)
-    rotation: float | None = None
-    section_id: int | None = None
-    is_admin_locked: bool | None = None
 
 
 class VenueSeatResponse(BaseModel):
     id: int
     venue_layout_id: int | None
     label: str
-    row_label: str | None
-    seat_number: int | None
     x: float | None
     y: float | None
-    rotation: float = 0
-    is_admin_locked: bool = False
-    section_id: int | None = None
-    section_name: str | None = None
 
 
 class VenueSeatBulkCreateResponse(BaseModel):
@@ -125,25 +108,15 @@ class VenueSeatBulkCreateResponse(BaseModel):
 class VenueSeatSyncCreateItem(BaseModel):
     client_id: int = Field(lt=0)
     label: str = Field(min_length=1, max_length=100)
-    row_label: str | None = Field(default=None, min_length=1, max_length=20)
-    seat_number: int | None = Field(default=None, ge=0)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
-    rotation: float | None = None
-    section_id: int | None = None
-    is_admin_locked: bool = False
 
 
 class VenueSeatSyncUpdateItem(BaseModel):
     id: int = Field(ge=1)
     label: str = Field(min_length=1, max_length=100)
-    row_label: str | None = Field(default=None, min_length=1, max_length=20)
-    seat_number: int | None = Field(default=None, ge=0)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
-    rotation: float | None = None
-    section_id: int | None = None
-    is_admin_locked: bool = False
 
 
 class VenueSeatSyncRequest(BaseModel):
@@ -157,8 +130,6 @@ class VenueSeatSyncCreatedItem(BaseModel):
     client_id: int
     id: int
     label: str
-    row_label: str | None
-    seat_number: int | None
     x: float | None
     y: float | None
 

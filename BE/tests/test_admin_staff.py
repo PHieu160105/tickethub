@@ -101,3 +101,57 @@ async def test_system_admin_cannot_create_event(db_session):
         app.dependency_overrides.clear()
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.asyncio
+async def test_system_admin_assigns_replacement_before_deactivating_event_staff(db_session, admin_user, sample_event):
+    from app.api.deps import get_current_system_admin, get_db_session
+
+    system_admin = User(
+        full_name="System Admin Assignment",
+        email="system-assignment@test.local",
+        password_hash="hashed",
+        user_type=UserType.SYSTEM_ADMIN,
+        gender=Gender.OTHER,
+        age=30,
+    )
+    system_admin.system_admin_profile = SystemAdmin(admin_code="SYS-TEST-003")
+    db_session.add(system_admin)
+    await db_session.commit()
+
+    async def override_db():
+        yield db_session
+
+    async def override_system_admin():
+        return system_admin
+
+    app.dependency_overrides[get_db_session] = override_db
+    app.dependency_overrides[get_current_system_admin] = override_system_admin
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            blocked_response = await client.patch(f"/api/admin/staff/{admin_user.id}/status", json={"is_active": False})
+            create_response = await client.post(
+                "/api/admin/staff",
+                json={
+                    "full_name": "Replacement Staff",
+                    "email": "replacement@example.com",
+                    "password": "Staff@123",
+                    "staff_code": "STAFF-REPLACEMENT",
+                    "gender": "OTHER",
+                    "age": 24,
+                },
+            )
+            replacement_id = create_response.json()["user_id"]
+            assignment_response = await client.put(
+                f"/api/admin/staff/assignments/{sample_event.id}",
+                json={"staff_ids": [admin_user.id, replacement_id]},
+            )
+            deactivate_response = await client.patch(f"/api/admin/staff/{admin_user.id}/status", json={"is_active": False})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert blocked_response.status_code == status.HTTP_409_CONFLICT
+    assert create_response.status_code == status.HTTP_201_CREATED
+    assert assignment_response.status_code == status.HTTP_200_OK
+    assert {item["user_id"] for item in assignment_response.json()["assigned_staff"]} == {admin_user.id, replacement_id}
+    assert deactivate_response.status_code == status.HTTP_200_OK, deactivate_response.text

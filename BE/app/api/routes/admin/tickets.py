@@ -6,7 +6,7 @@ from app.api.deps import get_current_active_event_staff, get_current_active_admi
 from app.models.event import EventAssignment
 from app.core.db import get_db_session
 from app.models.enums import OrderStatus
-from app.models.event import Event, SeatZone, Show
+from app.models.event import Event, Show, TicketTier
 from app.models.order import Order, Ticket, TransactionLog
 from app.models.user import User
 from app.schemas.admin import (
@@ -47,7 +47,7 @@ async def list_admin_ticket_sales(
             Show.venue.label("venue"),
             User.full_name.label("customer_name"),
             Ticket.label.label("seat_label"),
-            SeatZone.name.label("zone_name"),
+            TicketTier.name.label("ticket_tier_name"),
             Ticket.price,
             Order.created_at,
             Order.status,
@@ -56,9 +56,8 @@ async def list_admin_ticket_sales(
         .join(Show, Ticket.show_id == Show.id)
         .join(Event, Show.event_id == Event.id)
         .join(User, Order.user_id == User.id)
-        .outerjoin(SeatZone, Ticket.ticket_tier_id == SeatZone.id)
+        .outerjoin(TicketTier, Ticket.ticket_tier_id == TicketTier.id)
         .where(Order.status.in_(allowed_statuses))
-        #.where(Order.status.in_([OrderStatus.PAID, OrderStatus.PENDING]))
         .where(Event.id.in_(select(EventAssignment.event_id).where(EventAssignment.staff_id == staff_user.id, EventAssignment.is_active.is_(True))))
         .order_by(Order.created_at.desc())
     )
@@ -85,7 +84,7 @@ async def list_admin_ticket_sales(
             show_start_at=row.show_start_at.isoformat(),
             customer_name=row.customer_name,
             seat_label=row.seat_label,
-            zone_name=row.zone_name or "Khu vuc chung",
+            ticket_tier_name=row.ticket_tier_name or "Khu vuc chung",
             venue=row.venue,
             price=float(row.price or 0),
             purchased_at=row.created_at.isoformat(),
@@ -107,7 +106,7 @@ async def get_admin_ticket_transaction_history(
             select(
                 Ticket.id.label("ticket_id"),
                 Ticket.label.label("seat_label"),
-                SeatZone.name.label("zone_name"),
+                TicketTier.name.label("ticket_tier_name"),
                 Ticket.price,
                 Show.id.label("show_id"),
                 Show.title.label("show_title"),
@@ -131,7 +130,7 @@ async def get_admin_ticket_transaction_history(
             .join(Order, Ticket.order_id == Order.id)
             .join(Show, Ticket.show_id == Show.id)
             .join(Event, Show.event_id == Event.id)
-            .outerjoin(SeatZone, Ticket.ticket_tier_id == SeatZone.id)
+            .outerjoin(TicketTier, Ticket.ticket_tier_id == TicketTier.id)
             .where(Ticket.id == ticket_id)
         )
     ).first()
@@ -149,7 +148,7 @@ async def get_admin_ticket_transaction_history(
     return AdminTicketTransactionDetailResponse(
         ticket_id=row.ticket_id,
         seat_label=row.seat_label,
-        zone_name=row.zone_name or "Khu vuc chung",
+        ticket_tier_name=row.ticket_tier_name or "Hạng vé chung",
         price=float(row.price or 0),
         show_id=row.show_id,
         show_title=row.show_title,

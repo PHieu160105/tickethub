@@ -1,4 +1,4 @@
-﻿import math
+import math
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_assigned_event_staff
 from app.core.db import get_db_session
 from app.models.enums import SeatStatus
-from app.models.event import SeatZone
+from app.models.event import TicketTier
 from app.models.order import Ticket
 from app.models.user import User
 from app.schemas.common import APIMessage
@@ -26,7 +26,7 @@ from app.schemas.event import (
 )
 from app.services.dashboard_service import broadcast_dashboard_update
 from app.services.event_inventory_service import sync_show_ticket_inventory
-from app.services.event_lifecycle_service import create_show_zone, delete_show_zone, update_show_zone
+from app.services.event_lifecycle_service import create_show_ticket_tier, delete_show_ticket_tier, update_show_ticket_tier
 
 from ._shared import (
     _build_event_or_404_show,
@@ -48,32 +48,32 @@ def _ticket_response(ticket: Ticket) -> SeatCreateResponse:
     )
 
 
-def _ticket_tier_response(zone: SeatZone) -> TicketTierResponse:
+def _ticket_tier_response(tier: TicketTier) -> TicketTierResponse:
     return TicketTierResponse(
-        id=zone.id,
-        code=zone.code,
-        name=zone.name,
-        description=zone.description,
-        base_price=zone.base_price,
-        color=zone.color,
-        is_active=zone.is_active,
+        id=tier.id,
+        code=tier.code,
+        name=tier.name,
+        description=tier.description,
+        base_price=tier.base_price,
+        color=tier.color,
+        is_active=tier.is_active,
     )
 
 
-@router.get("/events/{event_key}/shows/{show_id}/zones", response_model=list[TicketTierResponse])
-async def list_zones(
+@router.get("/events/{event_key}/shows/{show_id}/ticket-tiers", response_model=list[TicketTierResponse])
+async def list_ticket_tiers(
     event_key: str,
     show_id: int,
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_assigned_event_staff),
 ) -> list[TicketTierResponse]:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
-    zones = list(await session.scalars(select(SeatZone).where(SeatZone.show_id == show.id).order_by(SeatZone.id.asc())))
-    return [_ticket_tier_response(zone) for zone in zones]
+    ticket_tiers = list(await session.scalars(select(TicketTier).where(TicketTier.show_id == show.id).order_by(TicketTier.id.asc())))
+    return [_ticket_tier_response(tier) for tier in ticket_tiers]
 
 
-@router.post("/events/{event_key}/shows/{show_id}/zones", response_model=TicketTierResponse, status_code=status.HTTP_201_CREATED)
-async def create_zone(
+@router.post("/events/{event_key}/shows/{show_id}/ticket-tiers", response_model=TicketTierResponse, status_code=status.HTTP_201_CREATED)
+async def create_ticket_tier(
     event_key: str,
     show_id: int,
     payload: TicketTierCreate,
@@ -83,21 +83,21 @@ async def create_zone(
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
     try:
-        zone = await create_show_zone(session, show, payload)
+        tier = await create_show_ticket_tier(session, show, payload)
         await session.commit()
     except Exception:
         await session.rollback()
         raise
     await _invalidate_show_cache(show.id)
     await broadcast_dashboard_update()
-    return _ticket_tier_response(zone)
+    return _ticket_tier_response(tier)
 
 
-@router.patch("/events/{event_key}/shows/{show_id}/zones/{zone_id}", response_model=TicketTierResponse)
-async def update_zone(
+@router.patch("/events/{event_key}/shows/{show_id}/ticket-tiers/{ticket_tier_id}", response_model=TicketTierResponse)
+async def update_ticket_tier(
     event_key: str,
     show_id: int,
-    zone_id: int,
+    ticket_tier_id: int,
     payload: TicketTierUpdate,
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_assigned_event_staff),
@@ -105,28 +105,28 @@ async def update_zone(
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
     try:
-        zone = await update_show_zone(session, show, zone_id, payload)
+        tier = await update_show_ticket_tier(session, show, ticket_tier_id, payload)
         await session.commit()
     except Exception:
         await session.rollback()
         raise
     await _invalidate_show_cache(show.id)
     await broadcast_dashboard_update()
-    return _ticket_tier_response(zone)
+    return _ticket_tier_response(tier)
 
 
-@router.delete("/events/{event_key}/shows/{show_id}/zones/{zone_id}", response_model=APIMessage)
-async def delete_zone(
+@router.delete("/events/{event_key}/shows/{show_id}/ticket-tiers/{ticket_tier_id}", response_model=APIMessage)
+async def delete_ticket_tier(
     event_key: str,
     show_id: int,
-    zone_id: int,
+    ticket_tier_id: int,
     session: AsyncSession = Depends(get_db_session),
     _: User = Depends(get_current_assigned_event_staff),
 ) -> APIMessage:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
     try:
-        await delete_show_zone(session, show, zone_id)
+        await delete_show_ticket_tier(session, show, ticket_tier_id)
         await session.commit()
     except Exception:
         await session.rollback()
@@ -136,15 +136,15 @@ async def delete_zone(
     return APIMessage(detail="Da xoa hang ve thanh cong")
 
 
-async def _default_zone(session: AsyncSession, show_id: int, zone_id: int | None) -> SeatZone:
-    stmt = select(SeatZone).where(SeatZone.show_id == show_id)
-    if zone_id is not None:
-        stmt = stmt.where(SeatZone.id == zone_id)
-    stmt = stmt.order_by(SeatZone.id.asc())
-    zone = await session.scalar(stmt)
-    if not zone:
+async def _default_ticket_tier(session: AsyncSession, show_id: int, ticket_tier_id: int | None) -> TicketTier:
+    stmt = select(TicketTier).where(TicketTier.show_id == show_id)
+    if ticket_tier_id is not None:
+        stmt = stmt.where(TicketTier.id == ticket_tier_id)
+    stmt = stmt.order_by(TicketTier.id.asc())
+    tier = await session.scalar(stmt)
+    if not tier:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Show can it nhat mot hang ve")
-    return zone
+    return tier
 
 
 @router.post("/events/{event_key}/shows/{show_id}/seats/single", response_model=SeatCreateResponse)
@@ -157,26 +157,27 @@ async def create_show_seat_single(
 ) -> SeatCreateResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
-    zone = await _default_zone(session, show.id, payload.zone_id)
+    tier = await _default_ticket_tier(session, show.id, payload.ticket_tier_id)
     exists = await session.scalar(select(func.count()).select_from(Ticket).where(Ticket.show_id == show.id, Ticket.seat_label == payload.seat_label))
     if exists and exists > 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nhan ghe da ton tai trong buoi dien nay")
 
     ticket = Ticket(
         show_id=show.id,
-        ticket_tier_id=zone.id,
+        ticket_tier_id=tier.id,
         seat_id=None,
         label=payload.seat_label,
         row_label=None,
         seat_number=None,
         x=round(payload.x, 2),
         y=round(payload.y, 2),
-        price=float(payload.price) if payload.price is not None else float(zone.base_price),
+        price=float(payload.price) if payload.price is not None else float(tier.base_price),
         status=SeatStatus.LOCKED if payload.is_admin_locked else SeatStatus.AVAILABLE,
         is_staff_locked=payload.is_admin_locked,
     )
     session.add(ticket)
     try:
+        await session.flush()
         await session.commit()
         await session.refresh(ticket)
     except Exception:
@@ -197,7 +198,7 @@ async def create_show_seat_bulk(
 ) -> SeatBulkCreateResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
-    zone = await _default_zone(session, show.id, payload.zone_id)
+    tier = await _default_ticket_tier(session, show.id, payload.ticket_tier_id)
     existing_labels = set(await session.scalars(select(Ticket.seat_label).where(Ticket.show_id == show.id)))
     created: list[Ticket] = []
 
@@ -223,14 +224,14 @@ async def create_show_seat_bulk(
                 y = max(0.0, min(100.0, cfg.center_y + radius * math.cos(radians)))
             ticket = Ticket(
                 show_id=show.id,
-                ticket_tier_id=zone.id,
+                ticket_tier_id=tier.id,
                 seat_id=None,
                 label=label,
                 row_label=f"{payload.label_prefix}{row + 1}",
                 seat_number=col + 1,
                 x=round(x, 2),
                 y=round(y, 2),
-                price=float(zone.base_price),
+                price=float(tier.base_price),
                 status=SeatStatus.AVAILABLE,
                 is_staff_locked=False,
             )
@@ -239,6 +240,7 @@ async def create_show_seat_bulk(
             created.append(ticket)
 
     try:
+        await session.flush()
         await session.commit()
         for ticket in created:
             await session.refresh(ticket)
@@ -263,7 +265,7 @@ async def sync_show_seats(
 
     existing_tickets = list(await session.scalars(select(Ticket).where(Ticket.show_id == show.id).order_by(Ticket.id.asc())))
     ticket_map = {ticket.id: ticket for ticket in existing_tickets}
-    zone_map = {zone.id: zone for zone in await session.scalars(select(SeatZone).where(SeatZone.show_id == show.id))}
+    tier_map = {tier.id: tier for tier in await session.scalars(select(TicketTier).where(TicketTier.show_id == show.id))}
 
     update_ids = [item.id for item in payload.update]
     delete_ids = list(payload.delete_ids)
@@ -289,13 +291,13 @@ async def sync_show_seats(
             ticket = ticket_map.get(item.id)
             if not ticket:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
-            if item.zone_id is not None:
-                zone = zone_map.get(item.zone_id)
-                if not zone:
+            if item.ticket_tier_id is not None:
+                tier = tier_map.get(item.ticket_tier_id)
+                if not tier:
                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay hang ve cua buoi dien nay")
-                ticket.ticket_tier_id = zone.id
+                ticket.ticket_tier_id = tier.id
                 if item.price is None:
-                    ticket.price = float(zone.base_price)
+                    ticket.price = float(tier.base_price)
             ticket.label = item.seat_label
             ticket.x = round(item.x, 2)
             ticket.y = round(item.y, 2)
@@ -307,17 +309,17 @@ async def sync_show_seats(
             )
 
         for item in payload.create:
-            zone = await _default_zone(session, show.id, item.zone_id)
+            tier = await _default_ticket_tier(session, show.id, item.ticket_tier_id)
             ticket = Ticket(
                 show_id=show.id,
-                ticket_tier_id=zone.id,
+                ticket_tier_id=tier.id,
                 seat_id=None,
                 label=item.seat_label,
                 row_label=None,
                 seat_number=None,
                 x=round(item.x, 2),
                 y=round(item.y, 2),
-                price=float(item.price) if item.price is not None else float(zone.base_price),
+                price=float(item.price) if item.price is not None else float(tier.base_price),
                 status=SeatStatus.LOCKED if item.is_admin_locked else SeatStatus.AVAILABLE,
                 is_staff_locked=item.is_admin_locked,
             )
@@ -330,6 +332,7 @@ async def sync_show_seats(
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
             await session.delete(ticket)
 
+        await session.flush()
         await session.commit()
         for _, ticket in created_pairs:
             await session.refresh(ticket)
@@ -369,11 +372,11 @@ async def update_show_seat(
     ticket = await session.scalar(select(Ticket).where(Ticket.id == seat_id, Ticket.show_id == show.id))
     if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
-    if payload.zone_id is not None:
-        zone = await _default_zone(session, show.id, payload.zone_id)
-        ticket.ticket_tier_id = zone.id
+    if payload.ticket_tier_id is not None:
+        tier = await _default_ticket_tier(session, show.id, payload.ticket_tier_id)
+        ticket.ticket_tier_id = tier.id
         if payload.price is None:
-            ticket.price = float(zone.base_price)
+            ticket.price = float(tier.base_price)
     if payload.seat_label is not None:
         exists = await session.scalar(
             select(func.count()).select_from(Ticket).where(Ticket.show_id == show.id, Ticket.seat_label == payload.seat_label, Ticket.id != ticket.id)

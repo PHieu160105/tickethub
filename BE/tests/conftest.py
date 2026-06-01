@@ -12,10 +12,10 @@ from app.core.redis_client import get_redis_client
 from app.core.security import hash_password
 from app.models import Base
 from app.models.enums import EventCategory, EventStatus, Gender, SeatStatus, UserRole
-from app.models.event import Event, SeatZone, Show
+from app.models.event import Event, TicketTier, Show
 from app.models.order import Ticket
 from app.models.user import Customer, EventStaff, User
-from app.schemas.event import EventCreateRequest, SeatZoneCreate, ShowCreateRequest
+from app.schemas.event import EventCreateRequest, TicketTierCreate, ShowCreateRequest
 from app.services.event_service import create_event, create_show_with_inventory
 from app.services.queue_service import _memory_active_sessions, _runtime_queue
 
@@ -123,12 +123,12 @@ async def sample_event_with_show(db_session: AsyncSession, admin_user: User) -> 
         end_time=time(hour=21, minute=30),
         status=EventStatus.LIVE,
         hold_minutes=10,
-        zones=[SeatZoneCreate(code="VIP", name="VIP", base_price=100.0, color="#024ddf")],
+        ticket_tiers=[TicketTierCreate(code="VIP", name="VIP", base_price=100.0, color="#024ddf")],
     )
 
     event = await create_event(db_session, admin_user.id, event_payload)
     show = await create_show_with_inventory(db_session, event, admin_user.id, show_payload)
-    tier = await db_session.scalar(select(SeatZone).where(SeatZone.show_id == show.id))
+    tier = await db_session.scalar(select(TicketTier).where(TicketTier.show_id == show.id))
     assert tier is not None
     for row_index, row_label in enumerate(("A", "B"), start=1):
         for seat_number in range(1, 4):

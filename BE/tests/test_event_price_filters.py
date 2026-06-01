@@ -306,7 +306,7 @@ async def test_admin_seat_planner_mutations_require_draft_show(db_session, admin
     app.dependency_overrides[get_db_session] = override_get_db
     app.dependency_overrides[get_current_active_admin] = override_get_admin
 
-    zone_payload = {
+    tier_payload = {
         "code": "GEN",
         "name": "General",
         "description": "General admission",
@@ -318,16 +318,16 @@ async def test_admin_seat_planner_mutations_require_draft_show(db_session, admin
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             live_response = await client.post(
-                f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}/zones",
-                json=zone_payload,
+                f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}/ticket-tiers",
+                json=tier_payload,
             )
             await client.patch(
                 f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}",
                 json={"status": "DRAFT"},
             )
             draft_response = await client.post(
-                f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}/zones",
-                json=zone_payload,
+                f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}/ticket-tiers",
+                json=tier_payload,
             )
 
         assert live_response.status_code == status.HTTP_400_BAD_REQUEST

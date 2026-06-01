@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.main import app
 from app.models.enums import EventStatus, SeatStatus
-from app.models.event import SeatZone
+from app.models.event import TicketTier
 from app.models.order import Ticket
 
 
@@ -30,16 +30,16 @@ async def _override_admin_client(db_session, admin_user) -> AsyncClient:
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
-async def _get_default_zone(db_session, sample_show):
-    zone = await db_session.scalar(select(SeatZone).where(SeatZone.show_id == sample_show.id))
-    assert zone is not None
-    return zone
+async def _get_default_ticket_tier(db_session, sample_show):
+    tier = await db_session.scalar(select(TicketTier).where(TicketTier.show_id == sample_show.id))
+    assert tier is not None
+    return tier
 
 
 @pytest.mark.asyncio
 async def test_create_single_seat(db_session, admin_user, sample_event, sample_show):
     await mark_show_draft(db_session, sample_show)
-    zone = await _get_default_zone(db_session, sample_show)
+    tier = await _get_default_ticket_tier(db_session, sample_show)
 
     try:
         client = await _override_admin_client(db_session, admin_user)
@@ -50,8 +50,7 @@ async def test_create_single_seat(db_session, admin_user, sample_event, sample_s
                     "seat_label": "CUST-1",
                     "x": 15.5,
                     "y": 20.0,
-                    "rotation": 0,
-                    "zone_id": zone.id,
+                    "ticket_tier_id": tier.id,
                 },
             )
 
@@ -75,7 +74,7 @@ async def test_create_single_seat(db_session, admin_user, sample_event, sample_s
 @pytest.mark.asyncio
 async def test_create_bulk_straight(db_session, admin_user, sample_event, sample_show):
     await mark_show_draft(db_session, sample_show)
-    zone = await _get_default_zone(db_session, sample_show)
+    tier = await _get_default_ticket_tier(db_session, sample_show)
 
     try:
         client = await _override_admin_client(db_session, admin_user)
@@ -83,7 +82,7 @@ async def test_create_bulk_straight(db_session, admin_user, sample_event, sample
             resp = await client.post(
                 f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}/seats/bulk",
                 json={
-                    "zone_id": zone.id,
+                    "ticket_tier_id": tier.id,
                     "pattern": "straight",
                     "rows": 2,
                     "cols": 2,
@@ -109,7 +108,7 @@ async def test_create_bulk_straight(db_session, admin_user, sample_event, sample
 @pytest.mark.asyncio
 async def test_create_bulk_arc(db_session, admin_user, sample_event, sample_show):
     await mark_show_draft(db_session, sample_show)
-    zone = await _get_default_zone(db_session, sample_show)
+    tier = await _get_default_ticket_tier(db_session, sample_show)
 
     try:
         client = await _override_admin_client(db_session, admin_user)
@@ -117,7 +116,7 @@ async def test_create_bulk_arc(db_session, admin_user, sample_event, sample_show
             resp = await client.post(
                 f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}/seats/bulk",
                 json={
-                    "zone_id": zone.id,
+                    "ticket_tier_id": tier.id,
                     "pattern": "arc",
                     "rows": 1,
                     "cols": 3,
@@ -141,7 +140,7 @@ async def test_create_bulk_arc(db_session, admin_user, sample_event, sample_show
 @pytest.mark.asyncio
 async def test_update_event_seat_admin_lock(db_session, admin_user, sample_event, sample_show):
     await mark_show_draft(db_session, sample_show)
-    zone = await _get_default_zone(db_session, sample_show)
+    tier = await _get_default_ticket_tier(db_session, sample_show)
 
     try:
         client = await _override_admin_client(db_session, admin_user)
@@ -152,7 +151,7 @@ async def test_update_event_seat_admin_lock(db_session, admin_user, sample_event
                     "seat_label": "LOCK-1",
                     "x": 25.0,
                     "y": 30.0,
-                    "zone_id": zone.id,
+                    "ticket_tier_id": tier.id,
                 },
             )
             assert create_resp.status_code == status.HTTP_200_OK

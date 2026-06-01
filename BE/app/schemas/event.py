@@ -31,10 +31,6 @@ class TicketTierUpdate(BaseModel):
     is_active: bool = True
 
 
-SeatZoneCreate = TicketTierCreate
-SeatZoneUpdate = TicketTierUpdate
-
-
 class EventCreateRequest(BaseModel):
     """Payload admin tạo sự kiện cha."""
 
@@ -79,7 +75,7 @@ class ShowCreateRequest(BaseModel):
     seat_source: SeatSource = SeatSource.LAYOUT
     venue_id: int | None = Field(default=None, ge=1)
     venue_layout_id: int | None = Field(default=None, ge=1)
-    zones: list[TicketTierCreate] = Field(default_factory=list)
+    ticket_tiers: list[TicketTierCreate] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_show_source(self) -> "ShowCreateRequest":
@@ -153,7 +149,7 @@ class ShowDetailResponse(ShowSummaryResponse):
     event_slug: str
     event_title: str
     hold_minutes: int
-    zones: list["TicketTierResponse"]
+    ticket_tiers: list["TicketTierResponse"]
 
 
 class TicketTierResponse(BaseModel):
@@ -168,9 +164,6 @@ class TicketTierResponse(BaseModel):
     is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
-
-
-SeatZoneResponse = TicketTierResponse
 
 
 class SeatUserInfoResponse(BaseModel):
@@ -196,7 +189,7 @@ class SeatResponse(BaseModel):
     """Đối tượng ghế có thể serialize để render ma trận ghế."""
 
     id: int
-    zone_id: int | None = None
+    ticket_tier_id: int | None = None
     row_index: int
     row_label: str
     seat_number: int
@@ -219,7 +212,7 @@ class SeatMatrixResponse(BaseModel):
     event_slug: str
     event_title: str
     queue_required: bool = False
-    zones: list[TicketTierResponse]
+    ticket_tiers: list[TicketTierResponse]
     seats: list[SeatResponse]
 
 
@@ -244,9 +237,7 @@ class SeatSingleCreateRequest(BaseModel):
     seat_label: str = Field(min_length=1, max_length=100)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
-    rotation: float = Field(default=0.0, ge=0.0, le=360.0)
-    zone_id: int | None = None
-    section_id: int | None = None
+    ticket_tier_id: int | None = None
     price: Decimal | None = None
     is_admin_locked: bool = False
 
@@ -262,8 +253,7 @@ class ArcConfig(BaseModel):
 class SeatBulkCreateRequest(BaseModel):
     """Payload sinh ghế hàng loạt theo các mẫu bố trí được hỗ trợ."""
 
-    zone_id: int | None = None
-    section_id: int | None = None
+    ticket_tier_id: int | None = None
     pattern: str = Field(default="straight")
     rows: int = Field(default=1, ge=1)
     cols: int = Field(default=1, ge=1)
@@ -288,9 +278,7 @@ class SeatUpdateRequest(BaseModel):
     seat_label: str | None = Field(default=None, min_length=1, max_length=100)
     x: float | None = Field(default=None, ge=0.0, le=100.0)
     y: float | None = Field(default=None, ge=0.0, le=100.0)
-    rotation: float | None = Field(default=None, ge=0.0, le=360.0)
-    zone_id: int | None = None
-    section_id: int | None = None
+    ticket_tier_id: int | None = None
     price: Decimal | None = None
     is_admin_locked: bool | None = None
 
@@ -305,9 +293,7 @@ class SeatSyncCreateItem(BaseModel):
     seat_label: str = Field(min_length=1, max_length=100)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
-    rotation: float = Field(default=0.0, ge=0.0, le=360.0)
-    zone_id: int | None = None
-    section_id: int | None = None
+    ticket_tier_id: int | None = None
     price: Decimal | None = None
     is_admin_locked: bool = False
 
@@ -317,9 +303,7 @@ class SeatSyncUpdateItem(BaseModel):
     seat_label: str = Field(min_length=1, max_length=100)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
-    rotation: float = Field(default=0.0, ge=0.0, le=360.0)
-    zone_id: int | None = None
-    section_id: int | None = None
+    ticket_tier_id: int | None = None
     price: Decimal | None = None
     is_admin_locked: bool = False
 
@@ -342,34 +326,6 @@ class SeatSyncResponse(BaseModel):
     created: list[SeatSyncCreatedItem]
     updated_ids: list[int]
     deleted_ids: list[int]
-
-
-class ShowPolygonPoint(BaseModel):
-    x: float = Field(ge=0.0, le=100.0)
-    y: float = Field(ge=0.0, le=100.0)
-
-
-class ShowPolygonCreateRequest(BaseModel):
-    zone_id: int | None = None
-    label: str | None = Field(default=None, max_length=100)
-    points: list[ShowPolygonPoint] = Field(min_length=3)
-
-
-class ShowPolygonUpdateRequest(BaseModel):
-    zone_id: int | None = None
-    label: str | None = Field(default=None, max_length=100)
-    points: list[ShowPolygonPoint] | None = Field(default=None, min_length=3)
-
-
-class ShowPolygonResponse(BaseModel):
-    id: int
-    show_id: int
-    zone_id: int | None
-    zone_name: str | None = None
-    label: str | None
-    points: list[ShowPolygonPoint]
-    created_at: datetime
-    updated_at: datetime
 
 
 ShowDetailResponse.model_rebuild()

@@ -1,10 +1,10 @@
 from pydantic import BaseModel
 
 
-class EventZoneStatsResponse(BaseModel):
-    zone_id: int
-    zone_code: str
-    zone_name: str
+class EventTicketTierStatsResponse(BaseModel):
+    ticket_tier_id: int
+    ticket_tier_code: str
+    ticket_tier_name: str
     color: str
     total_seats: int
     sold_seats: int
@@ -29,4 +29,4 @@ class EventDetailStatsResponse(BaseModel):
     occupancy_rate: float
     tickets_issued: int
     total_revenue: float
-    zone_stats: list[EventZoneStatsResponse]
+    ticket_tier_stats: list[EventTicketTierStatsResponse]

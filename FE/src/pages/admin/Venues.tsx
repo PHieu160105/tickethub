@@ -1,2275 +1,814 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { Building2, Copy, Edit, FileUp, Hand, Layers3, MapPin, MousePointer2, Plus, Redo2, RefreshCw, Save, Shapes, Trash2, Undo2 } from 'lucide-react'
+﻿import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { Building2, Copy, FileUp, Hand, Layers3, MapPin, MousePointer2, Plus, RefreshCw, Save, Trash2 } from 'lucide-react'
 
-import { Button } from '@/components/ui/Button'
 import { InteractiveSeatCanvas } from '@/components/admin/InteractiveSeatCanvas'
+import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { Input } from '@/components/ui/Input'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
+import { Input } from '@/components/ui/Input'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
-import type { VenueDetail, VenueLayoutItem, VenuePolygonItem, VenueSeatItem, VenueSectionItem, VenueSummary } from '@/types'
+import type { VenueDetail, VenueLayoutItem, VenueSeatItem, VenueSummary } from '@/types'
 
-const DEFAULT_LAYOUT_FORM = {
-    name: '',
-    description: '',
-}
-
-const DEFAULT_SECTION_FORM = {
-    name: '',
-    code: '',
-    color: '#024ddf',
-    price_base: '500000',
-    sort_order: '0',
-}
-
-const DEFAULT_VENUE_FORM = {
-    name: '',
-    address: '',
-    is_active: true,
-}
-
-const DEFAULT_SINGLE_SEAT_FORM = {
-    label: '',
-    section_id: '',
-    x: '50',
-    y: '50',
-    rotation: '0',
-    is_admin_locked: false,
-}
-
-const DEFAULT_BULK_SEAT_FORM = {
-    section_id: '',
-    pattern: 'straight' as 'straight' | 'arc' | 'zigzag',
-    rows: '4',
-    cols: '8',
-    gap_x: '4',
-    gap_y: '4',
-    start_x: '20',
-    start_y: '20',
-    label_prefix: 'A',
-    arc_center_x: '50',
-    arc_center_y: '50',
-    arc_radius: '24',
-    arc_start_angle: '-45',
-    arc_end_angle: '45',
-}
-
-const DEFAULT_POLYGON_FORM = {
-    label: '',
-    section_id: '',
-}
-
-const DEFAULT_VIEWPORT = {
-    scale: 1,
-    offsetX: 0,
-    offsetY: 0,
-}
-
-const SNAP_STEP = 1
-const STUDIO_STEPS = ['venue', 'layout', 'builder'] as const
-type StudioStep = (typeof STUDIO_STEPS)[number]
+const STEPS = ['venue', 'layout', 'builder'] as const
+type StudioStep = (typeof STEPS)[number]
 
 const STEP_META: Record<StudioStep, { title: string; description: string }> = {
-    venue: { title: 'Địa điểm', description: 'Nhập thông tin địa điểm và tải nền sơ đồ.' },
-    layout: { title: 'Bố cục sắp xếp', description: 'Tạo bố cục sắp xếp cho địa điểm.' },
-    builder: { title: 'Trình dựng sơ đồ', description: 'Đặt ghế mẫu trực tiếp trên canvas.' },
+  venue: { title: 'Địa điểm', description: 'Tạo địa điểm và tải ảnh nền sơ đồ.' },
+  layout: { title: 'Bố cục sắp xếp', description: 'Tạo bố cục ghế tái sử dụng cho địa điểm.' },
+  builder: { title: 'Trình dựng sơ đồ', description: 'Đặt ghế mẫu trực tiếp trên canvas.' },
 }
 
-function isSvgMarkup(value: string | null) {
-    return Boolean(value && value.slice(0, 500).toLowerCase().includes('<svg'))
+const EMPTY_VENUE = { name: '', address: '', is_active: true }
+const EMPTY_LAYOUT = { name: '', description: '' }
+const EMPTY_SEAT = { label: '', x: '50', y: '50' }
+const EMPTY_BULK = {
+  pattern: 'straight' as 'straight' | 'arc' | 'zigzag',
+  rows: '4',
+  cols: '8',
+  gap_x: '4',
+  gap_y: '4',
+  start_x: '20',
+  start_y: '20',
+  label_prefix: 'A',
+  arc_center_x: '50',
+  arc_center_y: '50',
+  arc_radius: '24',
+  arc_start_angle: '-45',
+  arc_end_angle: '45',
 }
-
-function deriveSeatIdentity(label: string, fallbackRowLabel?: string, fallbackSeatNumber = 0) {
-    const normalized = label.trim()
-    const match = normalized.match(/^([A-Za-z]+(?:\d+)?)\s*[- ]?\s*(\d+)$/)
-    if (match) {
-        return {
-            row_label: match[1],
-            seat_number: Number(match[2]),
-        }
-    }
-
-    return {
-        row_label: fallbackRowLabel ?? normalized,
-        seat_number: fallbackSeatNumber,
-    }
-}
-
-function renderBackgroundPreview(source: string | null) {
-    if (!source) {
-        return <div className="text-sm text-slate-500">Chưa có dữ liệu background.</div>
-    }
-
-    if (isSvgMarkup(source)) {
-        return (
-            <div
-                className="max-h-[420px] overflow-auto rounded-xl border border-white/10 bg-white p-3"
-                dangerouslySetInnerHTML={{ __html: source }}
-            />
-        )
-    }
-
-    return (
-        <div className="rounded-xl border border-white/10 customer-bg-page p-3">
-            <img src={source} alt="Nền địa điểm xem trước" className="max-h-[420px] w-full rounded-lg object-contain" />
-        </div>
-    )
-}
+const DEFAULT_VIEWPORT = { scale: 1, offsetX: 0, offsetY: 0 }
 
 export default function AdminVenues() {
-    const builderCanvasRef = useRef<HTMLDivElement>(null)
-    const suppressNextCanvasClickRef = useRef(false)
-    const nudgeSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-    const autoUploadQueuedRef = useRef(false)
-    const savedVenueSeatsRef = useRef<VenueSeatItem[]>([])
-    const savedVenuePolygonsRef = useRef<VenuePolygonItem[]>([])
-    const tempSeatIdRef = useRef(-1)
-    const tempPolygonIdRef = useRef(-1)
-    const [venues, setVenues] = useState<VenueSummary[]>([])
-    const [selectedVenueId, setSelectedVenueId] = useState<number | null>(null)
-    const [selectedVenue, setSelectedVenue] = useState<VenueDetail | null>(null)
-    const [layouts, setLayouts] = useState<VenueLayoutItem[]>([])
-    const [selectedLayoutId, setSelectedLayoutId] = useState<number | null>(null)
-    const [sections, setSections] = useState<VenueSectionItem[]>([])
-    const [venueSeats, setVenueSeats] = useState<VenueSeatItem[]>([])
-    const [venuePolygons, setVenuePolygons] = useState<VenuePolygonItem[]>([])
-    const [loading, setLoading] = useState(true)
-    const [busy, setBusy] = useState(false)
-    const [builderBusy, setBuilderBusy] = useState(false)
-    const [error, setError] = useState<string | null>(null)
-    const [message, setMessage] = useState<string | null>(null)
-    const [backgroundFile, setBackgroundFile] = useState<File | null>(null)
-    const [studioStep, setStudioStep] = useState<StudioStep>('venue')
-    const [activeBuilderPanel, setActiveBuilderPanel] = useState<'seat' | 'bulk' | 'polygon'>('seat')
-    const [canvasCursor, setCanvasCursor] = useState<{ x: number; y: number } | null>(null)
+  const builderCanvasRef = useRef<HTMLDivElement>(null)
+  const [step, setStep] = useState<StudioStep>('venue')
+  const [venues, setVenues] = useState<VenueSummary[]>([])
+  const [selectedVenue, setSelectedVenue] = useState<VenueDetail | null>(null)
+  const [layouts, setLayouts] = useState<VenueLayoutItem[]>([])
+  const [selectedLayoutId, setSelectedLayoutId] = useState<number | null>(null)
+  const [seats, setSeats] = useState<VenueSeatItem[]>([])
+  const [venueForm, setVenueForm] = useState(EMPTY_VENUE)
+  const [layoutForm, setLayoutForm] = useState(EMPTY_LAYOUT)
+  const [seatForm, setSeatForm] = useState(EMPTY_SEAT)
+  const [bulkForm, setBulkForm] = useState(EMPTY_BULK)
+  const [editingVenueId, setEditingVenueId] = useState<number | null>(null)
+  const [editingLayoutId, setEditingLayoutId] = useState<number | null>(null)
+  const [editingSeatId, setEditingSeatId] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const [activeBuilderPanel, setActiveBuilderPanel] = useState<'seat' | 'bulk'>('seat')
+  const [placementMode, setPlacementMode] = useState<'seat' | 'bulk' | 'select' | 'pan'>('seat')
+  const [canvasCursor, setCanvasCursor] = useState<{ x: number; y: number } | null>(null)
+  const [viewport, setViewport] = useState(DEFAULT_VIEWPORT)
+  const [panStart, setPanStart] = useState<{ clientX: number; clientY: number; offsetX: number; offsetY: number } | null>(null)
+  const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null)
+  const [selectionCurrent, setSelectionCurrent] = useState<{ x: number; y: number } | null>(null)
+  const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([])
+  const [draggingSeatId, setDraggingSeatId] = useState<number | null>(null)
+  const [dragStartPosition, setDragStartPosition] = useState<{ x: number; y: number } | null>(null)
+  const [dragSelectedSeatStartPositions, setDragSelectedSeatStartPositions] = useState<Record<number, { x: number; y: number }> | null>(null)
+  const [snapToGrid, setSnapToGrid] = useState(false)
+  const [seatSize, setSeatSize] = useState(1.5)
+  const seatsRef = useRef<VenueSeatItem[]>([])
 
-    const [venueForm, setVenueForm] = useState(DEFAULT_VENUE_FORM)
-    const [editingVenueId, setEditingVenueId] = useState<number | null>(null)
-    const [layoutForm, setLayoutForm] = useState(DEFAULT_LAYOUT_FORM)
-    const [editingLayoutId, setEditingLayoutId] = useState<number | null>(null)
-    const [sectionForm, setSectionForm] = useState(DEFAULT_SECTION_FORM)
-    const [editingSectionId, setEditingSectionId] = useState<number | null>(null)
-    const [singleSeatForm, setSingleSeatForm] = useState(DEFAULT_SINGLE_SEAT_FORM)
-    const [bulkSeatForm, setBulkSeatForm] = useState(DEFAULT_BULK_SEAT_FORM)
-    const [polygonForm, setPolygonForm] = useState(DEFAULT_POLYGON_FORM)
-    const [editingSeatId, setEditingSeatId] = useState<number | null>(null)
-    const [editingPolygonId, setEditingPolygonId] = useState<number | null>(null)
-    const [placementMode, setPlacementMode] = useState<'seat' | 'polygon' | 'pan' | 'select'>('seat')
-    const [draftPolygonPoints, setDraftPolygonPoints] = useState<Array<{ x: number; y: number }>>([])
-    const [draggingSeatId, setDraggingSeatId] = useState<number | null>(null)
-    const [dragSeatPosition, setDragSeatPosition] = useState<{ x: number; y: number } | null>(null)
-    const [dragStartSeatPosition, setDragStartSeatPosition] = useState<{ x: number; y: number } | null>(null)
-    const [dragSelectedSeatStartPositions, setDragSelectedSeatStartPositions] = useState<Record<number, { x: number; y: number }> | null>(null)
-    const [draggingPolygonPointIndex, setDraggingPolygonPointIndex] = useState<number | null>(null)
-    const [draggingPolygonBody, setDraggingPolygonBody] = useState(false)
-    const [dragPolygonStartCursor, setDragPolygonStartCursor] = useState<{ x: number; y: number } | null>(null)
-    const [dragPolygonStartPoints, setDragPolygonStartPoints] = useState<Array<{ x: number; y: number }> | null>(null)
-    const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([])
-    const [snapToGrid, setSnapToGrid] = useState(false)
-    const [viewport, setViewport] = useState(DEFAULT_VIEWPORT)
-    const [isPanning, setIsPanning] = useState(false)
-    const [panStartCursor, setPanStartCursor] = useState<{ x: number; y: number } | null>(null)
-    const [panStartOffset, setPanStartOffset] = useState<{ x: number; y: number } | null>(null)
-    const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null)
-    const [selectionCurrent, setSelectionCurrent] = useState<{ x: number; y: number } | null>(null)
-    const [historyPast, setHistoryPast] = useState<Array<{ seats: VenueSeatItem[]; polygons: VenuePolygonItem[]; deletedSeatIds: number[]; deletedPolygonIds: number[]; selectedSeatIds: number[] }>>([])
-    const [historyFuture, setHistoryFuture] = useState<Array<{ seats: VenueSeatItem[]; polygons: VenuePolygonItem[]; deletedSeatIds: number[]; deletedPolygonIds: number[]; selectedSeatIds: number[] }>>([])
-    const [builderDirty, setBuilderDirty] = useState(false)
-    const [pendingDeletedSeatIds, setPendingDeletedSeatIds] = useState<number[]>([])
-    const [pendingDeletedPolygonIds, setPendingDeletedPolygonIds] = useState<number[]>([])
-    const [seatSize, setSeatSize] = useState(1.5)
-    const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null)
+  const selectedLayout = layouts.find((item) => item.id === selectedLayoutId) ?? null
+  const canvasAspectRatio = selectedVenue && selectedVenue.width > 0 && selectedVenue.height > 0
+    ? selectedVenue.width / selectedVenue.height
+    : 5 / 3
 
-    const selectedLayout = useMemo(
-        () => layouts.find((layout) => layout.id === selectedLayoutId) ?? null,
-        [layouts, selectedLayoutId],
-    )
+  async function loadSeats(venueId: number, layoutId: number | null) {
+    setSeats(layoutId ? await adminApi.listVenueSeats(venueId, layoutId) : [])
+    setSelectedSeatIds([])
+    setSelectionStart(null)
+    setSelectionCurrent(null)
+    setDraggingSeatId(null)
+    setDragStartPosition(null)
+    setDragSelectedSeatStartPositions(null)
+  }
 
-    const selectedVenueBackground = selectedVenue?.background_source ?? null
+  async function selectVenue(venueId: number) {
+    setError(null)
+    const [venue, nextLayouts] = await Promise.all([adminApi.getVenue(venueId), adminApi.listLayouts(venueId)])
+    setSelectedVenue(venue)
+    setLayouts(nextLayouts)
+    const nextLayoutId = nextLayouts[0]?.id ?? null
+    setSelectedLayoutId(nextLayoutId)
+    await loadSeats(venueId, nextLayoutId)
+  }
 
-    const hasLayout = Boolean(selectedLayoutId)
-    const activeStepIndex = STUDIO_STEPS.indexOf(studioStep)
-    const sectionMap = useMemo(() => new Map(sections.map((section) => [section.id, section])), [sections])
-
-    function canAccessStep(step: StudioStep) {
-        switch (step) {
-            case 'venue':
-                return true
-            case 'layout':
-                return Boolean(selectedVenueId)
-            case 'builder':
-                return Boolean(selectedVenueId && hasLayout)
-            default:
-                return false
-        }
+  async function loadVenues(preferredVenueId?: number) {
+    setLoading(true)
+    setError(null)
+    try {
+      const nextVenues = await adminApi.listVenues()
+      setVenues(nextVenues)
+      const nextId = preferredVenueId ?? selectedVenue?.id ?? nextVenues[0]?.id
+      if (nextId) await selectVenue(nextId)
+      else {
+        setSelectedVenue(null)
+        setLayouts([])
+        setSeats([])
+      }
+    } catch (errorValue) {
+      setError(extractApiErrorMessage(errorValue, 'Không thể tải Venue Studio.'))
+    } finally {
+      setLoading(false)
     }
+  }
 
-    const seatPositionMap = useMemo(() => {
-        const next = new Map<number, { x: number; y: number }>()
-        venueSeats.forEach((seat) => {
-            next.set(seat.id, { x: seat.x ?? 0, y: seat.y ?? 0 })
-        })
-        if (draggingSeatId !== null && dragSeatPosition) {
-            next.set(draggingSeatId, dragSeatPosition)
-        }
-        return next
-    }, [venueSeats, draggingSeatId, dragSeatPosition])
-    const selectedSeat = useMemo(
-        () => venueSeats.find((seat) => seat.id === selectedSeatIds[0]) ?? null,
-        [venueSeats, selectedSeatIds],
-    )
+  useEffect(() => {
+    void loadVenues()
+    // Venue list is loaded once on entry; subsequent refreshes are explicit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-    function cloneSeatsForHistory(seats: VenueSeatItem[]) {
-        return seats.map((seat) => ({ ...seat }))
+  useEffect(() => {
+    seatsRef.current = seats
+  }, [seats])
+
+  function startCreateVenue() {
+    setEditingVenueId(null)
+    setVenueForm(EMPTY_VENUE)
+  }
+
+  function startEditVenue() {
+    if (!selectedVenue) return
+    setEditingVenueId(selectedVenue.id)
+    setVenueForm({ name: selectedVenue.name, address: selectedVenue.address ?? '', is_active: selectedVenue.is_active })
+  }
+
+  async function saveVenue() {
+    if (!venueForm.name.trim()) return
+    setBusy(true)
+    setError(null)
+    try {
+      const payload = { name: venueForm.name.trim(), address: venueForm.address.trim() || null, is_active: venueForm.is_active }
+      const saved = editingVenueId
+        ? await adminApi.updateVenue(editingVenueId, payload)
+        : await adminApi.createVenue(payload)
+      setMessage(editingVenueId ? 'Đã cập nhật địa điểm.' : 'Đã tạo địa điểm.')
+      setEditingVenueId(saved.id)
+      await loadVenues(saved.id)
+    } catch (errorValue) {
+      setError(extractApiErrorMessage(errorValue, 'Không thể lưu địa điểm.'))
+    } finally {
+      setBusy(false)
     }
+  }
 
-    function clonePolygonsForHistory(polygons: VenuePolygonItem[]) {
-        return polygons.map((polygon) => ({
-            ...polygon,
-            points: polygon.points.map((point) => ({ ...point })),
-        }))
+  async function deleteVenue() {
+    if (!selectedVenue || !window.confirm(`Xóa địa điểm "${selectedVenue.name}"?`)) return
+    setBusy(true)
+    try {
+      await adminApi.deleteVenue(selectedVenue.id)
+      setMessage('Đã xóa địa điểm.')
+      setEditingVenueId(null)
+      setVenueForm(EMPTY_VENUE)
+      await loadVenues()
+    } catch (errorValue) {
+      setError(extractApiErrorMessage(errorValue, 'Không thể xóa địa điểm.'))
+    } finally {
+      setBusy(false)
     }
+  }
 
-    function pushHistorySnapshot(nextSeats = venueSeats, nextPolygons = venuePolygons) {
-        setHistoryPast((previous) => [...previous, { seats: cloneSeatsForHistory(nextSeats), polygons: clonePolygonsForHistory(nextPolygons), deletedSeatIds: [...pendingDeletedSeatIds], deletedPolygonIds: [...pendingDeletedPolygonIds], selectedSeatIds: [...selectedSeatIds] }].slice(-50))
-        setHistoryFuture([])
+  async function uploadBackground(file: File) {
+    if (!selectedVenue) return
+    setBusy(true)
+    try {
+      await adminApi.uploadVenueBackground(selectedVenue.id, file)
+      await selectVenue(selectedVenue.id)
+      setMessage('Đã tải ảnh nền và cập nhật kích thước canvas.')
+    } catch (errorValue) {
+      setError(extractApiErrorMessage(errorValue, 'Không thể tải ảnh nền. Chỉ hỗ trợ SVG, PNG, JPEG hoặc WEBP.'))
+    } finally {
+      setBusy(false)
     }
+  }
 
-    function syncSavedVenueSeats(seats: VenueSeatItem[]) {
-        savedVenueSeatsRef.current = cloneSeatsForHistory(seats)
+  function startEditLayout(layout: VenueLayoutItem) {
+    setEditingLayoutId(layout.id)
+    setLayoutForm({ name: layout.name, description: layout.description ?? '' })
+  }
+
+  async function saveLayout() {
+    if (!selectedVenue || !layoutForm.name.trim()) return
+    setBusy(true)
+    try {
+      const payload = { name: layoutForm.name.trim(), description: layoutForm.description.trim() || null }
+      const saved = editingLayoutId
+        ? await adminApi.updateLayout(editingLayoutId, payload)
+        : await adminApi.createLayout(selectedVenue.id, payload)
+      const nextLayouts = await adminApi.listLayouts(selectedVenue.id)
+      setLayouts(nextLayouts)
+      setSelectedLayoutId(saved.id)
+      setEditingLayoutId(saved.id)
+      setLayoutForm({ name: saved.name, description: saved.description ?? '' })
+      await loadSeats(selectedVenue.id, saved.id)
+      setMessage(editingLayoutId ? 'Đã cập nhật bố cục.' : 'Đã tạo bố cục.')
+    } catch (errorValue) {
+      setError(extractApiErrorMessage(errorValue, 'Không thể lưu bố cục.'))
+    } finally {
+      setBusy(false)
     }
+  }
 
-    function syncSavedVenuePolygons(polygons: VenuePolygonItem[]) {
-        savedVenuePolygonsRef.current = clonePolygonsForHistory(polygons)
+  async function deleteLayout(layoutId: number) {
+    if (!selectedVenue || !window.confirm('Xóa bố cục này?')) return
+    setBusy(true)
+    try {
+      await adminApi.deleteLayout(layoutId)
+      const nextLayouts = await adminApi.listLayouts(selectedVenue.id)
+      setLayouts(nextLayouts)
+      const nextId = nextLayouts[0]?.id ?? null
+      setSelectedLayoutId(nextId)
+      await loadSeats(selectedVenue.id, nextId)
+      setEditingLayoutId(null)
+      setLayoutForm(EMPTY_LAYOUT)
+    } catch (errorValue) {
+      setError(extractApiErrorMessage(errorValue, 'Không thể xóa bố cục.'))
+    } finally {
+      setBusy(false)
     }
+  }
 
-    function nextTempSeatId() {
-        const nextId = tempSeatIdRef.current
-        tempSeatIdRef.current -= 1
-        return nextId
+  function getCanvasCoordinates(clientX: number, clientY: number) {
+    const rect = builderCanvasRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    const x = ((clientX - rect.left - viewport.offsetX) / viewport.scale / rect.width) * 100
+    const y = ((clientY - rect.top - viewport.offsetY) / viewport.scale / rect.height) * 100
+    return {
+      x: Math.max(0, Math.min(100, snapToGrid ? Math.round(x) : Number(x.toFixed(2)))),
+      y: Math.max(0, Math.min(100, snapToGrid ? Math.round(y) : Number(y.toFixed(2)))),
     }
+  }
 
-    function nextTempPolygonId() {
-        const nextId = tempPolygonIdRef.current
-        tempPolygonIdRef.current -= 1
-        return nextId
+  function handleCanvasMouseDown(event: MouseEvent<HTMLDivElement>) {
+    if (placementMode === 'select') {
+      const point = getCanvasCoordinates(event.clientX, event.clientY)
+      if (!point) return
+      event.preventDefault()
+      setSelectionStart(point)
+      setSelectionCurrent(point)
+      return
     }
+    if (placementMode !== 'pan') return
+    event.preventDefault()
+    setPanStart({ clientX: event.clientX, clientY: event.clientY, offsetX: viewport.offsetX, offsetY: viewport.offsetY })
+  }
 
-    function markBuilderDirty() {
-        setBuilderDirty(true)
+  function handleCanvasMouseMove(event: MouseEvent<HTMLDivElement>) {
+    setCanvasCursor(getCanvasCoordinates(event.clientX, event.clientY))
+  }
+
+  function handleCanvasClick(event: MouseEvent<HTMLDivElement>) {
+    if (!['seat', 'bulk'].includes(placementMode) || draggingSeatId !== null) return
+    const point = getCanvasCoordinates(event.clientX, event.clientY)
+    if (!point) return
+    if (placementMode === 'bulk') {
+      setBulkForm((current) => ({ ...current, start_x: point.x.toFixed(2), start_y: point.y.toFixed(2) }))
+      return
     }
+    setSeatForm((current) => ({ ...current, x: point.x.toFixed(2), y: point.y.toFixed(2) }))
+  }
 
-    function discardBuilderChanges() {
-        setVenueSeats(cloneSeatsForHistory(savedVenueSeatsRef.current))
-        setVenuePolygons(clonePolygonsForHistory(savedVenuePolygonsRef.current))
-        setPendingDeletedSeatIds([])
-        setPendingDeletedPolygonIds([])
-        setSelectedSeatIds([])
-        setDraggingSeatId(null)
-        setDragSeatPosition(null)
-        setDragStartSeatPosition(null)
-        setDragSelectedSeatStartPositions(null)
-        setHistoryPast([])
-        setHistoryFuture([])
-        setBuilderDirty(false)
-        setSelectionStart(null)
-        setSelectionCurrent(null)
+  function zoomCanvas(multiplier: number) {
+    setViewport((current) => ({ ...current, scale: Math.max(0.5, Math.min(3, current.scale * multiplier)) }))
+  }
+
+  function handleCanvasWheel(event: WheelEvent) {
+    event.preventDefault()
+    const element = builderCanvasRef.current
+    if (!element) return
+    const rect = element.getBoundingClientRect()
+    const pointerX = event.clientX - rect.left
+    const pointerY = event.clientY - rect.top
+    setViewport((current) => {
+      const scale = Math.max(0.5, Math.min(3, Number((current.scale * (event.deltaY < 0 ? 1.1 : 0.9)).toFixed(2))))
+      return {
+        scale,
+        offsetX: pointerX - ((pointerX - current.offsetX) / current.scale) * scale,
+        offsetY: pointerY - ((pointerY - current.offsetY) / current.scale) * scale,
+      }
+    })
+  }
+
+  function handleSeatMouseDown(event: MouseEvent<HTMLButtonElement>, seat: VenueSeatItem) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (placementMode !== 'select') {
+      editSeat(seat)
+      return
     }
-
-    function confirmLeaveBuilderIfDirty() {
-        if (!builderDirty) return true
-        return window.confirm('Anh đang có thay đổi trên sơ đồ chưa lưu. Thoát ra sẽ mất các thay đổi này. Vẫn tiếp tục?')
+    const nextSelection = event.shiftKey
+      ? (selectedSeatIds.includes(seat.id) ? selectedSeatIds.filter((id) => id !== seat.id) : [...selectedSeatIds, seat.id])
+      : (selectedSeatIds.includes(seat.id) ? selectedSeatIds : [seat.id])
+    if (!nextSelection.includes(seat.id)) {
+      setSelectedSeatIds(nextSelection)
+      return
     }
+    const point = { x: seat.x ?? 0, y: seat.y ?? 0 }
+    setSelectedSeatIds(nextSelection)
+    setDraggingSeatId(seat.id)
+    setDragStartPosition(point)
+    setDragSelectedSeatStartPositions(Object.fromEntries(
+      seats.filter((item) => nextSelection.includes(item.id)).map((item) => [item.id, { x: item.x ?? 0, y: item.y ?? 0 }]),
+    ))
+  }
 
-    function applySnap(value: number) {
-        if (!snapToGrid) return Number(value.toFixed(2))
-        return Number((Math.round(value / SNAP_STEP) * SNAP_STEP).toFixed(2))
+  useEffect(() => {
+    if (!panStart) return
+    const onMove = (event: globalThis.MouseEvent) => {
+      setViewport((current) => ({
+        ...current,
+        offsetX: panStart.offsetX + event.clientX - panStart.clientX,
+        offsetY: panStart.offsetY + event.clientY - panStart.clientY,
+      }))
     }
-
-    async function loadVenues(nextSelectedId?: number | null) {
-        setLoading(true)
-        setError(null)
-        try {
-            const list = await adminApi.listVenues()
-            setVenues(list)
-            const candidate = nextSelectedId ?? selectedVenueId ?? list[0]?.id ?? null
-            setSelectedVenueId(candidate)
-            if (candidate) {
-                await loadVenueBundle(candidate)
-            } else {
-                setSelectedVenue(null)
-                setLayouts([])
-                setSections([])
-                setSelectedLayoutId(null)
-            }
-        } catch (errorValue) {
-            setError(extractApiErrorMessage(errorValue, 'Không thể tải danh sách venue.'))
-        } finally {
-            setLoading(false)
-        }
+    const onUp = () => setPanStart(null)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
     }
+  }, [panStart])
 
-    async function loadVenueBundle(venueId: number) {
-        const [detail, layoutList] = await Promise.all([adminApi.getVenue(venueId), adminApi.listLayouts(venueId)])
-        setSelectedVenue(detail)
-        setLayouts(layoutList)
-        const nextLayoutId = layoutList[0]?.id ?? null
-        setSelectedLayoutId(nextLayoutId)
-        setSelectedVenueId(venueId)
-        if (nextLayoutId) {
-            await loadBuilderData(venueId, nextLayoutId)
-        } else {
-            setSections([])
-            setVenueSeats([])
-            setVenuePolygons([])
-        }
-        if (!nextLayoutId) {
-            setStudioStep('layout')
-        } else {
-            setStudioStep('builder')
-        }
+  useEffect(() => {
+    if (placementMode !== 'select' || !selectionStart) return
+    const onMove = (event: globalThis.MouseEvent) => {
+      const point = getCanvasCoordinates(event.clientX, event.clientY)
+      if (point) setSelectionCurrent(point)
     }
-
-    async function loadBuilderData(venueId: number, layoutId: number) {
-        const seats = await adminApi.listVenueSeats(venueId, layoutId)
-        setSections([])
-        setVenueSeats(seats)
-        setVenuePolygons([])
-        syncSavedVenueSeats(seats)
-        syncSavedVenuePolygons([])
-        setSingleSeatForm((previous) => ({
-            ...previous,
-            section_id: '',
-            label: previous.label || 'A1',
-        }))
-        setBulkSeatForm((previous) => ({
-            ...previous,
-            section_id: '',
-        }))
-        setPolygonForm((previous) => ({
-            ...previous,
-            section_id: '',
-        }))
-        setEditingSeatId(null)
-        setEditingPolygonId(null)
-        setDraftPolygonPoints([])
-        setDraggingSeatId(null)
-        setDragSeatPosition(null)
-        setDragStartSeatPosition(null)
-        setDragSelectedSeatStartPositions(null)
-        setDraggingPolygonPointIndex(null)
-        setDraggingPolygonBody(false)
-        setDragPolygonStartCursor(null)
-        setDragPolygonStartPoints(null)
-        setSelectedSeatIds([])
-        setHistoryPast([])
-        setHistoryFuture([])
-        setPendingDeletedSeatIds([])
-        setPendingDeletedPolygonIds([])
-        setBuilderDirty(false)
-        setSelectionStart(null)
-        setSelectionCurrent(null)
-        if (nudgeSaveTimerRef.current) {
-            clearTimeout(nudgeSaveTimerRef.current)
-            nudgeSaveTimerRef.current = null
-        }
+    const onUp = () => {
+      const end = selectionCurrent ?? selectionStart
+      const minX = Math.min(selectionStart.x, end.x)
+      const maxX = Math.max(selectionStart.x, end.x)
+      const minY = Math.min(selectionStart.y, end.y)
+      const maxY = Math.max(selectionStart.y, end.y)
+      setSelectedSeatIds(seats.filter((seat) => {
+        const x = seat.x ?? 0
+        const y = seat.y ?? 0
+        return x >= minX && x <= maxX && y >= minY && y <= maxY
+      }).map((seat) => seat.id))
+      setSelectionStart(null)
+      setSelectionCurrent(null)
     }
-
-    useEffect(() => {
-        void loadVenues()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
-
-    useEffect(() => {
-        if (!selectedLayoutId) {
-            setSections([])
-            setVenueSeats([])
-            setVenuePolygons([])
-            return
-        }
-        if (!selectedVenueId) return
-
-        const activeLayout = layouts.find((layout) => layout.id === selectedLayoutId)
-        if (!activeLayout || activeLayout.venue_id !== selectedVenueId) return
-
-        let active = true
-        void (async () => {
-            try {
-                const seats = await adminApi.listVenueSeats(selectedVenueId, selectedLayoutId)
-                if (active) {
-                    setSections([])
-                    setVenueSeats(seats)
-                    setVenuePolygons([])
-                    syncSavedVenueSeats(seats)
-                    syncSavedVenuePolygons([])
-                    setPendingDeletedSeatIds([])
-                    setPendingDeletedPolygonIds([])
-                    setBuilderDirty(false)
-                }
-            } catch (errorValue) {
-                if (active) {
-                    setError(extractApiErrorMessage(errorValue, 'Không thể tải seat template của layout.'))
-                }
-            }
-        })()
-
-        return () => {
-            active = false
-        }
-    }, [layouts, selectedLayoutId, selectedVenueId])
-
-    useEffect(() => {
-        if (studioStep === 'builder' && !canAccessStep('builder')) {
-            if (canAccessStep('layout')) {
-                setStudioStep('layout')
-            } else {
-                setStudioStep('venue')
-            }
-        }
-    }, [studioStep, selectedVenueId, hasLayout])
-
-    useEffect(() => {
-        if (!autoUploadQueuedRef.current || !backgroundFile || !selectedVenueId) return
-        autoUploadQueuedRef.current = false
-        void handleUploadBackground(backgroundFile)
-    }, [backgroundFile, selectedVenueId])
-
-    useEffect(() => {
-        if (!builderDirty) return
-
-        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-            event.preventDefault()
-            event.returnValue = ''
-        }
-
-        window.addEventListener('beforeunload', handleBeforeUnload)
-        return () => {
-            window.removeEventListener('beforeunload', handleBeforeUnload)
-        }
-    }, [builderDirty])
-
-    useEffect(() => {
-        if (draggingSeatId === null) return
-
-        const handleWindowMouseMove = (event: globalThis.MouseEvent) => {
-            const coordinates = getCanvasCoordinates(event.clientX, event.clientY)
-            if (!coordinates) return
-            setDragSeatPosition(coordinates)
-            if (dragSelectedSeatStartPositions && dragStartSeatPosition && draggingSeatId !== null) {
-                const deltaX = coordinates.x - dragStartSeatPosition.x
-                const deltaY = coordinates.y - dragStartSeatPosition.y
-            setVenueSeats((previous) =>
-                previous.map((seat) => {
-                    const start = dragSelectedSeatStartPositions[seat.id]
-                    if (!start) return seat
-                    return {
-                            ...seat,
-                            x: applySnap(Math.max(0, Math.min(100, start.x + deltaX))),
-                            y: applySnap(Math.max(0, Math.min(100, start.y + deltaY))),
-                        }
-                    }),
-                )
-                markBuilderDirty()
-            }
-            setSingleSeatForm((previous) => ({
-                ...previous,
-                x: coordinates.x.toFixed(2),
-                y: coordinates.y.toFixed(2),
-            }))
-        }
-
-        const handleWindowMouseUp = () => {
-            void finalizeSeatDrag()
-        }
-
-        window.addEventListener('mousemove', handleWindowMouseMove)
-        window.addEventListener('mouseup', handleWindowMouseUp)
-
-        return () => {
-            window.removeEventListener('mousemove', handleWindowMouseMove)
-            window.removeEventListener('mouseup', handleWindowMouseUp)
-        }
-    }, [draggingSeatId, selectedLayoutId, selectedVenueId, dragSeatPosition, dragStartSeatPosition, dragSelectedSeatStartPositions, snapToGrid])
-
-    useEffect(() => {
-        if (draggingPolygonPointIndex === null) return
-
-        const handleWindowMouseMove = (event: globalThis.MouseEvent) => {
-            const coordinates = getCanvasCoordinates(event.clientX, event.clientY)
-            if (!coordinates) return
-            setDraftPolygonPoints((previous) =>
-                previous.map((point, index) => (index === draggingPolygonPointIndex ? coordinates : point)),
-            )
-        }
-
-        const handleWindowMouseUp = () => {
-            setDraggingPolygonPointIndex(null)
-        }
-
-        window.addEventListener('mousemove', handleWindowMouseMove)
-        window.addEventListener('mouseup', handleWindowMouseUp)
-
-        return () => {
-            window.removeEventListener('mousemove', handleWindowMouseMove)
-            window.removeEventListener('mouseup', handleWindowMouseUp)
-        }
-    }, [draggingPolygonPointIndex])
-
-    useEffect(() => {
-        if (!draggingPolygonBody || !dragPolygonStartCursor || !dragPolygonStartPoints) return
-
-        const handleWindowMouseMove = (event: globalThis.MouseEvent) => {
-            const coordinates = getCanvasCoordinates(event.clientX, event.clientY)
-            if (!coordinates) return
-            const deltaX = coordinates.x - dragPolygonStartCursor.x
-            const deltaY = coordinates.y - dragPolygonStartCursor.y
-            setDraftPolygonPoints(
-                dragPolygonStartPoints.map((point) => ({
-                    x: Number(Math.max(0, Math.min(100, point.x + deltaX)).toFixed(2)),
-                    y: Number(Math.max(0, Math.min(100, point.y + deltaY)).toFixed(2)),
-                })),
-            )
-        }
-
-        const handleWindowMouseUp = () => {
-            setDraggingPolygonBody(false)
-            setDragPolygonStartCursor(null)
-            setDragPolygonStartPoints(null)
-        }
-
-        window.addEventListener('mousemove', handleWindowMouseMove)
-        window.addEventListener('mouseup', handleWindowMouseUp)
-
-        return () => {
-            window.removeEventListener('mousemove', handleWindowMouseMove)
-            window.removeEventListener('mouseup', handleWindowMouseUp)
-        }
-    }, [draggingPolygonBody, dragPolygonStartCursor, dragPolygonStartPoints])
-
-    useEffect(() => {
-        if (!isPanning || !panStartCursor || !panStartOffset) return
-
-        const handleWindowMouseMove = (event: globalThis.MouseEvent) => {
-            setViewport((previous) => ({
-                ...previous,
-                offsetX: panStartOffset.x + (event.clientX - panStartCursor.x),
-                offsetY: panStartOffset.y + (event.clientY - panStartCursor.y),
-            }))
-        }
-
-        const handleWindowMouseUp = () => {
-            setIsPanning(false)
-            setPanStartCursor(null)
-            setPanStartOffset(null)
-        }
-
-        window.addEventListener('mousemove', handleWindowMouseMove)
-        window.addEventListener('mouseup', handleWindowMouseUp)
-
-        return () => {
-            window.removeEventListener('mousemove', handleWindowMouseMove)
-            window.removeEventListener('mouseup', handleWindowMouseUp)
-        }
-    }, [isPanning, panStartCursor, panStartOffset])
-
-    useEffect(() => {
-        if (placementMode !== 'select' || !selectionStart) return
-
-        const handleWindowMouseMove = (event: globalThis.MouseEvent) => {
-            const coordinates = getCanvasCoordinates(event.clientX, event.clientY)
-            if (!coordinates) return
-            setSelectionCurrent(coordinates)
-        }
-
-        const handleWindowMouseUp = () => {
-            const end = selectionCurrent ?? selectionStart
-            const minX = Math.min(selectionStart.x, end.x)
-            const maxX = Math.max(selectionStart.x, end.x)
-            const minY = Math.min(selectionStart.y, end.y)
-            const maxY = Math.max(selectionStart.y, end.y)
-            setSelectedSeatIds(
-                venueSeats
-                    .filter((seat) => {
-                        const x = seat.x ?? 0
-                        const y = seat.y ?? 0
-                        return x >= minX && x <= maxX && y >= minY && y <= maxY
-                    })
-                    .map((seat) => seat.id),
-            )
-            setSelectionStart(null)
-            setSelectionCurrent(null)
-        }
-
-        window.addEventListener('mousemove', handleWindowMouseMove)
-        window.addEventListener('mouseup', handleWindowMouseUp)
-        return () => {
-            window.removeEventListener('mousemove', handleWindowMouseMove)
-            window.removeEventListener('mouseup', handleWindowMouseUp)
-        }
-    }, [placementMode, selectionStart, selectionCurrent, venueSeats])
-
-    useEffect(() => {
-        const activeSeatIds = selectedSeatIds.length > 0 ? selectedSeatIds : editingSeatId !== null ? [editingSeatId] : []
-        if (activeSeatIds.length === 0) return
-
-        const handleKeyDown = (event: KeyboardEvent) => {
-            const isEditableTarget = event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)
-            if (isEditableTarget) return
-
-            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
-                event.preventDefault()
-                if (event.shiftKey) {
-                    handleRedo()
-                } else {
-                    handleUndo()
-                }
-                return
-            }
-
-            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'y') {
-                event.preventDefault()
-                handleRedo()
-                return
-            }
-
-            const delta = event.shiftKey ? 5 : 1
-            let moveX = 0
-            let moveY = 0
-            if (event.key === 'ArrowLeft') moveX = -delta
-            if (event.key === 'ArrowRight') moveX = delta
-            if (event.key === 'ArrowUp') moveY = -delta
-            if (event.key === 'ArrowDown') moveY = delta
-            if (moveX === 0 && moveY === 0) return
-
-            event.preventDefault()
-            pushHistorySnapshot()
-            let nextSeatsSnapshot: VenueSeatItem[] = []
-            setVenueSeats((previous) => {
-                nextSeatsSnapshot = previous.map((seat) => {
-                    if (!activeSeatIds.includes(seat.id)) return seat
-                    return {
-                        ...seat,
-                        x: applySnap(Math.max(0, Math.min(100, (seat.x ?? 0) + moveX))),
-                        y: applySnap(Math.max(0, Math.min(100, (seat.y ?? 0) + moveY))),
-                    }
-                })
-                return nextSeatsSnapshot
-            })
-            setBuilderDirty(true)
-        }
-
-        window.addEventListener('keydown', handleKeyDown)
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown)
-        }
-    }, [selectedSeatIds, editingSeatId, venueSeats, venuePolygons, historyPast, historyFuture, snapToGrid])
-
-    useEffect(() => {
-        if (!selectedSeat || selectedSeatIds.length !== 1) {
-            setEditingSeatId(null)
-            return
-        }
-        setEditingSeatId(selectedSeat.id)
-        setSingleSeatForm({
-            label: selectedSeat.label,
-            section_id: selectedSeat.section_id ? String(selectedSeat.section_id) : '',
-            x: String(selectedSeat.x ?? 0),
-            y: String(selectedSeat.y ?? 0),
-            rotation: String(selectedSeat.rotation ?? 0),
-            is_admin_locked: selectedSeat.is_admin_locked ?? false,
-        })
-    }, [selectedSeat, selectedSeatIds])
-
-    function startEditVenue(venue: VenueSummary) {
-        setEditingVenueId(venue.id)
-        setVenueForm({
-            name: venue.name,
-            address: selectedVenue?.id === venue.id ? selectedVenue.address ?? '' : '',
-            is_active: venue.is_active,
-        })
-        setStudioStep('venue')
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
     }
+  }, [placementMode, seats, selectionCurrent, selectionStart, snapToGrid, viewport])
 
-    function resetVenueForm() {
-        setEditingVenueId(null)
-        setVenueForm(DEFAULT_VENUE_FORM)
-    }
-
-    async function handleSaveVenue() {
-        setBusy(true)
-        setError(null)
-        setMessage(null)
-        try {
-            if (editingVenueId) {
-                const updated = await adminApi.updateVenue(editingVenueId, {
-                    name: venueForm.name,
-                    address: venueForm.address || null,
-                    is_active: venueForm.is_active,
-                })
-                setMessage('Đã cập nhật venue.')
-                resetVenueForm()
-                setStudioStep('venue')
-                await loadVenues(updated.id)
-                return
-            }
-
-            const created = await adminApi.createVenue({
-                name: venueForm.name,
-                address: venueForm.address || null,
-            })
-            resetVenueForm()
-            setMessage('Đã tạo venue mới.')
-            setStudioStep('venue')
-            await loadVenues(created.id)
-        } catch (errorValue) {
-            setError(extractApiErrorMessage(errorValue, 'Không thể tạo venue.'))
-        } finally {
-            setBusy(false)
-        }
-    }
-
-    async function handleDeleteVenue(venueId: number) {
-        if (!window.confirm('Bạn có chắc muốn xóa địa điểm này? Hành động này không thể hoàn tác.')) return
-        setBusy(true)
-        setError(null)
-        setMessage(null)
-        try {
-            await adminApi.deleteVenue(venueId)
-            setMessage('Đã xóa địa điểm.')
-            const nextId = venues.find((v) => v.id !== venueId)?.id ?? null
-            await loadVenues(nextId)
-            if (selectedVenueId === venueId) {
-                setSelectedVenue(null)
-                setSelectedVenueId(null)
-                setLayouts([])
-                setSections([])
-                setVenueSeats([])
-                setVenuePolygons([])
-                setStudioStep('venue')
-            }
-        } catch (errorValue) {
-            setError(extractApiErrorMessage(errorValue, 'Không thể xóa địa điểm.'))
-        } finally {
-            setBusy(false)
-        }
-    }
-
-    async function handleUploadBackground(fileOverride?: File) {
-        const file = fileOverride ?? backgroundFile
-        if (!selectedVenueId || !file) return
-        const nextStepAfterUpload: StudioStep = studioStep === 'builder' ? 'builder' : 'venue'
-        setBusy(true)
-        setError(null)
-        setMessage(null)
-        try {
-            await adminApi.uploadVenueBackground(selectedVenueId, file)
-            setMessage('Đã tải nền lên. Trình dựng đã sẵn sàng.')
-            await loadVenueBundle(selectedVenueId)
-            setStudioStep(nextStepAfterUpload)
-        } catch (errorValue) {
-            setError(extractApiErrorMessage(errorValue, 'Không thể tải background.'))
-        } finally {
-            setBusy(false)
-        }
-    }
-
-    function handleBackgroundFileChange(file: File | null) {
-        setBackgroundFile(file)
-        if (!file) {
-            autoUploadQueuedRef.current = false
-            return
-        }
-        autoUploadQueuedRef.current = true
-        if (!selectedVenueId) {
-            setMessage('File đã được giữ tạm. Hãy chọn venue, background sẽ tự upload.')
-            return
-        }
-        void handleUploadBackground(file)
-    }
-
-    function startEditLayout(layout: VenueLayoutItem) {
-        setEditingLayoutId(layout.id)
-        setLayoutForm({
-            name: layout.name,
-            description: layout.description ?? '',
-        })
-    }
-
-    function resetLayoutForm() {
-        setEditingLayoutId(null)
-        setLayoutForm(DEFAULT_LAYOUT_FORM)
-    }
-
-    async function handleSaveLayout() {
-        if (!selectedVenueId || !layoutForm.name.trim()) return
-        setBusy(true)
-        setError(null)
-        setMessage(null)
-        try {
-            if (editingLayoutId) {
-                await adminApi.updateLayout(editingLayoutId, {
-                    name: layoutForm.name,
-                    description: layoutForm.description || null,
-                })
-                setMessage('Đã cập nhật layout.')
-                setStudioStep('builder')
-            } else {
-                const created = await adminApi.createLayout(selectedVenueId, {
-                    name: layoutForm.name,
-                    description: layoutForm.description || null,
-                })
-                setMessage('Đã tạo layout mới.')
-                setSelectedLayoutId(created.id)
-                setStudioStep('builder')
-            }
-            resetLayoutForm()
-            await loadVenueBundle(selectedVenueId)
-        } catch (errorValue) {
-            setError(extractApiErrorMessage(errorValue, 'Không thể lưu layout.'))
-        } finally {
-            setBusy(false)
-        }
-    }
-
-    async function handleDeleteLayout(layoutId: number) {
-        if (!window.confirm('Xóa layout này?')) return
-        setBusy(true)
-        setError(null)
-        setMessage(null)
-        try {
-            await adminApi.deleteLayout(layoutId)
-            setMessage('Đã xóa layout.')
-            if (selectedVenueId) {
-                await loadVenueBundle(selectedVenueId)
-            }
-        } catch (errorValue) {
-            setError(extractApiErrorMessage(errorValue, 'Không thể xóa layout.'))
-        } finally {
-            setBusy(false)
-        }
-    }
-
-    function startEditSection(section: VenueSectionItem) {
-        setEditingSectionId(section.id)
-        setSectionForm({
-            name: section.name,
-            code: section.code,
-            color: section.color,
-            price_base: String(section.price_base),
-            sort_order: String(section.sort_order),
-        })
-    }
-
-    function resetSectionForm() {
-        setEditingSectionId(null)
-        setSectionForm(DEFAULT_SECTION_FORM)
-    }
-
-    async function handleSaveSection() {
-        if (!selectedLayoutId || !sectionForm.name.trim() || !sectionForm.code.trim()) return
-        setBusy(true)
-        setError(null)
-        setMessage(null)
-        try {
-            if (editingSectionId) {
-                await adminApi.updateSection(editingSectionId, {
-                    name: sectionForm.name,
-                    code: sectionForm.code,
-                    color: sectionForm.color,
-                    price_base: Number(sectionForm.price_base),
-                    sort_order: Number(sectionForm.sort_order),
-                })
-                setMessage('Đã cập nhật section.')
-            } else {
-                await adminApi.createLayoutSection(selectedLayoutId, {
-                    name: sectionForm.name,
-                    code: sectionForm.code,
-                    color: sectionForm.color,
-                    price_base: Number(sectionForm.price_base),
-                    sort_order: Number(sectionForm.sort_order),
-                })
-                setMessage('Đã tạo section mới.')
-            }
-            resetSectionForm()
-            const latestSections = await adminApi.listLayoutSections(selectedLayoutId)
-            setSections(latestSections)
-            setStudioStep('builder')
-        } catch (errorValue) {
-            setError(extractApiErrorMessage(errorValue, 'Không thể lưu section.'))
-        } finally {
-            setBusy(false)
-        }
-    }
-
-    async function handleDeleteSection(sectionId: number) {
-        if (!window.confirm('Xóa section này?')) return
-        setBusy(true)
-        setError(null)
-        setMessage(null)
-        try {
-            await adminApi.deleteSection(sectionId)
-            setMessage('Đã xóa section.')
-            if (selectedLayoutId) {
-                setSections(await adminApi.listLayoutSections(selectedLayoutId))
-            }
-        } catch (errorValue) {
-            setError(extractApiErrorMessage(errorValue, 'Không thể xóa section.'))
-        } finally {
-            setBusy(false)
-        }
-    }
-
-    function resetSeatForm() {
-        setEditingSeatId(null)
-        setSingleSeatForm((previous) => ({
-            ...DEFAULT_SINGLE_SEAT_FORM,
-            section_id: previous.section_id,
-        }))
-    }
-
-    function handleUndo() {
-        if (builderBusy) return
-        setHistoryPast((previous) => {
-            const snapshot = previous[previous.length - 1]
-            if (!snapshot) return previous
-            setHistoryFuture((future) => [{ seats: cloneSeatsForHistory(venueSeats), polygons: clonePolygonsForHistory(venuePolygons), deletedSeatIds: [...pendingDeletedSeatIds], deletedPolygonIds: [...pendingDeletedPolygonIds], selectedSeatIds: [...selectedSeatIds] }, ...future].slice(0, 50))
-            setVenueSeats(cloneSeatsForHistory(snapshot.seats))
-            setVenuePolygons(clonePolygonsForHistory(snapshot.polygons))
-            setPendingDeletedSeatIds(snapshot.deletedSeatIds)
-            setPendingDeletedPolygonIds(snapshot.deletedPolygonIds)
-            setSelectedSeatIds(snapshot.selectedSeatIds)
-            setBuilderDirty(true)
-            if (editingPolygonId !== null) {
-                const polygon = snapshot.polygons.find((item) => item.id === editingPolygonId)
-                setDraftPolygonPoints(polygon ? polygon.points.map((point) => ({ ...point })) : [])
-            }
-            return previous.slice(0, -1)
-        })
-    }
-
-    function handleRedo() {
-        if (builderBusy) return
-        setHistoryFuture((previous) => {
-            const snapshot = previous[0]
-            if (!snapshot) return previous
-            setHistoryPast((past) => [...past, { seats: cloneSeatsForHistory(venueSeats), polygons: clonePolygonsForHistory(venuePolygons), deletedSeatIds: [...pendingDeletedSeatIds], deletedPolygonIds: [...pendingDeletedPolygonIds], selectedSeatIds: [...selectedSeatIds] }].slice(-50))
-            setVenueSeats(cloneSeatsForHistory(snapshot.seats))
-            setVenuePolygons(clonePolygonsForHistory(snapshot.polygons))
-            setPendingDeletedSeatIds(snapshot.deletedSeatIds)
-            setPendingDeletedPolygonIds(snapshot.deletedPolygonIds)
-            setSelectedSeatIds(snapshot.selectedSeatIds)
-            setBuilderDirty(true)
-            if (editingPolygonId !== null) {
-                const polygon = snapshot.polygons.find((item) => item.id === editingPolygonId)
-                setDraftPolygonPoints(polygon ? polygon.points.map((point) => ({ ...point })) : [])
-            }
-            return previous.slice(1)
-        })
-    }
-
-    function zoomCanvas(factor: number) {
-        const element = builderCanvasRef.current
-        if (!element) return
-        const rect = element.getBoundingClientRect()
-        const centerX = rect.width / 2
-        const centerY = rect.height / 2
-        setViewport((previous) => {
-            const nextScale = Math.max(0.5, Math.min(3, Number((previous.scale * factor).toFixed(2))))
-            const scaleRatio = nextScale / previous.scale
-            return {
-                scale: nextScale,
-                offsetX: previous.offsetX - (centerX - previous.offsetX) * (scaleRatio - 1),
-                offsetY: previous.offsetY - (centerY - previous.offsetY) * (scaleRatio - 1),
-            }
-        })
-    }
-
-    function handleBuilderCanvasClick(event: MouseEvent<HTMLDivElement>) {
-        if (suppressNextCanvasClickRef.current) {
-            suppressNextCanvasClickRef.current = false
-            return
-        }
-        if (draggingSeatId !== null || draggingPolygonBody) return
-        const coordinates = getCanvasCoordinates(event.clientX, event.clientY)
-        if (!coordinates) return
-        if (placementMode === 'pan') {
-            return
-        }
-        if (placementMode === 'select') {
-            return
-        }
-        if (placementMode !== 'seat') {
-            setSelectedSeatIds([])
-            setEditingSeatId(null)
-        }
-
-        if (placementMode === 'seat') {
-            setSingleSeatForm((previous) => ({
-                ...previous,
-                x: coordinates.x.toFixed(2),
-                y: coordinates.y.toFixed(2),
-            }))
-            if (!event.shiftKey) {
-                setSelectedSeatIds([])
-            }
-            return
-        }
-
-        if (editingPolygonId !== null) {
-            return
-        }
-
-        setDraftPolygonPoints((previous) => [...previous, coordinates])
-    }
-
-    function handleCanvasMouseDown(event: MouseEvent<HTMLDivElement>) {
-        if (placementMode === 'select') {
-            const coordinates = getCanvasCoordinates(event.clientX, event.clientY)
-            if (!coordinates) return
-            event.preventDefault()
-            setSelectionStart(coordinates)
-            setSelectionCurrent(coordinates)
-            return
-        }
-        const shouldPan = placementMode === 'pan' || event.button === 1 || event.shiftKey
-        if (!shouldPan) return
-        event.preventDefault()
-        event.stopPropagation()
-        suppressNextCanvasClickRef.current = true
-        setIsPanning(true)
-        setPanStartCursor({ x: event.clientX, y: event.clientY })
-        setPanStartOffset({ x: viewport.offsetX, y: viewport.offsetY })
-    }
-
-    function handleCanvasWheel(event: WheelEvent) {
-        event.preventDefault()
-        const element = builderCanvasRef.current
-        if (!element) return
-        const rect = element.getBoundingClientRect()
-        const pointerX = event.clientX - rect.left
-        const pointerY = event.clientY - rect.top
-        setViewport((previous) => {
-            const factor = event.deltaY < 0 ? 1.1 : 0.9
-            const nextScale = Math.max(0.5, Math.min(3, Number((previous.scale * factor).toFixed(2))))
-            const logicalX = (pointerX - previous.offsetX) / previous.scale
-            const logicalY = (pointerY - previous.offsetY) / previous.scale
-            return {
-                scale: nextScale,
-                offsetX: pointerX - logicalX * nextScale,
-                offsetY: pointerY - logicalY * nextScale,
-            }
-        })
-    }
-
-    function handleCanvasMouseMove(event: MouseEvent<HTMLDivElement>) {
-        const coordinates = getCanvasCoordinates(event.clientX, event.clientY)
-        setCanvasCursor(coordinates)
-    }
-
-    function startEditSeat(seat: VenueSeatItem) {
-        setEditingSeatId(seat.id)
-        setEditingPolygonId(null)
-        setPlacementMode('seat')
-        setSingleSeatForm({
-            label: seat.label,
-            section_id: seat.section_id ? String(seat.section_id) : '',
-            x: String(seat.x ?? 0),
-            y: String(seat.y ?? 0),
-            rotation: String(seat.rotation ?? 0),
-            is_admin_locked: seat.is_admin_locked ?? false,
-        })
-    }
-
-    function startEditPolygon(polygon: VenuePolygonItem) {
-        setEditingSeatId(null)
-        setSelectedSeatIds([])
-        setEditingPolygonId(polygon.id)
-        setPlacementMode('polygon')
-        setPolygonForm({
-            label: polygon.label ?? '',
-            section_id: polygon.section_id ? String(polygon.section_id) : '',
-        })
-        setDraftPolygonPoints(polygon.points.map((point) => ({ x: point.x, y: point.y })))
-    }
-
-    function cancelPolygonEditing() {
-        setEditingPolygonId(null)
-        setDraftPolygonPoints([])
-        setDraggingPolygonPointIndex(null)
-        setDraggingPolygonBody(false)
-        setDragPolygonStartCursor(null)
-        setDragPolygonStartPoints(null)
-        setPolygonForm((previous) => ({
-            ...DEFAULT_POLYGON_FORM,
-            section_id: previous.section_id,
-        }))
-    }
-
-    function getCanvasCoordinates(clientX: number, clientY: number) {
-        const element = builderCanvasRef.current
-        if (!element) return null
-        const rect = element.getBoundingClientRect()
-        if (rect.width <= 0 || rect.height <= 0) return null
-        const logicalX = ((clientX - rect.left - viewport.offsetX) / viewport.scale / rect.width) * 100
-        const logicalY = ((clientY - rect.top - viewport.offsetY) / viewport.scale / rect.height) * 100
+  useEffect(() => {
+    if (draggingSeatId === null || !dragStartPosition || !dragSelectedSeatStartPositions) return
+    const onMove = (event: globalThis.MouseEvent) => {
+      const point = getCanvasCoordinates(event.clientX, event.clientY)
+      if (!point) return
+      setSeats((current) => current.map((seat) => {
+        const start = dragSelectedSeatStartPositions[seat.id]
+        if (!start) return seat
         return {
-            x: applySnap(Math.max(0, Math.min(100, logicalX))),
-            y: applySnap(Math.max(0, Math.min(100, logicalY))),
+          ...seat,
+          x: Math.max(0, Math.min(100, Number((start.x + point.x - dragStartPosition.x).toFixed(2)))),
+          y: Math.max(0, Math.min(100, Number((start.y + point.y - dragStartPosition.y).toFixed(2)))),
         }
+      }))
     }
+    const onUp = async (event: globalThis.MouseEvent) => {
+      const movedSeatIds = Object.keys(dragSelectedSeatStartPositions).map(Number)
+      const point = getCanvasCoordinates(event.clientX, event.clientY)
+      const finalSeats = seatsRef.current.map((seat) => {
+        const start = dragSelectedSeatStartPositions[seat.id]
+        if (!start || !point) return seat
+        return {
+          ...seat,
+          x: Math.max(0, Math.min(100, Number((start.x + point.x - dragStartPosition.x).toFixed(2)))),
+          y: Math.max(0, Math.min(100, Number((start.y + point.y - dragStartPosition.y).toFixed(2)))),
+        }
+      })
+      setSeats(finalSeats)
+      setDraggingSeatId(null)
+      setDragStartPosition(null)
+      setDragSelectedSeatStartPositions(null)
+      if (!selectedVenue || !selectedLayoutId) return
+      try {
+        await adminApi.syncVenueSeats(selectedVenue.id, {
+          layout_id: selectedLayoutId,
+          create: [],
+          update: finalSeats.filter((seat) => movedSeatIds.includes(seat.id)).map((seat) => ({
+            id: seat.id,
+            label: seat.label,
+            x: seat.x ?? 0,
+            y: seat.y ?? 0,
+          })),
+          delete_ids: [],
+        })
+        setMessage(`Đã cập nhật vị trí ${movedSeatIds.length} ghế mẫu.`)
+      } catch (errorValue) {
+        setError(extractApiErrorMessage(errorValue, 'Không thể cập nhật vị trí ghế mẫu.'))
+        await loadSeats(selectedVenue.id, selectedLayoutId)
+      }
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [dragSelectedSeatStartPositions, dragStartPosition, draggingSeatId, selectedLayoutId, selectedVenue, snapToGrid, viewport])
 
-    function handleSeatPointerDown(event: MouseEvent<HTMLButtonElement>, seat: VenueSeatItem) {
-        event.preventDefault()
-        event.stopPropagation()
-        suppressNextCanvasClickRef.current = true
-        if (placementMode === 'select') {
-            const nextSelection = event.shiftKey
-                ? (selectedSeatIds.includes(seat.id) ? selectedSeatIds.filter((id) => id !== seat.id) : [...selectedSeatIds, seat.id])
-                : (selectedSeatIds.length > 1 && selectedSeatIds.includes(seat.id) ? selectedSeatIds : [seat.id])
-            setSelectedSeatIds(nextSelection)
-            pushHistorySnapshot()
-            const currentPosition = {
-                x: seatPositionMap.get(seat.id)?.x ?? seat.x ?? 0,
-                y: seatPositionMap.get(seat.id)?.y ?? seat.y ?? 0,
+  function editSeat(seat: VenueSeatItem) {
+    setEditingSeatId(seat.id)
+    setSelectedSeatIds([seat.id])
+    setSeatForm({ label: seat.label, x: String(seat.x ?? 50), y: String(seat.y ?? 50) })
+    setActiveBuilderPanel('seat')
+    setPlacementMode('select')
+  }
+
+  function resetSeatForm() {
+    setEditingSeatId(null)
+    setSelectedSeatIds([])
+    setSeatForm(EMPTY_SEAT)
+    setPlacementMode('seat')
+  }
+
+  async function saveSeat() {
+    if (!selectedVenue || !selectedLayoutId || !seatForm.label.trim()) return
+    setBusy(true)
+    try {
+      const payload = { label: seatForm.label.trim(), x: Number(seatForm.x), y: Number(seatForm.y) }
+      if (editingSeatId) await adminApi.updateVenueSeat(editingSeatId, payload)
+      else await adminApi.createVenueSeatSingle(selectedVenue.id, { ...payload, layout_id: selectedLayoutId })
+      await loadSeats(selectedVenue.id, selectedLayoutId)
+      resetSeatForm()
+      setMessage('Đã lưu ghế mẫu.')
+    } catch (errorValue) {
+      setError(extractApiErrorMessage(errorValue, 'Không thể lưu ghế mẫu.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function createBulkSeats() {
+    if (!selectedVenue || !selectedLayoutId) return
+    setBusy(true)
+    try {
+      await adminApi.createVenueSeatBulk(selectedVenue.id, {
+        layout_id: selectedLayoutId,
+        pattern: bulkForm.pattern,
+        rows: Number(bulkForm.rows),
+        cols: Number(bulkForm.cols),
+        gap_x: Number(bulkForm.gap_x),
+        gap_y: Number(bulkForm.gap_y),
+        start_x: Number(bulkForm.start_x),
+        start_y: Number(bulkForm.start_y),
+        label_prefix: bulkForm.label_prefix,
+        arc_config: bulkForm.pattern === 'arc'
+          ? {
+              center_x: Number(bulkForm.arc_center_x),
+              center_y: Number(bulkForm.arc_center_y),
+              radius: Number(bulkForm.arc_radius),
+              start_angle: Number(bulkForm.arc_start_angle),
+              end_angle: Number(bulkForm.arc_end_angle),
             }
-            const startPositions = Object.fromEntries(
-                venueSeats
-                    .filter((item) => nextSelection.includes(item.id))
-                    .map((item) => [item.id, { x: item.x ?? 0, y: item.y ?? 0 }]),
-            )
-            setDraggingSeatId(seat.id)
-            setDragStartSeatPosition(currentPosition)
-            setDragSeatPosition(currentPosition)
-            setDragSelectedSeatStartPositions(startPositions)
-            return
-        }
-        if (placementMode !== 'seat') {
-            startEditSeat(seat)
-            return
-        }
-        if (event.shiftKey) {
-            setSelectedSeatIds((previous) => (previous.includes(seat.id) ? previous.filter((id) => id !== seat.id) : [...previous, seat.id]))
-            return
-        }
-        startEditSeat(seat)
-        setSelectedSeatIds((previous) => (previous.length > 1 && previous.includes(seat.id) ? previous : [seat.id]))
-        pushHistorySnapshot()
-        const currentPosition = {
-            x: seatPositionMap.get(seat.id)?.x ?? seat.x ?? 0,
-            y: seatPositionMap.get(seat.id)?.y ?? seat.y ?? 0,
-        }
-        const activeIds = selectedSeatIds.length > 1 && selectedSeatIds.includes(seat.id) ? selectedSeatIds : [seat.id]
-        const startPositions = Object.fromEntries(
-            venueSeats
-                .filter((item) => activeIds.includes(item.id))
-                .map((item) => [item.id, { x: item.x ?? 0, y: item.y ?? 0 }]),
-        )
-        setDraggingSeatId(seat.id)
-        setDragStartSeatPosition(currentPosition)
-        setDragSeatPosition(currentPosition)
-        setDragSelectedSeatStartPositions(startPositions)
+          : null,
+      })
+      await loadSeats(selectedVenue.id, selectedLayoutId)
+      setMessage('Đã tạo cụm ghế mẫu.')
+    } catch (errorValue) {
+      setError(extractApiErrorMessage(errorValue, 'Không thể tạo cụm ghế mẫu.'))
+    } finally {
+      setBusy(false)
     }
+  }
 
-    async function finalizeSeatDrag() {
-        if (!selectedVenueId || !selectedLayoutId || draggingSeatId === null || !dragSeatPosition) {
-            setDraggingSeatId(null)
-            setDragSeatPosition(null)
-            setDragStartSeatPosition(null)
-            return
-        }
-
-        const originalPosition = dragStartSeatPosition
-        const activeSeatId = draggingSeatId
-        const nextPosition = dragSeatPosition
-        const activeSeatIds = dragSelectedSeatStartPositions ? Object.keys(dragSelectedSeatStartPositions).map(Number) : [activeSeatId]
-        const seatsToPersist = venueSeats.filter((seat) => activeSeatIds.includes(seat.id))
-
-        setDraggingSeatId(null)
-        setDragSeatPosition(null)
-        setDragStartSeatPosition(null)
-        setDragSelectedSeatStartPositions(null)
-        setDragSeatPosition(null)
-        if (!originalPosition || originalPosition.x !== nextPosition.x || originalPosition.y !== nextPosition.y || seatsToPersist.length > 1) {
-            setBuilderDirty(true)
-        }
+  async function deleteSeat(seatId: number) {
+    if (!selectedVenue || !selectedLayoutId || !window.confirm('Xóa ghế mẫu này?')) return
+    try {
+      await adminApi.deleteVenueSeat(seatId)
+      await loadSeats(selectedVenue.id, selectedLayoutId)
+      if (editingSeatId === seatId) resetSeatForm()
+    } catch (errorValue) {
+      setError(extractApiErrorMessage(errorValue, 'Không thể xóa ghế mẫu.'))
     }
+  }
 
-    function handleSaveSeat() {
-        if (!selectedLayoutId || !singleSeatForm.label.trim()) return
-        const nextSectionId = singleSeatForm.section_id ? Number(singleSeatForm.section_id) : null
-        const nextSectionName = nextSectionId ? sectionMap.get(nextSectionId)?.name ?? null : null
-        const identity = deriveSeatIdentity(singleSeatForm.label.trim())
-        const nextSeat: VenueSeatItem = {
-            id: editingSeatId ?? nextTempSeatId(),
-            venue_layout_id: selectedLayoutId,
-            section_id: nextSectionId,
-            section_name: nextSectionName,
-            label: singleSeatForm.label.trim(),
-            row_label: identity.row_label,
-            seat_number: identity.seat_number,
-            x: Number(singleSeatForm.x),
-            y: Number(singleSeatForm.y),
-            rotation: Number(singleSeatForm.rotation),
-            is_admin_locked: singleSeatForm.is_admin_locked,
-        }
-        pushHistorySnapshot()
-        setVenueSeats((previous) => (
-            editingSeatId
-                ? previous.map((seat) => (seat.id === editingSeatId ? nextSeat : seat))
-                : [...previous, nextSeat]
-        ))
-        setBuilderDirty(true)
-        resetSeatForm()
-        setActiveBuilderPanel('seat')
+  async function deleteSelectedSeats() {
+    if (!selectedVenue || !selectedLayoutId || selectedSeatIds.length === 0 || !window.confirm(`Xóa ${selectedSeatIds.length} ghế mẫu đã chọn?`)) return
+    setBusy(true)
+    try {
+      await adminApi.syncVenueSeats(selectedVenue.id, {
+        layout_id: selectedLayoutId,
+        create: [],
+        update: [],
+        delete_ids: selectedSeatIds,
+      })
+      setSeats((current) => current.filter((seat) => !selectedSeatIds.includes(seat.id)))
+      setSelectedSeatIds([])
+      setEditingSeatId(null)
+      setMessage('Đã xóa các ghế mẫu được chọn.')
+    } catch (errorValue) {
+      setError(extractApiErrorMessage(errorValue, 'Không thể xóa các ghế mẫu được chọn.'))
+    } finally {
+      setBusy(false)
     }
+  }
 
-    async function handleDeleteSeat(seatId: number) {
-        if (!window.confirm('Xóa ghế này khỏi bố cục?')) return
-        pushHistorySnapshot()
-        setVenueSeats((previous) => previous.filter((seat) => seat.id !== seatId))
-        if (seatId > 0) {
-            setPendingDeletedSeatIds((previous) => (previous.includes(seatId) ? previous : [...previous, seatId]))
-        }
-        setSelectedSeatIds((previous) => previous.filter((id) => id !== seatId))
-        if (editingSeatId === seatId) {
-            resetSeatForm()
-        }
-        setBuilderDirty(true)
-    }
+  const canGoNext = step === 'venue' ? Boolean(selectedVenue) : step === 'layout' ? Boolean(selectedLayoutId) : false
+  const stepIndex = STEPS.indexOf(step)
+  const selectionBox = selectionStart && selectionCurrent ? {
+    left: `${Math.min(selectionStart.x, selectionCurrent.x)}%`,
+    top: `${Math.min(selectionStart.y, selectionCurrent.y)}%`,
+    width: `${Math.abs(selectionStart.x - selectionCurrent.x)}%`,
+    height: `${Math.abs(selectionStart.y - selectionCurrent.y)}%`,
+  } : null
 
-    function handleBulkSeatCreate() {
-        if (!selectedLayoutId) return
-        const sectionId = bulkSeatForm.section_id ? Number(bulkSeatForm.section_id) : null
-        const sectionName = sectionId ? sectionMap.get(sectionId)?.name ?? null : null
-        const rows = Number(bulkSeatForm.rows)
-        const cols = Number(bulkSeatForm.cols)
-        const gapX = Number(bulkSeatForm.gap_x)
-        const gapY = Number(bulkSeatForm.gap_y)
-        const startX = Number(bulkSeatForm.start_x)
-        const startY = Number(bulkSeatForm.start_y)
-        const prefix = bulkSeatForm.label_prefix.trim() || 'A'
-        const existingLabels = new Set(venueSeats.map((seat) => seat.label.trim().toLowerCase()))
-        const generatedSeats: VenueSeatItem[] = []
+  if (loading) return <GlobalLoader />
 
-        const tryPushSeat = (rowIndex: number, seatIndex: number, x: number, y: number, rotation = 0) => {
-            const label = `${prefix}${rowIndex + 1}-${seatIndex + 1}`
-            if (existingLabels.has(label.toLowerCase())) return
-            existingLabels.add(label.toLowerCase())
-            const identity = deriveSeatIdentity(label, `${prefix}${rowIndex + 1}`, seatIndex + 1)
-            generatedSeats.push({
-                id: nextTempSeatId(),
-                venue_layout_id: selectedLayoutId,
-                section_id: sectionId,
-                section_name: sectionName,
-                label,
-                row_label: identity.row_label,
-                seat_number: identity.seat_number,
-                x: Number(Math.max(0, Math.min(100, x)).toFixed(2)),
-                y: Number(Math.max(0, Math.min(100, y)).toFixed(2)),
-                rotation: Number(rotation.toFixed(2)),
-                is_admin_locked: false,
-            })
-        }
-
-        if (bulkSeatForm.pattern === 'straight' || bulkSeatForm.pattern === 'zigzag') {
-            for (let row = 0; row < rows; row += 1) {
-                const offset = bulkSeatForm.pattern === 'zigzag' && row % 2 ? gapX / 2 : 0
-                for (let col = 0; col < cols; col += 1) {
-                    tryPushSeat(row, col, startX + offset + col * gapX, startY + row * gapY)
-                }
-            }
-        } else {
-            const centerX = Number(bulkSeatForm.arc_center_x)
-            const centerY = Number(bulkSeatForm.arc_center_y)
-            const radius = Number(bulkSeatForm.arc_radius)
-            const startAngle = Number(bulkSeatForm.arc_start_angle)
-            const endAngle = Number(bulkSeatForm.arc_end_angle)
-            for (let row = 0; row < rows; row += 1) {
-                const rowRadius = radius + row * gapY
-                const seatsInRow = cols + row * 2
-                const denominator = seatsInRow > 1 ? seatsInRow - 1 : 1
-                for (let col = 0; col < seatsInRow; col += 1) {
-                    const angle = startAngle + (endAngle - startAngle) * (col / denominator)
-                    const radians = (angle * Math.PI) / 180
-                    tryPushSeat(row, col, centerX + rowRadius * Math.sin(radians), centerY + rowRadius * Math.cos(radians), angle)
-                }
-            }
-        }
-
-        if (generatedSeats.length === 0) {
-            return
-        }
-
-        pushHistorySnapshot()
-        setVenueSeats((previous) => [...previous, ...generatedSeats])
-        setBuilderDirty(true)
-        setActiveBuilderPanel('bulk')
-    }
-
-    function handleSavePolygon() {
-        if (!selectedVenueId || !selectedLayoutId || draftPolygonPoints.length < 3) return
-        const nextSectionId = polygonForm.section_id ? Number(polygonForm.section_id) : null
-        const nextSectionName = nextSectionId ? sectionMap.get(nextSectionId)?.name ?? null : null
-        const nextPolygon: VenuePolygonItem = {
-            id: editingPolygonId ?? nextTempPolygonId(),
-            venue_id: selectedVenueId,
-            venue_layout_id: selectedLayoutId,
-            section_id: nextSectionId,
-            section_name: nextSectionName,
-            label: polygonForm.label.trim() || null,
-            points: draftPolygonPoints.map((point) => ({ ...point })),
-            created_at: '',
-            updated_at: '',
-        }
-        pushHistorySnapshot()
-        setVenuePolygons((previous) => (
-            editingPolygonId
-                ? previous.map((polygon) => (polygon.id === editingPolygonId ? nextPolygon : polygon))
-                : [...previous, nextPolygon]
-        ))
-        setBuilderDirty(true)
-        cancelPolygonEditing()
-        setActiveBuilderPanel('polygon')
-    }
-
-    function handleDeletePolygon(polygonId: number) {
-        if (!selectedVenueId || !selectedLayoutId || !window.confirm('Xóa polygon này?')) return
-        pushHistorySnapshot()
-        setVenuePolygons((previous) => previous.filter((polygon) => polygon.id !== polygonId))
-        if (polygonId > 0) {
-            setPendingDeletedPolygonIds((previous) => (previous.includes(polygonId) ? previous : [...previous, polygonId]))
-        }
-        setBuilderDirty(true)
-        if (editingPolygonId === polygonId) {
-            cancelPolygonEditing()
-        }
-    }
-
-    const selectedVenueLabel = selectedVenue ? `${selectedVenue.name} · ${selectedVenue.address ?? 'Chưa có address'}` : 'Chưa chọn venue'
-    const stepSummary = STEP_META[studioStep]
-
-    async function handleSaveBuilderChanges() {
-        if (!selectedVenueId || !selectedLayoutId) return
-        setBuilderBusy(true)
-        setError(null)
-        setMessage(null)
-        try {
-            const savedMap = new Map(savedVenueSeatsRef.current.map((seat) => [seat.id, seat]))
-            const newSeats = venueSeats.filter((seat) => seat.id < 0)
-            const changedSeats = venueSeats.filter((seat) => {
-                if (seat.id < 0) return false
-                const savedSeat = savedMap.get(seat.id)
-                if (!savedSeat) return false
-                return savedSeat.x !== seat.x || savedSeat.y !== seat.y || savedSeat.rotation !== seat.rotation || savedSeat.section_id !== seat.section_id || savedSeat.label !== seat.label
-                    || savedSeat.is_admin_locked !== seat.is_admin_locked
-            })
-
-            const seatSyncResult = (newSeats.length > 0 || changedSeats.length > 0 || pendingDeletedSeatIds.length > 0)
-                ? await adminApi.syncVenueSeats(selectedVenueId, {
-                    layout_id: selectedLayoutId,
-                    create: newSeats.map((seat) => ({
-                        client_id: seat.id,
-                        label: seat.label,
-                        row_label: seat.row_label,
-                        seat_number: seat.seat_number,
-                        section_id: seat.section_id ?? null,
-                        x: seat.x ?? 0,
-                        y: seat.y ?? 0,
-                        rotation: seat.rotation,
-                        is_admin_locked: seat.is_admin_locked,
-                    })),
-                    update: changedSeats.map((seat) => ({
-                        id: seat.id,
-                        label: seat.label,
-                        row_label: seat.row_label,
-                        seat_number: seat.seat_number,
-                        section_id: seat.section_id ?? null,
-                        x: seat.x ?? 0,
-                        y: seat.y ?? 0,
-                        rotation: seat.rotation,
-                        is_admin_locked: seat.is_admin_locked,
-                    })),
-                    delete_ids: pendingDeletedSeatIds,
-                })
-                : null
-            const createdSeatMap = new Map((seatSyncResult?.created ?? []).map((seat) => [seat.client_id, seat]))
-
-            const finalSeats = venueSeats
-                .filter((seat) => !pendingDeletedSeatIds.includes(seat.id))
-                .map((seat) => {
-                    const created = createdSeatMap.get(seat.id)
-                    return created
-                        ? {
-                            ...seat,
-                            id: created.id,
-                            label: created.label,
-                            row_label: created.row_label,
-                            seat_number: created.seat_number,
-                            x: created.x,
-                            y: created.y,
-                        }
-                        : seat
-                })
-            const finalPolygons: VenuePolygonItem[] = []
-
-            setVenueSeats(finalSeats)
-            setVenuePolygons(finalPolygons)
-            syncSavedVenueSeats(finalSeats)
-            syncSavedVenuePolygons(finalPolygons)
-            setPendingDeletedSeatIds([])
-            setPendingDeletedPolygonIds([])
-            setBuilderDirty(false)
-            setHistoryPast([])
-            setHistoryFuture([])
-            setMessage('Đã lưu thay đổi trên sơ đồ.')
-        } catch (errorValue) {
-            setError(extractApiErrorMessage(errorValue, 'Không thể lưu thay đổi trên sơ đồ.'))
-        } finally {
-            setBuilderBusy(false)
-        }
-    }
-
-    function handleRemovePolygonPoint(index: number) {
-        pushHistorySnapshot()
-        setDraftPolygonPoints((previous) => previous.filter((_, pointIndex) => pointIndex !== index))
-    }
-
-    function handleApplySelectedSeatChanges() {
-        if (selectedSeatIds.length === 0) return
-        pushHistorySnapshot()
-        const nextSectionId = singleSeatForm.section_id ? Number(singleSeatForm.section_id) : null
-        const nextSectionName = nextSectionId ? sectionMap.get(nextSectionId)?.name ?? null : null
-        const nextRotation = Number(singleSeatForm.rotation)
-        setVenueSeats((previous) =>
-            previous.map((seat) =>
-                selectedSeatIds.includes(seat.id)
-                    ? {
-                        ...seat,
-                        section_id: nextSectionId,
-                        section_name: nextSectionName,
-                        rotation: Number.isNaN(nextRotation) ? seat.rotation : nextRotation,
-                        is_admin_locked: singleSeatForm.is_admin_locked,
-                    }
-                    : seat,
-            ),
-        )
-        setBuilderDirty(true)
-    }
-
-    function handleDeleteSelectedSeats() {
-        if (selectedSeatIds.length === 0 || !window.confirm(`Xóa ${selectedSeatIds.length} ghế đã chọn khỏi bố cục?`)) return
-        pushHistorySnapshot()
-        setVenueSeats((previous) => previous.filter((seat) => !selectedSeatIds.includes(seat.id)))
-        setPendingDeletedSeatIds((previous) => [...new Set([...previous, ...selectedSeatIds.filter((id) => id > 0)])])
-        setSelectedSeatIds([])
-        setBuilderDirty(true)
-    }
-
-    function goToStep(step: StudioStep) {
-        if (studioStep === 'builder' && step !== 'builder' && !confirmLeaveBuilderIfDirty()) {
-            return
-        }
-        if (!canAccessStep(step)) {
-            setError(`Chưa thể vào bước ${STEP_META[step].title}. Hãy hoàn tất các bước trước.`)
-            return
-        }
-        setError(null)
-        setStudioStep(step)
-    }
-
-    function goToPreviousStep() {
-        const previousStep = STUDIO_STEPS[Math.max(0, activeStepIndex - 1)]
-        setStudioStep(previousStep)
-    }
-
-    function goToNextStep() {
-        const nextStep = STUDIO_STEPS[Math.min(STUDIO_STEPS.length - 1, activeStepIndex + 1)]
-        goToStep(nextStep)
-    }
-
-    if (loading) {
-        return <GlobalLoader />
-    }
-
-    return (
-        <div className="space-y-6">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-                <div>
-                    <h1 className="text-3xl font-black admin-text-body">Venue Studio</h1>
-                    <p className="text-slate-500 mt-1 max-w-2xl">
-                        Tạo các mẫu sơ đồ bố trí khán đài.
-                    </p>
-                </div>
-                <Button
-                    className='border border-bg-black'
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                        if (!confirmLeaveBuilderIfDirty()) return
-                        void loadVenues()
-                    }}
-                    isLoading={loading}
-                >
-                    <RefreshCw className="h-4 w-4" />
-                    Làm mới
-                </Button>
-            </div>
-
-            {(error || message) && (
-                <div className="fixed right-6 top-24 z-50 w-full max-w-sm">
-                    <div className={`rounded-2xl border px-4 py-3 text-sm shadow-2xl backdrop-blur ${error ? 'border-red-500/30 bg-red-500/15 text-red-100' : 'border-emerald-500/30 bg-emerald-500/15 text-emerald-100'}`}>
-                        {error ?? message}
-                    </div>
-                </div>
-            )}
-
-            <Card className="bg-space-900/90 border-white/10">
-                <CardContent className="py-5 space-y-4">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div>
-                            <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Các bước thực hiện</p>
-                            <h2 className="text-xl font-black customer-text-header">{stepSummary.title}</h2>
-                            <p className="mt-1 text-sm text-slate-500">{stepSummary.description}</p>
-                        </div>
-                        <div className="flex gap-2">
-                            <Button variant="outline" onClick={goToPreviousStep} disabled={activeStepIndex === 0}>
-                                Quay lại
-                            </Button>
-                            <Button variant="primary" onClick={goToNextStep} disabled={activeStepIndex === STUDIO_STEPS.length - 1}>
-                                Tiếp theo
-                            </Button>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {STUDIO_STEPS.map((step, index) => {
-                            const isActive = studioStep === step
-                            const unlocked = canAccessStep(step)
-                            return (
-                                <button
-                                    key={step}
-                                    type="button"
-                                    onClick={() => goToStep(step)}
-                                    className={`rounded-2xl border px-4 py-3 text-left transition ${
-                                        isActive
-                                            ? 'border-brand-red/40 bg-slate/10'
-                                            : unlocked
-                                                ? 'border-white/10 customer-bg-page hover:bg-white/10'
-                                                : 'border-white/5 bg-white/[0.03] opacity-60'
-                                    }`}
-                                >
-                                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Bước {index + 1}</p>
-                                    <p className="mt-1 font-semibold customer-text-body">{STEP_META[step].title}</p>
-                                </button>
-                            )
-                        })}
-                    </div>
-                </CardContent>
-            </Card>
-
-            <div className={`grid gap-6 ${studioStep === 'builder' ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-3'}`}>
-                <Card className={`xl:col-span-1 bg-space-900/90 border-white/10 ${studioStep === 'builder' ? 'hidden' : ''}`}>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 customer-text-body">
-                            <Building2 className="h-5 w-5 text-primary" /> Danh sách địa điểm
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-3">
-                            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">VENUE</p>
-                            <div>
-                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">name</label>
-                                <Input value={venueForm.name} onChange={(event) => setVenueForm({ ...venueForm, name: event.target.value })} />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">address</label>
-                                <Input value={venueForm.address} onChange={(event) => setVenueForm({ ...venueForm, address: event.target.value })} />
-                            </div>
-                            {editingVenueId && (
-                                <label className="flex items-center gap-2 rounded-xl border border-white/10 customer-bg-page px-3 py-2 text-sm text-slate-500">
-                                    <input
-                                        type="checkbox"
-                                        checked={venueForm.is_active}
-                                        onChange={(event) => setVenueForm({ ...venueForm, is_active: event.target.checked })}
-                                    />
-                                    is_active
-                                </label>
-                            )}
-                            <div className="flex gap-2">
-                                {editingVenueId && (
-                                    <Button variant="ghost" className="flex-1" onClick={resetVenueForm}>
-                                        Hủy sửa
-                                    </Button>
-                                )}
-                                <Button className="flex-1" onClick={() => void handleSaveVenue()} isLoading={busy}>
-                                    {editingVenueId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                                    {editingVenueId ? 'Lưu venue' : 'Tạo venue'}
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div className="border-t border-white/10 pt-4 space-y-2">
-                            {loading ? (
-                                <p className="text-sm text-slate-500">Đang tải danh sách địa điểm...</p>
-                            ) : venues.length === 0 ? (
-                                <p className="text-sm text-slate-500">Chưa có địa điểm nào.</p>
-                            ) : (
-                                venues.map((venue) => (
-                                    <div
-                                        key={venue.id}
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={() => {
-                                            if (!confirmLeaveBuilderIfDirty()) return
-                                            void loadVenueBundle(venue.id)
-                                        }}
-                                        onKeyDown={(event) => {
-                                            if (event.key !== 'Enter' && event.key !== ' ') return
-                                            event.preventDefault()
-                                            if (!confirmLeaveBuilderIfDirty()) return
-                                            void loadVenueBundle(venue.id)
-                                        }}
-                                        className={`w-full rounded-xl border px-4 py-3 text-left transition ${selectedVenueId === venue.id ? 'border-brand-red/40 bg-slate-500/10' : 'border-white/10 customer-bg-page hover:bg-white/10'}`}
-                                    >
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div>
-                                                <p className="font-semibold customer-text-body">{venue.name}</p>
-                                                <p className="text-xs text-slate-500">id #{venue.id} · {venue.is_active ? 'is_active' : 'inactive'}</p>
-                                            </div>
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                <button
-                                                    type="button"
-                                                    className="rounded p-1.5 hover:bg-white/10"
-                                                    onClick={(event) => {
-                                                        event.stopPropagation()
-                                                        if (!confirmLeaveBuilderIfDirty()) return
-                                                        void loadVenueBundle(venue.id).then(() => startEditVenue(venue))
-                                                    }}
-                                                >
-                                                    <Edit className="h-4 w-4 text-sky-300" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="rounded p-1.5 hover:bg-red-500/20"
-                                                    title="Xóa địa điểm"
-                                                    onClick={(event) => {
-                                                        event.stopPropagation()
-                                                        void handleDeleteVenue(venue.id)
-                                                    }}
-                                                >
-                                                    <Trash2 className="h-4 w-4 text-red-400" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <div className={`${studioStep === 'builder' ? 'space-y-6' : 'xl:col-span-2 space-y-6'}`}>
-                    <Card className={`bg-space-900/90 border-white/10 ${studioStep === 'venue' ? '' : 'hidden'}`}>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 customer-text-body">
-                                <FileUp className="h-5 w-5 text-yellow" /> Tải lên nền sơ đồ
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <p className="text-sm text-slate-500">{selectedVenueLabel}</p>
-                            <div className="flex flex-col md:flex-row gap-3">
-                                <input
-                                    type="file"
-                                    accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp"
-                                    className="w-full rounded-lg border border-white/10 customer-bg-page px-3 py-2 text-sm text-slate-500 file:mr-4 file:rounded-md file:border-0 file:bg-brand-red file:px-4 file:py-2 file:customer-text-body"
-                                    onChange={(event) => handleBackgroundFileChange(event.target.files?.[0] ?? null)}
-                                />
-                                <Button variant="outline" onClick={() => void handleUploadBackground()} disabled={!selectedVenueId || !backgroundFile} isLoading={busy}>
-                                    Reup
-                                </Button>
-                            </div>
-                            <p className="text-xs text-slate-500">
-                                Chọn file là hệ thống sẽ tự tải lên ngay. Anh có thể quay lại bước này bất kỳ lúc nào để thay nền.
-                            </p>
-                            {selectedVenue?.background_source && (
-                                <div className="grid grid-cols-2 gap-3 text-sm">
-                                    <div className="rounded-xl border border-white/10 customer-bg-page px-4 py-3">
-                                        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">width</p>
-                                        <p className="mt-1 font-semibold customer-text-body">{selectedVenue.width}px</p>
-                                    </div>
-                                    <div className="rounded-xl border border-white/10 customer-bg-page px-4 py-3">
-                                        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">height</p>
-                                        <p className="mt-1 font-semibold customer-text-body">{selectedVenue.height}px</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="flex flex-wrap items-center gap-2 text-xs">
-                                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 uppercase tracking-[0.2em] text-emerald-200">
-                                    {selectedVenue?.background_source ? 'Đã có nền' : 'Chưa có nền'}
-                                </span>
-                            </div>
-
-                            <div className="gap-4">
-                                <div>
-                                    <p className="mb-2 text-xs uppercase tracking-[0.2em] text-slate-500">Nền hiện tại</p>
-                                    {renderBackgroundPreview(selectedVenue?.background_source ?? null)}
-                                </div>
-
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <div className={`grid grid-cols-1 xl:grid-cols-2 gap-6 ${studioStep === 'layout' ? '' : 'hidden'}`}>
-                        <Card className={`bg-space-900/90 border-white/10 ${studioStep === 'layout' ? '' : 'hidden'}`}>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2 customer-text-body ">
-                                    <Layers3 className="h-5 w-5 text-violet" /> VENUE_LAYOUT
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="space-y-3">
-                                    <div>
-                                        <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">name</label>
-                                        <Input value={layoutForm.name} onChange={(event) => setLayoutForm({ ...layoutForm, name: event.target.value })} />
-                                    </div>
-                                    <div>
-                                        <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">description</label>
-                                        <Input value={layoutForm.description} onChange={(event) => setLayoutForm({ ...layoutForm, description: event.target.value })} />
-                                    </div>
-                                    <div className="flex gap-2">
-                                        {editingLayoutId && (
-                                            <Button variant="ghost" onClick={resetLayoutForm}>
-                                                Hủy sửa
-                                            </Button>
-                                        )}
-                                        <Button onClick={() => void handleSaveLayout()} isLoading={busy}>
-                                            <Save className="h-4 w-4" /> {editingLayoutId ? 'Cập nhật bố cục' : 'Thêm bố cục'}
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2 border-t border-white/10 pt-4">
-                                    {layouts.length === 0 ? (
-                                        <p className="text-sm text-slate-500">Chưa có bố cục nào.</p>
-                                    ) : (
-                                        layouts.map((layout) => (
-                                            <div
-                                                key={layout.id}
-                                                role="button"
-                                                tabIndex={0}
-                                                onClick={() => {
-                                                    if (!confirmLeaveBuilderIfDirty()) return
-                                                    setSelectedLayoutId(layout.id)
-                                                }}
-                                                onKeyDown={(event) => {
-                                                    if (event.key !== 'Enter' && event.key !== ' ') return
-                                                    event.preventDefault()
-                                                    if (!confirmLeaveBuilderIfDirty()) return
-                                                    setSelectedLayoutId(layout.id)
-                                                }}
-                                                className={`w-full rounded-xl border px-4 py-3 text-left transition ${selectedLayoutId === layout.id ? 'border-brand-yellow/40 bg-slate-500/10' : 'border-white/10 customer-bg-page hover:bg-white/10'}`}
-                                            >
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <div>
-                                                        <p className="font-semibold customer-text-body ">{layout.name}</p>
-                                                        <p className="text-xs text-slate-500">id #{layout.id} · venue_id {layout.venue_id}</p>
-                                                    </div>
-                                                    <div className="flex gap-1">
-                                                        <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={(event) => { event.stopPropagation(); startEditLayout(layout) }}>
-                                                            <Edit className="h-4 w-4 text-sky-300" />
-                                                        </button>
-                                                        <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={(event) => { event.stopPropagation(); void handleDeleteLayout(layout.id) }}>
-                                                            <Trash2 className="h-4 w-4 text-red-400" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="hidden">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2 customer-text-body ">
-                                    <Shapes className="h-5 w-5 text-brand-red" /> SECTION / khu vực ghế
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <p className="text-sm text-slate-500">
-                                    Bố cục đang chọn: <span className="customer-text-body ">{selectedLayout?.name ?? 'Chưa chọn'}</span>
-                                </p>
-                                <div className="space-y-3">
-                                    <Input placeholder="name" value={sectionForm.name} onChange={(event) => setSectionForm({ ...sectionForm, name: event.target.value })} />
-                                    <Input placeholder="code" value={sectionForm.code} onChange={(event) => setSectionForm({ ...sectionForm, code: event.target.value })} />
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <Input placeholder="price_base" value={sectionForm.price_base} onChange={(event) => setSectionForm({ ...sectionForm, price_base: event.target.value })} />
-                                        <Input placeholder="sort_order" value={sectionForm.sort_order} onChange={(event) => setSectionForm({ ...sectionForm, sort_order: event.target.value })} />
-                                    </div>
-                                    <div className="grid grid-cols-[96px_1fr] gap-3 items-center">
-                                        <input
-                                            type="color"
-                                            value={sectionForm.color}
-                                            onChange={(event) => setSectionForm({ ...sectionForm, color: event.target.value })}
-                                            className="h-12 w-full rounded-lg border border-white/10 bg-transparent p-1"
-                                        />
-                                        <Input value={sectionForm.color} onChange={(event) => setSectionForm({ ...sectionForm, color: event.target.value })} />
-                                    </div>
-                                    <div className="flex gap-2">
-                                        {editingSectionId && (
-                                            <Button variant="ghost" onClick={resetSectionForm}>
-                                                Hủy sửa
-                                            </Button>
-                                        )}
-                                        <Button onClick={() => void handleSaveSection()} isLoading={busy} disabled={!selectedLayoutId}>
-                                            <Save className="h-4 w-4" /> {editingSectionId ? 'Cập nhật khu vực' : 'Thêm khu vực'}
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2 border-t border-white/10 pt-4">
-                                    {sections.length === 0 ? (
-                                        <p className="text-sm text-slate-500">Chưa có khu vực nào.</p>
-                                    ) : (
-                                        sections.map((section) => (
-                                            <div key={section.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 customer-bg-page px-4 py-3">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <span className="h-4 w-4 rounded-full border border-white/20" style={{ backgroundColor: section.color }} />
-                                                    <div className="min-w-0">
-                                                        <p className="truncate font-semibold customer-text-body ">{section.name}</p>
-                                                        <p className="text-xs text-slate-500">{section.code} · {Number(section.price_base).toLocaleString('vi-VN')}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex gap-1 shrink-0">
-                                                    <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={() => startEditSection(section)}>
-                                                        <Edit className="h-4 w-4 text-sky-300" />
-                                                    </button>
-                                                    <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={() => void handleDeleteSection(section.id)}>
-                                                        <Trash2 className="h-4 w-4 text-red-400" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    <div className={`grid grid-cols-1 xl:grid-cols-[1.35fr_0.95fr] gap-6 ${studioStep === 'builder' ? '' : 'hidden'}`}>
-                        <Card className="bg-space-900/90 border-white/10">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2 customer-text-body ">
-                                    <MapPin className="h-5 w-5 text-brand-yellow" /> Trình dựng bố cục
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <InteractiveSeatCanvas
-                                    canvasRef={builderCanvasRef}
-                                    cursor={canvasCursor}
-                                    viewport={viewport}
-                                    onMouseDown={handleCanvasMouseDown}
-                                    onMouseMove={handleCanvasMouseMove}
-                                    onWheel={handleCanvasWheel}
-                                    onClick={handleBuilderCanvasClick}
-                                    onZoomIn={() => zoomCanvas(1.1)}
-                                    onZoomOut={() => zoomCanvas(0.9)}
-                                    cursorClassName={placementMode === 'polygon' ? 'cursor-cell' : placementMode === 'pan' ? 'cursor-grab' : 'cursor-crosshair'}
-                                    gridSize={snapToGrid ? '5% 5%' : '10% 10%'}
-                                    aspectRatio={selectedVenue && selectedVenue.width > 0 && selectedVenue.height > 0 ? selectedVenue.width / selectedVenue.height : undefined}
-                                    toolbar={
-                                        <div className="flex flex-wrap items-center gap-2 customer-text-body ">
-                                            <Button size="icon" variant={activeBuilderPanel === 'seat' ? 'primary' : 'outline'} onClick={() => { resetSeatForm(); setSelectedSeatIds([]); setActiveBuilderPanel('seat'); setPlacementMode('seat') }} title="Thêm một ghế">
-                                                <Plus className="h-4 w-4" />
-                                            </Button>
-                                            <Button size="icon" variant={activeBuilderPanel === 'bulk' ? 'primary' : 'outline'} onClick={() => { setSelectedSeatIds([]); setActiveBuilderPanel('bulk') }} title="Tạo nhiều ghế">
-                                                <Copy className="h-4 w-4" />
-                                            </Button>
-                                            <Button className="hidden" size="icon" variant={activeBuilderPanel === 'polygon' ? 'primary' : 'outline'} onClick={() => { setSelectedSeatIds([]); setActiveBuilderPanel('polygon'); setPlacementMode('polygon') }} title="Tạo vùng polygon">
-                                                <Shapes className="h-4 w-4" />
-                                            </Button>
-                                            <Button size="icon" variant={placementMode === 'select' ? 'primary' : 'outline'} onClick={() => setPlacementMode('select')} title="Chọn vùng ghế">
-                                                <MousePointer2 className="h-4 w-4" />
-                                            </Button>
-                                            <Button size="icon" variant={placementMode === 'pan' ? 'primary' : 'outline'} onClick={() => setPlacementMode('pan')} title="Di chuyển sơ đồ">
-                                                <Hand className="h-4 w-4" />
-                                            </Button>
-                                            <Button variant={snapToGrid ? 'primary' : 'outline'} onClick={() => setSnapToGrid((previous) => !previous)}>
-                                                Bám lưới {snapToGrid ? 'Bật' : 'Tắt'}
-                                            </Button>
-                                            <Button size="icon" variant="outline" onClick={handleUndo} disabled={historyPast.length === 0} title="Hoàn tác">
-                                                <Undo2 className="h-4 w-4" />
-                                            </Button>
-                                            <Button size="icon" variant="outline" onClick={handleRedo} disabled={historyFuture.length === 0} title="Làm lại">
-                                                <Redo2 className="h-4 w-4" />
-                                            </Button>
-                                            <Button variant="ghost" onClick={() => setViewport(DEFAULT_VIEWPORT)}>
-                                                Đặt lại góc nhìn
-                                            </Button>
-                                            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm customer-text-body  hover:bg-white/15" title="Nhập file nền SVG/ảnh">
-                                                <FileUp className="h-4 w-4" />
-                                                Đổi nền
-                                                <input
-                                                    type="file"
-                                                    accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp"
-                                                    className="hidden"
-                                                    onChange={(event) => { const file = event.target.files?.[0]; if (file) handleBackgroundFileChange(file) }}
-                                                />
-                                            </label>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs text-slate-500">Ghế:</span>
-                                                <input
-                                                    type="range"
-                                                    min="0.5"
-                                                    max="4"
-                                                    step="0.1"
-                                                    value={seatSize}
-                                                    onChange={(event) => setSeatSize(Number(event.target.value))}
-                                                    className="w-20 accent-brand-red"
-                                                    title={`Kích thước ghế: ${seatSize}%`}
-                                                />
-                                                <span className="text-xs text-slate-500 w-8">{seatSize}%</span>
-                                            </div>
-                                            <Button variant={builderDirty ? 'primary' : 'outline'} onClick={() => void handleSaveBuilderChanges()} disabled={!builderDirty || builderBusy}>
-                                                <Save className="h-4 w-4" /> Lưu thay đổi
-                                            </Button>
-                                            <Button variant="outline" onClick={discardBuilderChanges} disabled={!builderDirty || builderBusy}>
-                                                Khôi phục bản đã lưu
-                                            </Button>
-                                        </div>
-                                    }
-                                    footerLeft={null}
-                                    footerRight={`${venueSeats.length} ghế · zoom ${viewport.scale.toFixed(2)}x`}
-                                >
-                                        {selectedVenueBackground && (
-                                            isSvgMarkup(selectedVenueBackground) ? (
-                                                <div
-                                                    className="pointer-events-none absolute inset-0 opacity-70 [&>svg]:h-full [&>svg]:w-full"
-                                                    dangerouslySetInnerHTML={{ __html: selectedVenueBackground }}
-                                                />
-                                            ) : (
-                                                <img
-                                                    src={selectedVenueBackground}
-                                                    alt="Nền địa điểm"
-                                                    className="absolute inset-0 h-full w-full object-contain opacity-80 pointer-events-none"
-                                                />
-                                            )
-                                        )}
-
-                                        {selectionStart && selectionCurrent && (
-                                            <div
-                                                className="absolute border-2 border-sky-400 bg-sky-400/10"
-                                                style={{
-                                                    left: `${Math.min(selectionStart.x, selectionCurrent.x)}%`,
-                                                    top: `${Math.min(selectionStart.y, selectionCurrent.y)}%`,
-                                                    width: `${Math.abs(selectionCurrent.x - selectionStart.x)}%`,
-                                                    height: `${Math.abs(selectionCurrent.y - selectionStart.y)}%`,
-                                                }}
-                                            />
-                                        )}
-
-                                        {venueSeats.map((seat) => (
-                                            <button
-                                                key={seat.id}
-                                                type="button"
-                                                onMouseDown={(event) => handleSeatPointerDown(event, seat)}
-                                                onMouseEnter={(event) => setTooltip({ x: event.clientX, y: event.clientY, content: `${seat.label} · ${seat.section_name ?? 'Chưa gán'}${seat.is_admin_locked ? ' · 🔒' : ''}` })}
-                                                onMouseMove={(event) => setTooltip((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current)}
-                                                onMouseLeave={() => setTooltip(null)}
-                                                className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-lg transition-transform ${selectedSeatIds.includes(seat.id) || editingSeatId === seat.id ? 'ring-2 ring-brand-yellow/50' : ''} ${draggingSeatId === seat.id ? 'scale-110 cursor-grabbing' : 'cursor-grab'}`}
-                                                style={{
-                                                    left: `${seatPositionMap.get(seat.id)?.x ?? seat.x ?? 0}%`,
-                                                    top: `${seatPositionMap.get(seat.id)?.y ?? seat.y ?? 0}%`,
-                                                    transform: `translate(-50%, -50%) rotate(${seat.rotation}deg)`,
-                                                    width: `${seatSize}%`,
-                                                    aspectRatio: '1',
-                                                    backgroundColor: seat.is_admin_locked ? '#be123ccc' : `${sectionMap.get(seat.section_id ?? -1)?.color ?? '#1e293b'}cc`,
-                                                    borderColor: seat.is_admin_locked ? '#fb7185' : (sectionMap.get(seat.section_id ?? -1)?.color ?? 'rgba(255,255,255,0.2)'),
-                                                }}
-                                            />
-                                        ))}
-
-                                        <div
-                                            className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-brand-red bg-brand-red/30 shadow-[0_0_0_6px_rgba(252,83,109,0.18)]"
-                                            style={{ left: `${singleSeatForm.x}%`, top: `${singleSeatForm.y}%` }}
-                                            title="Vị trí ghế đang chọn"
-                                        />
-                                </InteractiveSeatCanvas>
-                                {tooltip && (
-                                    <div
-                                        className="pointer-events-none fixed z-[9999] max-w-xs rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 shadow-2xl"
-                                        style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}
-                                    >
-                                        {tooltip.content}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        <div className="space-y-6">
-                            {selectedSeatIds.length > 1 && (
-                                <Card className="bg-space-900/90 border-white/10">
-                                    <CardHeader>
-                                        <CardTitle className="customer-text-body ">Ghế đang chọn</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-3">
-                                        <p className="text-sm text-slate-500">Đã chọn {selectedSeatIds.length} ghế.</p>
-                                        <div className="hidden">
-                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Đổi khu vực cho nhóm ghế</label>
-                                            <select
-                                                className="h-11 w-full rounded-lg border border-white/10 bg-space-700/50 px-3 customer-text-body  outline-none"
-                                                value={singleSeatForm.section_id}
-                                                onChange={(event) => setSingleSeatForm({ ...singleSeatForm, section_id: event.target.value })}
-                                            >
-                                                <option value="">Chọn khu vực</option>
-                                                {sections.map((section) => (
-                                                    <option key={section.id} value={section.id}>
-                                                        {section.code} · {section.name}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Góc xoay</label>
-                                            <Input type="number" step="0.01" placeholder="Góc xoay" value={singleSeatForm.rotation} onChange={(event) => setSingleSeatForm({ ...singleSeatForm, rotation: event.target.value })} />
-                                        </div>
-                                        <label className="flex items-center gap-2 rounded-xl border border-white/10 customer-bg-page px-3 py-2 text-sm text-slate-500">
-                                            <input
-                                                type="checkbox"
-                                                checked={singleSeatForm.is_admin_locked}
-                                                onChange={(event) => setSingleSeatForm({ ...singleSeatForm, is_admin_locked: event.target.checked })}
-                                            />
-                                            Khóa sẵn nhóm ghế này
-                                        </label>
-                                        <div className="flex gap-2">
-                                            <Button className="flex-1" onClick={handleApplySelectedSeatChanges}>
-                                                Áp dụng thuộc tính
-                                            </Button>
-                                            <Button variant="outline" className="flex-1" onClick={handleDeleteSelectedSeats}>
-                                                Xóa ghế đã chọn
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                            <Card className={`bg-space-900/90 border-white/10 ${(activeBuilderPanel === 'seat' || selectedSeatIds.length === 1) && selectedSeatIds.length <= 1 ? '' : 'hidden'}`}>
-                                <CardHeader>
-                                    <CardTitle className="customer-text-body ">{editingSeatId ? 'Chỉnh sửa ghế' : 'Ghế lẻ'}</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    <div>
-                                        <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Nhãn ghế</label>
-                                        <Input placeholder="Ví dụ A1" value={singleSeatForm.label} onChange={(event) => setSingleSeatForm({ ...singleSeatForm, label: event.target.value })} />
-                                    </div>
-                                    <div className="hidden">
-                                        <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Khu vực ghế</label>
-                                        <select
-                                            className="h-11 w-full rounded-lg border border-white/10 customer-bg-page px-3 customer-text-body  outline-none"
-                                            value={singleSeatForm.section_id}
-                                            onChange={(event) => setSingleSeatForm({ ...singleSeatForm, section_id: event.target.value })}
-                                        >
-                                            <option>Chưa gán khu vực</option>
-                                            {sections.map((section) => (
-                                                <option key={section.id} value={section.id}>
-                                                    {section.code} · {section.name}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-3">
-                                        <div>
-                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Tọa độ X</label>
-                                            <Input type="number" step="0.01" placeholder="X %" value={singleSeatForm.x} onChange={(event) => setSingleSeatForm({ ...singleSeatForm, x: event.target.value })} />
-                                        </div>
-                                        <div>
-                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Tọa độ Y</label>
-                                            <Input type="number" step="0.01" placeholder="Y %" value={singleSeatForm.y} onChange={(event) => setSingleSeatForm({ ...singleSeatForm, y: event.target.value })} />
-                                        </div>
-                                        <div>
-                                            <label className="mb-1 block text-xs uppercase tracking-[0.2em] text-slate-500">Góc xoay</label>
-                                            <Input type="number" step="0.01" placeholder="Góc xoay" value={singleSeatForm.rotation} onChange={(event) => setSingleSeatForm({ ...singleSeatForm, rotation: event.target.value })} />
-                                        </div>
-                                    </div>
-                                    <label className="flex items-center gap-2 rounded-xl border border-white/10 customer-bg-page px-3 py-2 text-sm text-slate-500">
-                                        <input
-                                            type="checkbox"
-                                            checked={singleSeatForm.is_admin_locked}
-                                            onChange={(event) => setSingleSeatForm({ ...singleSeatForm, is_admin_locked: event.target.checked })}
-                                        />
-                                        Khóa sẵn ghế này để khách không thể mua
-                                    </label>
-                                    <div className="flex gap-2">
-                                        {editingSeatId && (
-                                            <Button variant="ghost" onClick={resetSeatForm}>
-                                                Hủy sửa
-                                            </Button>
-                                        )}
-                                        {editingSeatId && (
-                                            <Button variant="outline" onClick={() => void handleDeleteSeat(editingSeatId)}>
-                                                <Trash2 className="h-4 w-4" /> Xóa ghế
-                                            </Button>
-                                        )}
-                                        <Button className="flex-1" onClick={() => void handleSaveSeat()} isLoading={builderBusy} disabled={!selectedLayoutId || !singleSeatForm.label.trim()}>
-                                            <Save className="h-4 w-4" /> {editingSeatId ? 'Cập nhật ghế' : 'Tạo ghế'}
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className={`bg-space-900/90 border-white/10 ${activeBuilderPanel === 'bulk' && selectedSeatIds.length === 0 ? '' : 'hidden'}`}>
-                                <CardHeader>
-                                    <CardTitle className="customer-text-body ">Tạo ghế hàng loạt</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <Input placeholder="Tiền tố nhãn ghế" value={bulkSeatForm.label_prefix} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, label_prefix: event.target.value })} />
-                                        <select
-                                            className="h-11 rounded-lg border border-white/10 bg-slate-900 px-3 customer-text-body  outline-none"
-                                            value={bulkSeatForm.pattern}
-                                            onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, pattern: event.target.value as 'straight' | 'arc' | 'zigzag' })}
-                                        >
-                                            <option value="straight">straight</option>
-                                            <option value="arc">arc</option>
-                                            <option value="zigzag">zigzag</option>
-                                        </select>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <Input type="number" min={1} placeholder="Số hàng" value={bulkSeatForm.rows} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, rows: event.target.value })} />
-                                        <Input type="number" min={1} placeholder="Số cột" value={bulkSeatForm.cols} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, cols: event.target.value })} />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <Input type="number" step="0.01" placeholder="Khoảng cách X" value={bulkSeatForm.gap_x} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, gap_x: event.target.value })} />
-                                        <Input type="number" step="0.01" placeholder="Khoảng cách Y" value={bulkSeatForm.gap_y} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, gap_y: event.target.value })} />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <Input type="number" step="0.01" placeholder="Điểm bắt đầu X" value={bulkSeatForm.start_x} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, start_x: event.target.value })} />
-                                        <Input type="number" step="0.01" placeholder="Điểm bắt đầu Y" value={bulkSeatForm.start_y} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, start_y: event.target.value })} />
-                                    </div>
-                                    {bulkSeatForm.pattern === 'arc' && (
-                                        <div className="space-y-3 rounded-xl border border-white/10 customer-bg-page p-3">
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <Input type="number" step="0.01" placeholder="Tâm X" value={bulkSeatForm.arc_center_x} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, arc_center_x: event.target.value })} />
-                                                <Input type="number" step="0.01" placeholder="Tâm Y" value={bulkSeatForm.arc_center_y} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, arc_center_y: event.target.value })} />
-                                            </div>
-                                            <div className="grid grid-cols-3 gap-3">
-                                                <Input type="number" step="0.01" placeholder="Bán kính" value={bulkSeatForm.arc_radius} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, arc_radius: event.target.value })} />
-                                                <Input type="number" step="0.01" placeholder="Góc bắt đầu" value={bulkSeatForm.arc_start_angle} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, arc_start_angle: event.target.value })} />
-                                                <Input type="number" step="0.01" placeholder="Góc kết thúc" value={bulkSeatForm.arc_end_angle} onChange={(event) => setBulkSeatForm({ ...bulkSeatForm, arc_end_angle: event.target.value })} />
-                                            </div>
-                                        </div>
-                                    )}
-                                    <Button className="w-full" onClick={() => void handleBulkSeatCreate()} isLoading={builderBusy} disabled={!selectedLayoutId}>
-                                        <Copy className="h-4 w-4" /> Tạo dãy ghế
-                                    </Button>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="hidden">
-                                <CardHeader>
-                                    <CardTitle className="customer-text-body ">POLYGON</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    <Input placeholder="label" value={polygonForm.label} onChange={(event) => setPolygonForm({ ...polygonForm, label: event.target.value })} />
-                                    <select
-                                        className="h-11 rounded-lg border border-white/10 bg-slate-900 px-3 customer-text-body  outline-none"
-                                        value={polygonForm.section_id}
-                                        onChange={(event) => setPolygonForm({ ...polygonForm, section_id: event.target.value })}
-                                    >
-                                            <option value="">Chưa gán khu vực</option>
-                                        {sections.map((section) => (
-                                            <option key={section.id} value={section.id}>
-                                                {section.code} · {section.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <p className="text-xs text-slate-500">
-                                        {editingPolygonId ? `Đang chỉnh polygon #${editingPolygonId}.` : `${draftPolygonPoints.length} điểm nháp. Cần ít nhất 3 điểm để lưu.`}
-                                    </p>
-                                    <div className="flex gap-2">
-                                        {draftPolygonPoints.length > 0 && (
-                                            <Button variant="outline" onClick={() => handleRemovePolygonPoint(draftPolygonPoints.length - 1)}>
-                                                Xóa điểm cuối
-                                            </Button>
-                                        )}
-                                        {editingPolygonId && (
-                                            <Button variant="ghost" onClick={cancelPolygonEditing}>
-                                                Hủy chỉnh
-                                            </Button>
-                                        )}
-                                        <Button className="flex-1" onClick={() => void handleSavePolygon()} isLoading={builderBusy} disabled={!selectedLayoutId || draftPolygonPoints.length < 3}>
-                                            <Save className="h-4 w-4" /> {editingPolygonId ? 'Cập nhật polygon' : 'Lưu polygon'}
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    </div>
-
-                    <div className={`grid grid-cols-1 xl:grid-cols-2 gap-6 ${studioStep === 'builder' ? '' : 'hidden'}`}>
-                            <Card className="hidden">
-                            <CardHeader>
-                                <CardTitle className="customer-text-body ">Danh sách ghế mẫu</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-2">
-                                {venueSeats.length === 0 ? (
-                                    <p className="text-sm text-slate-500">Chưa có ghế template.</p>
-                                ) : (
-                                    venueSeats.map((seat) => (
-                                        <div key={seat.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 customer-bg-page px-4 py-3">
-                                            <div className="min-w-0">
-                                                <p className="font-semibold customer-text-body ">{seat.label}</p>
-                                                <p className="text-xs text-slate-500">
-                                                    {seat.section_name ?? 'Chưa gán khu vực'} · x {seat.x ?? 0}% · y {seat.y ?? 0}% · xoay {seat.rotation}
-                                                </p>
-                                            </div>
-                                            <div className="flex gap-1 shrink-0">
-                                                <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={() => startEditSeat(seat)}>
-                                                    <Edit className="h-4 w-4 text-sky-300" />
-                                                </button>
-                                                <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={() => void handleDeleteSeat(seat.id)}>
-                                                    <Trash2 className="h-4 w-4 text-red-400" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        <Card className="hidden">
-                            <CardHeader>
-                                <CardTitle className="customer-text-body ">Danh sách vùng đa giác</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-2">
-                                {venuePolygons.length === 0 ? (
-                                    <p className="text-sm text-slate-500">Chưa có polygon nào.</p>
-                                ) : (
-                                    venuePolygons.map((polygon) => (
-                                        <div key={polygon.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 customer-bg-page px-4 py-3">
-                                            <div className="min-w-0">
-                                                <p className="font-semibold customer-text-body ">{polygon.label || `Polygon #${polygon.id}`}</p>
-                                                <p className="text-xs text-slate-500">
-                                                    {polygon.section_name ?? 'Chưa gán khu vực'} · {polygon.points.length} điểm
-                                                </p>
-                                            </div>
-                                            <div className="flex gap-1 shrink-0">
-                                                <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={() => startEditPolygon(polygon)}>
-                                                    <Edit className="h-4 w-4 text-sky-300" />
-                                                </button>
-                                                <button type="button" className="rounded p-1.5 hover:bg-white/10" onClick={() => void handleDeletePolygon(polygon.id)}>
-                                                    <Trash2 className="h-4 w-4 text-red-400" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </CardContent>
-                        </Card>
-                    </div>
-                </div>
-            </div>
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-3xl font-bold admin-text-header">Venue Studio</h2>
+          <p className="mt-1 text-sm admin-text-muted">Thiết lập địa điểm theo từng bước: thông tin, bố cục và ghế mẫu.</p>
         </div>
-    )
+        <Button variant="outline" onClick={() => void loadVenues()}><RefreshCw className="h-4 w-4" /> Làm mới</Button>
+      </div>
+
+      {error ? <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : null}
+      {message ? <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{message}</div> : null}
+
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] admin-text-muted">Các bước thực hiện</p>
+              <h3 className="mt-1 text-xl font-bold admin-text-header">{STEP_META[step].title}</h3>
+              <p className="text-sm admin-text-muted">{STEP_META[step].description}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" disabled={stepIndex === 0} onClick={() => setStep(STEPS[stepIndex - 1])}>Quay lại</Button>
+              <Button disabled={!canGoNext} onClick={() => setStep(STEPS[stepIndex + 1])}>Tiếp theo</Button>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            {STEPS.map((item, index) => (
+              <button key={item} type="button" onClick={() => setStep(item)} className={`rounded-lg border px-4 py-3 text-left ${item === step ? 'admin-border bg-white/10' : 'border-white/5 bg-black/20'}`}>
+                <p className="text-xs uppercase tracking-[0.16em] admin-text-muted">Bước {index + 1}</p>
+                <p className="mt-1 font-semibold admin-text-body">{STEP_META[item].title}</p>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {step === 'venue' ? (
+        <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Building2 className="h-5 w-5" /> Danh sách địa điểm</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <Button onClick={startCreateVenue}><Plus className="h-4 w-4" /> Địa điểm mới</Button>
+              {venues.map((venue) => (
+                <button key={venue.id} type="button" onClick={() => void selectVenue(venue.id)} className={`w-full rounded-lg border px-4 py-3 text-left ${selectedVenue?.id === venue.id ? 'border-rose-400 bg-rose-500/10' : 'border-white/10 bg-white/5'}`}>
+                  <p className="font-semibold admin-text-body">{venue.name}</p>
+                  <p className="text-xs admin-text-muted">#{venue.id} · {venue.is_active ? 'Đang hoạt động' : 'Đã tắt'}</p>
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Thông tin địa điểm</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <Input placeholder="Tên địa điểm" value={venueForm.name} onChange={(event) => setVenueForm({ ...venueForm, name: event.target.value })} />
+              <Input placeholder="Địa chỉ" value={venueForm.address} onChange={(event) => setVenueForm({ ...venueForm, address: event.target.value })} />
+              <label className="flex items-center gap-2 text-sm admin-text-body"><input type="checkbox" checked={venueForm.is_active} onChange={(event) => setVenueForm({ ...venueForm, is_active: event.target.checked })} /> Đang hoạt động</label>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => void saveVenue()} isLoading={busy}><Save className="h-4 w-4" /> Lưu địa điểm</Button>
+                {selectedVenue ? <Button variant="outline" onClick={startEditVenue}>Sửa địa điểm đang chọn</Button> : null}
+                {selectedVenue ? <Button variant="danger" onClick={() => void deleteVenue()}><Trash2 className="h-4 w-4" /> Xóa</Button> : null}
+              </div>
+              {selectedVenue ? (
+                <div className="space-y-3 border-t border-white/10 pt-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm admin-text-body">
+                      <FileUp className="h-4 w-4" /> Tải ảnh nền
+                      <input className="hidden" type="file" accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp" onChange={(event) => event.target.files?.[0] && void uploadBackground(event.target.files[0])} />
+                    </label>
+                    <span className="text-sm admin-text-muted">Kích thước: {selectedVenue.width} x {selectedVenue.height}</span>
+                  </div>
+                  {selectedVenue.background_source ? <img src={selectedVenue.background_source} alt="Ảnh nền địa điểm" className="max-h-80 w-full rounded-lg border border-white/10 bg-white object-contain" /> : <p className="text-sm admin-text-muted">Chưa có ảnh nền.</p>}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {step === 'layout' ? (
+        <div className="grid gap-6 xl:grid-cols-2">
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Layers3 className="h-5 w-5" /> Bố cục của {selectedVenue?.name}</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {layouts.map((layout) => (
+                <div key={layout.id} className={`flex items-center justify-between gap-3 rounded-lg border px-4 py-3 ${layout.id === selectedLayoutId ? 'border-rose-400 bg-rose-500/10' : 'border-white/10 bg-white/5'}`}>
+                  <button type="button" className="flex-1 text-left" onClick={() => { setSelectedLayoutId(layout.id); void loadSeats(selectedVenue!.id, layout.id) }}><p className="font-semibold admin-text-body">{layout.name}</p><p className="text-xs admin-text-muted">{layout.description || 'Không có mô tả'}</p></button>
+                  <Button size="sm" variant="outline" onClick={() => startEditLayout(layout)}>Sửa</Button>
+                  <Button size="icon" variant="danger" onClick={() => void deleteLayout(layout.id)}><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>{editingLayoutId ? 'Sửa bố cục' : 'Thêm bố cục'}</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <Input placeholder="Tên bố cục" value={layoutForm.name} onChange={(event) => setLayoutForm({ ...layoutForm, name: event.target.value })} />
+              <Input placeholder="Mô tả" value={layoutForm.description} onChange={(event) => setLayoutForm({ ...layoutForm, description: event.target.value })} />
+              <div className="flex gap-2"><Button onClick={() => void saveLayout()} isLoading={busy}><Save className="h-4 w-4" /> Lưu bố cục</Button><Button variant="outline" onClick={() => { setEditingLayoutId(null); setLayoutForm(EMPTY_LAYOUT) }}>Tạo mới</Button></div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {step === 'builder' ? (
+        <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
+          <Card className="border-white/10">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-brand-yellow" /> Trình dựng bố cục
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <InteractiveSeatCanvas
+                canvasRef={builderCanvasRef}
+                cursor={canvasCursor}
+                viewport={viewport}
+                onMouseDown={handleCanvasMouseDown}
+                onMouseMove={handleCanvasMouseMove}
+                onClick={handleCanvasClick}
+                onWheel={handleCanvasWheel}
+                onZoomIn={() => zoomCanvas(1.1)}
+                onZoomOut={() => zoomCanvas(0.9)}
+                cursorClassName={placementMode === 'pan' ? 'cursor-grab' : placementMode === 'select' ? 'cursor-default' : 'cursor-crosshair'}
+                gridSize={snapToGrid ? '5% 5%' : '10% 10%'}
+                aspectRatio={canvasAspectRatio}
+                footerRight={`${seats.length} ghế · zoom ${viewport.scale.toFixed(2)}x`}
+                toolbar={(
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button size="icon" variant={activeBuilderPanel === 'seat' && placementMode === 'seat' ? 'primary' : 'outline'} onClick={() => { resetSeatForm(); setActiveBuilderPanel('seat') }} title="Thêm một ghế">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant={activeBuilderPanel === 'bulk' && placementMode === 'bulk' ? 'primary' : 'outline'} onClick={() => { setActiveBuilderPanel('bulk'); setPlacementMode('bulk'); setSelectedSeatIds([]) }} title="Tạo nhiều ghế">
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant={placementMode === 'select' ? 'primary' : 'outline'} onClick={() => setPlacementMode('select')} title="Chọn ghế">
+                      <MousePointer2 className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant={placementMode === 'pan' ? 'primary' : 'outline'} onClick={() => setPlacementMode('pan')} title="Di chuyển sơ đồ">
+                      <Hand className="h-4 w-4" />
+                    </Button>
+                    <Button variant={snapToGrid ? 'primary' : 'outline'} onClick={() => setSnapToGrid((current) => !current)}>
+                      Bám lưới {snapToGrid ? 'Bật' : 'Tắt'}
+                    </Button>
+                    <Button variant="ghost" onClick={() => setViewport(DEFAULT_VIEWPORT)}>Đặt lại góc nhìn</Button>
+                    <label className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 text-sm admin-text-body hover:bg-white/15">
+                      <FileUp className="h-4 w-4" /> Đổi nền
+                      <input className="hidden" type="file" accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp" onChange={(event) => event.target.files?.[0] && void uploadBackground(event.target.files[0])} />
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs admin-text-muted">Ghế:</span>
+                      <input type="range" min="0.5" max="4" step="0.1" value={seatSize} onChange={(event) => setSeatSize(Number(event.target.value))} className="w-20 accent-brand-red" title={`Kích thước ghế: ${seatSize}%`} />
+                      <span className="w-8 text-xs admin-text-muted">{seatSize}%</span>
+                    </div>
+                  </div>
+                )}
+              >
+                {selectedVenue?.background_source ? <img src={selectedVenue.background_source} alt="Nền địa điểm" className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-80" /> : null}
+                {selectionBox ? <div className="pointer-events-none absolute border border-sky-500 bg-sky-400/20" style={selectionBox} /> : null}
+                {seats.map((seat) => (
+                  <button
+                    key={seat.id}
+                    type="button"
+                    onMouseDown={(event) => handleSeatMouseDown(event, seat)}
+                    onClick={(event) => event.stopPropagation()}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-blue-600 shadow-lg ${selectedSeatIds.includes(seat.id) || editingSeatId === seat.id ? 'ring-2 ring-brand-yellow/60' : ''} ${draggingSeatId === seat.id ? 'cursor-grabbing scale-110' : placementMode === 'select' ? 'cursor-grab' : ''}`}
+                    style={{ left: `${seat.x ?? 0}%`, top: `${seat.y ?? 0}%`, width: `${seatSize}%`, aspectRatio: '1' }}
+                    title={seat.label}
+                  />
+                ))}
+                <div
+                  className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-brand-red bg-brand-red/30 shadow-[0_0_0_6px_rgba(252,83,109,0.18)]"
+                  style={{ left: `${placementMode === 'bulk' ? bulkForm.start_x : seatForm.x}%`, top: `${placementMode === 'bulk' ? bulkForm.start_y : seatForm.y}%` }}
+                  title={placementMode === 'bulk' ? 'Điểm bắt đầu cụm ghế' : 'Vị trí ghế đang chọn'}
+                />
+              </InteractiveSeatCanvas>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-6">
+            {placementMode === 'select' && selectedSeatIds.length > 0 ? (
+              <Card className="border-white/10">
+                <CardHeader><CardTitle>Ghế đang chọn</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm admin-text-muted">Đã chọn {selectedSeatIds.length} ghế.</p>
+                  <Button variant="outline" className="w-full" onClick={() => void deleteSelectedSeats()}><Trash2 className="h-4 w-4" /> Xóa ghế đã chọn</Button>
+                </CardContent>
+              </Card>
+            ) : activeBuilderPanel === 'seat' ? (
+              <Card className="border-white/10">
+                <CardHeader><CardTitle>{editingSeatId ? 'Chỉnh sửa ghế' : 'Ghế lẻ'}</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm admin-text-muted">Bố cục: {selectedLayout?.name ?? 'Chưa chọn'}</p>
+                  <div>
+                    <label className="mb-1 block text-md admin-text-muted">Nhãn ghế</label>
+                    <Input placeholder="Ví dụ: A1" value={seatForm.label} onChange={(event) => setSeatForm({ ...seatForm, label: event.target.value })} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-md admin-text-muted">Tọa độ X</label>
+                      <Input type="number" step="0.01" value={seatForm.x} onChange={(event) => setSeatForm({ ...seatForm, x: event.target.value })} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-md admin-text-muted">Tọa độ Y</label>
+                      <Input type="number" step="0.01" value={seatForm.y} onChange={(event) => setSeatForm({ ...seatForm, y: event.target.value })} />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {editingSeatId ? <Button variant="ghost" onClick={resetSeatForm}>Hủy sửa</Button> : null}
+                    {editingSeatId ? <Button variant="outline" onClick={() => void deleteSeat(editingSeatId)}><Trash2 className="h-4 w-4" /> Xóa ghế</Button> : null}
+                    <Button className="flex-1" onClick={() => void saveSeat()} isLoading={busy} disabled={!selectedLayoutId || !seatForm.label.trim()}>
+                      <Save className="h-4 w-4" /> {editingSeatId ? 'Cập nhật ghế' : 'Tạo ghế'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-white/10">
+                <CardHeader><CardTitle>Tạo ghế hàng loạt</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <p className='text-md text-slate-500'>Kiểu</p>
+                    <select className="h-11 w-full rounded-lg border border-white/10 bg-[var(--admin-bg-page)] px-3 admin-text-body outline-none" value={bulkForm.pattern} onChange={(event) => setBulkForm({ ...bulkForm, pattern: event.target.value as 'straight' | 'arc' | 'zigzag' })}>
+                      <option value="straight">Thẳng</option>
+                      <option value="zigzag">So le</option>
+                      <option value="arc">Cung tròn</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className='text-md text-slate-500'>Số hàng</p>
+                      <Input type="number" min={1} placeholder="VD: 10" value={bulkForm.rows} onChange={(event) => setBulkForm({ ...bulkForm, rows: event.target.value })} />
+                    </div>
+                    <div>
+                      <p className='text-md text-slate-500'>Số cột</p>
+                      <Input type="number" min={1} placeholder="VD: 10" value={bulkForm.cols} onChange={(event) => setBulkForm({ ...bulkForm, cols: event.target.value })} />
+                    </div>
+                    <div>
+                      <p className='text-md text-slate-500'>Khoảng cách ngang</p>
+                      <Input type="number" step="0.01" placeholder="VD: 5" value={bulkForm.gap_x} onChange={(event) => setBulkForm({ ...bulkForm, gap_x: event.target.value })} />
+                    </div>
+                    <div>
+                      <p className='text-md text-slate-500'>Khoảng cách dọc</p>
+                      <Input type="number" step="0.01" placeholder="VD: 5" value={bulkForm.gap_y} onChange={(event) => setBulkForm({ ...bulkForm, gap_y: event.target.value })} />
+                    </div>
+                    <div>
+                      <p className='text-md text-slate-500'>Điểm bắt đầu x</p>
+                      <Input type="number" step="0.01" placeholder="VD: 50" value={bulkForm.start_x} onChange={(event) => setBulkForm({ ...bulkForm, start_x: event.target.value })} />
+                    </div>
+                    <div>
+                      <p className='text-md text-slate-500'>Điểm bắt đầu y</p>
+                      <Input type="number" step="0.01" placeholder="VD: 50" value={bulkForm.start_y} onChange={(event) => setBulkForm({ ...bulkForm, start_y: event.target.value })} />
+                    </div>                  
+                  </div>
+                  <div>
+                      <p className='text-md text-slate-500'>Tiền tố nhãn ghế</p>
+                    <Input placeholder="VD: VIP" value={bulkForm.label_prefix} onChange={(event) => setBulkForm({ ...bulkForm, label_prefix: event.target.value })} />
+                  </div>
+                  {bulkForm.pattern === 'arc' ? (
+                    <div className="space-y-3 rounded-lg border border-white/10 p-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <Input type="number" step="0.01" placeholder="Tâm X" value={bulkForm.arc_center_x} onChange={(event) => setBulkForm({ ...bulkForm, arc_center_x: event.target.value })} />
+                        <Input type="number" step="0.01" placeholder="Tâm Y" value={bulkForm.arc_center_y} onChange={(event) => setBulkForm({ ...bulkForm, arc_center_y: event.target.value })} />
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <Input type="number" step="0.01" placeholder="Bán kính" value={bulkForm.arc_radius} onChange={(event) => setBulkForm({ ...bulkForm, arc_radius: event.target.value })} />
+                        <Input type="number" step="0.01" placeholder="Góc đầu" value={bulkForm.arc_start_angle} onChange={(event) => setBulkForm({ ...bulkForm, arc_start_angle: event.target.value })} />
+                        <Input type="number" step="0.01" placeholder="Góc cuối" value={bulkForm.arc_end_angle} onChange={(event) => setBulkForm({ ...bulkForm, arc_end_angle: event.target.value })} />
+                      </div>
+                    </div>
+                  ) : null}
+                  <Button className="w-full" onClick={() => void createBulkSeats()} isLoading={busy} disabled={!selectedLayoutId}>
+                    <Copy className="h-4 w-4" /> Tạo dãy ghế
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
 }

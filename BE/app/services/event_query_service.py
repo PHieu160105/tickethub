@@ -10,7 +10,7 @@ from app.services.event_core_service import (  # noqa: F401
     list_event_max_prices_for_event_ids,
     list_event_shows,
     list_live_events,
-    list_show_zones,
+    list_show_ticket_tiers,
     list_shows_for_event_ids,
 )
 
@@ -24,6 +24,6 @@ __all__ = [
     "list_event_max_prices_for_event_ids",
     "list_event_shows",
     "list_live_events",
-    "list_show_zones",
+    "list_show_ticket_tiers",
     "list_shows_for_event_ids",
 ]

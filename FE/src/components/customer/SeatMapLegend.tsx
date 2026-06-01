@@ -1,10 +1,10 @@
 import { CheckCircle2, Clock3, Lock } from 'lucide-react'
 
 import { formatCurrencyVnd } from '@/lib/utils'
-import type { SeatMapZone, SeatZone } from '@/types'
+import type { SeatMapTicketTier, TicketTier } from '@/types'
 
 interface SeatMapLegendProps {
-  zones?: Array<SeatZone | SeatMapZone>
+  ticket_tiers?: Array<TicketTier | SeatMapTicketTier>
 }
 
 const stateItems = [
@@ -38,13 +38,13 @@ const stateItems = [
   },
 ]
 
-export function SeatMapLegend({ zones = [] }: SeatMapLegendProps) {
+export function SeatMapLegend({ ticket_tiers = [] }: SeatMapLegendProps) {
   return (
     <div className="space-y-4">
       <div>
         <p className="text-[11px] uppercase tracking-[0.24em] text-gray-500">Hạng vé</p>
         <div className="mt-3 grid grid-cols-1 gap-2">
-          {zones.map((zone) => (
+          {ticket_tiers.map((zone) => (
             <div key={zone.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2">
               <div className="flex items-center gap-3">
                 <span

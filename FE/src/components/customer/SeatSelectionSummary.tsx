@@ -29,7 +29,7 @@ export function SeatSelectionSummary({
               <div key={seat.id} className="flex items-center justify-between rounded-xl border border-dashed border-[var(--customer-bg-opp)] customer-bg-surface px-3 py-2">
                 <div>
                   <p className="text-sm font-semibold customer-text-body">{seat.label}</p>
-                  <p className="text-xs text-gray-500">{seat.zone_name ?? 'Vé phổ thông'}</p>
+                  <p className="text-xs text-gray-500">{seat.ticket_tier_name ?? 'Vé phổ thông'}</p>
                 </div>
                 <p className="text-sm font-semibold customer-text-body">{formatCurrencyVnd(seat.price)}</p>
               </div>
@@ -53,7 +53,7 @@ export function SeatSelectionSummary({
               <div key={seat.id} className="flex items-center justify-between rounded-xl border border-violet-400/20 bg-violet-500/10 px-3 py-2">
                 <div>
                   <p className="text-sm font-semibold text-violet-50">{seat.label}</p>
-                  <p className="text-xs text-violet-100/70">{seat.zone_name ?? 'Vé phổ thông'}</p>
+                  <p className="text-xs text-violet-100/70">{seat.ticket_tier_name ?? 'Vé phổ thông'}</p>
                 </div>
                 <p className="text-sm font-semibold text-violet-50">{formatCurrencyVnd(seat.price)}</p>
               </div>
