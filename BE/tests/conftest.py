@@ -5,14 +5,15 @@ from datetime import UTC, datetime, time, timedelta
 
 import pytest_asyncio
 from redis.exceptions import RedisError
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.redis_client import get_redis_client
 from app.core.security import hash_password
 from app.models import Base
-from app.models.enums import EventCategory, EventStatus, Gender, UserRole
-from app.models.event import Event, Show
+from app.models.enums import EventCategory, EventStatus, Gender, SeatStatus, UserRole
+from app.models.event import Event, SeatZone, Show
+from app.models.order import Ticket
 from app.models.user import Customer, EventStaff, User
 from app.schemas.event import EventCreateRequest, SeatZoneCreate, ShowCreateRequest
 from app.services.event_service import create_event, create_show_with_inventory
@@ -122,11 +123,27 @@ async def sample_event_with_show(db_session: AsyncSession, admin_user: User) -> 
         end_time=time(hour=21, minute=30),
         status=EventStatus.LIVE,
         hold_minutes=10,
-        zones=[SeatZoneCreate(code="VIP", name="VIP", row_count=2, seats_per_row=3, price=100.0, color="#024ddf")],
+        zones=[SeatZoneCreate(code="VIP", name="VIP", base_price=100.0, color="#024ddf")],
     )
 
     event = await create_event(db_session, admin_user.id, event_payload)
     show = await create_show_with_inventory(db_session, event, admin_user.id, show_payload)
+    tier = await db_session.scalar(select(SeatZone).where(SeatZone.show_id == show.id))
+    assert tier is not None
+    for row_index, row_label in enumerate(("A", "B"), start=1):
+        for seat_number in range(1, 4):
+            db_session.add(
+                Ticket(
+                    show_id=show.id,
+                    ticket_tier_id=tier.id,
+                    label=f"{row_label}{seat_number}",
+                    row_label=row_label,
+                    seat_number=seat_number,
+                    price=float(tier.base_price),
+                    status=SeatStatus.AVAILABLE,
+                    is_staff_locked=False,
+                )
+            )
     await db_session.commit()
     await db_session.refresh(event)
     await db_session.refresh(show)

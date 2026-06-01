@@ -1,10 +1,10 @@
-import math
+﻿import math
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_active_admin
+from app.api.deps import get_current_assigned_event_staff
 from app.core.db import get_db_session
 from app.models.enums import SeatStatus
 from app.models.event import SeatZone
@@ -20,13 +20,13 @@ from app.schemas.event import (
     SeatSyncRequest,
     SeatSyncResponse,
     SeatUpdateRequest,
-    SeatZoneCreate,
-    SeatZoneResponse,
-    SeatZoneUpdate,
+    TicketTierCreate,
+    TicketTierResponse,
+    TicketTierUpdate,
 )
 from app.services.dashboard_service import broadcast_dashboard_update
 from app.services.event_inventory_service import sync_show_ticket_inventory
-from app.services.event_lifecycle_service import create_initial_show_zone, create_show_zone, delete_show_zone, update_show_zone
+from app.services.event_lifecycle_service import create_show_zone, delete_show_zone, update_show_zone
 
 from ._shared import (
     _build_event_or_404_show,
@@ -48,37 +48,38 @@ def _ticket_response(ticket: Ticket) -> SeatCreateResponse:
     )
 
 
-@router.get("/events/{event_key}/shows/{show_id}/zones", response_model=list[SeatZoneResponse])
+def _ticket_tier_response(zone: SeatZone) -> TicketTierResponse:
+    return TicketTierResponse(
+        id=zone.id,
+        code=zone.code,
+        name=zone.name,
+        description=zone.description,
+        base_price=zone.base_price,
+        color=zone.color,
+        is_active=zone.is_active,
+    )
+
+
+@router.get("/events/{event_key}/shows/{show_id}/zones", response_model=list[TicketTierResponse])
 async def list_zones(
     event_key: str,
     show_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
-) -> list[SeatZoneResponse]:
+    _: User = Depends(get_current_assigned_event_staff),
+) -> list[TicketTierResponse]:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     zones = list(await session.scalars(select(SeatZone).where(SeatZone.show_id == show.id).order_by(SeatZone.id.asc())))
-    return [
-        SeatZoneResponse(
-            id=zone.id,
-            code=zone.code,
-            name=zone.name,
-            row_count=0,
-            seats_per_row=0,
-            price=zone.price,
-            color=zone.color,
-        )
-        for zone in zones
-    ]
+    return [_ticket_tier_response(zone) for zone in zones]
 
 
-@router.post("/events/{event_key}/shows/{show_id}/zones", response_model=SeatZoneResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/events/{event_key}/shows/{show_id}/zones", response_model=TicketTierResponse, status_code=status.HTTP_201_CREATED)
 async def create_zone(
     event_key: str,
     show_id: int,
-    payload: SeatZoneCreate,
+    payload: TicketTierCreate,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
-) -> SeatZoneResponse:
+    _: User = Depends(get_current_assigned_event_staff),
+) -> TicketTierResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
     try:
@@ -89,39 +90,18 @@ async def create_zone(
         raise
     await _invalidate_show_cache(show.id)
     await broadcast_dashboard_update()
-    return SeatZoneResponse(id=zone.id, code=zone.code, name=zone.name, row_count=0, seats_per_row=0, price=zone.price, color=zone.color)
+    return _ticket_tier_response(zone)
 
 
-@router.post("/events/{event_key}/shows/{show_id}/zones/initial", response_model=SeatZoneResponse, status_code=status.HTTP_201_CREATED)
-async def create_initial_zone(
-    event_key: str,
-    show_id: int,
-    payload: SeatZoneCreate,
-    session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
-) -> SeatZoneResponse:
-    _, show = await _build_event_or_404_show(session, event_key, show_id)
-    _ensure_show_is_draft(show)
-    try:
-        zone = await create_initial_show_zone(session, show, payload)
-        await session.commit()
-    except Exception:
-        await session.rollback()
-        raise
-    await _invalidate_show_cache(show.id)
-    await broadcast_dashboard_update()
-    return SeatZoneResponse(id=zone.id, code=zone.code, name=zone.name, row_count=0, seats_per_row=0, price=zone.price, color=zone.color)
-
-
-@router.patch("/events/{event_key}/shows/{show_id}/zones/{zone_id}", response_model=SeatZoneResponse)
+@router.patch("/events/{event_key}/shows/{show_id}/zones/{zone_id}", response_model=TicketTierResponse)
 async def update_zone(
     event_key: str,
     show_id: int,
     zone_id: int,
-    payload: SeatZoneUpdate,
+    payload: TicketTierUpdate,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
-) -> SeatZoneResponse:
+    _: User = Depends(get_current_assigned_event_staff),
+) -> TicketTierResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
     try:
@@ -132,7 +112,7 @@ async def update_zone(
         raise
     await _invalidate_show_cache(show.id)
     await broadcast_dashboard_update()
-    return SeatZoneResponse(id=zone.id, code=zone.code, name=zone.name, row_count=0, seats_per_row=0, price=zone.price, color=zone.color)
+    return _ticket_tier_response(zone)
 
 
 @router.delete("/events/{event_key}/shows/{show_id}/zones/{zone_id}", response_model=APIMessage)
@@ -141,7 +121,7 @@ async def delete_zone(
     show_id: int,
     zone_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> APIMessage:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
@@ -173,7 +153,7 @@ async def create_show_seat_single(
     show_id: int,
     payload: SeatSingleCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> SeatCreateResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
@@ -213,7 +193,7 @@ async def create_show_seat_bulk(
     show_id: int,
     payload: SeatBulkCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> SeatBulkCreateResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
@@ -276,7 +256,7 @@ async def sync_show_seats(
     show_id: int,
     payload: SeatSyncRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> SeatSyncResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
@@ -382,7 +362,7 @@ async def update_show_seat(
     seat_id: int,
     payload: SeatUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> SeatCreateResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
@@ -429,7 +409,7 @@ async def delete_show_seat(
     show_id: int,
     seat_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> APIMessage:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)

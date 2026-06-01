@@ -1,6 +1,7 @@
 """Kiểm thử payload sự kiện có trả giá ghế lớn nhất để FE lọc khoảng giá."""
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from fastapi import status
@@ -308,11 +309,10 @@ async def test_admin_seat_planner_mutations_require_draft_show(db_session, admin
     zone_payload = {
         "code": "GEN",
         "name": "General",
-        "row_count": 1,
-        "seats_per_row": 1,
-        "price": "120.00",
+        "description": "General admission",
+        "base_price": "120.00",
         "color": "#024ddf",
-        "generate_seats": False,
+        "is_active": True,
     }
 
     try:
@@ -332,6 +332,12 @@ async def test_admin_seat_planner_mutations_require_draft_show(db_session, admin
 
         assert live_response.status_code == status.HTTP_400_BAD_REQUEST
         assert draft_response.status_code == status.HTTP_201_CREATED
+        created_tier = draft_response.json()
+        assert created_tier["description"] == "General admission"
+        assert Decimal(str(created_tier["base_price"])) == Decimal("120.00")
+        assert created_tier["is_active"] is True
+        assert "row_count" not in created_tier
+        assert "seats_per_row" not in created_tier
     finally:
         app.dependency_overrides.clear()
 

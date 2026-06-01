@@ -16,6 +16,7 @@ import type {
   EventCard,
   EventDetailStats,
   EventDetail,
+  EventStaffItem,
   PerformerDetail,
   ShowDetail,
   ShowSummary,
@@ -38,7 +39,7 @@ import type {
   VenueSectionItem,
   VenueSummary,
   SeatMapResponse,
-  SeatZone,
+  TicketTier,
   SearchSuggestionItem,
   SiteSettings,
 } from '../types'
@@ -443,6 +444,24 @@ export const adminApi = {
   async users(params?: { search?: string; user_type?: string; limit?: number; offset?: number }) {
     return withRetry(() => api.get<PaginatedAdminUsersResponse>('/admin/users', { params }))
   },
+  async listStaff() {
+    return withRetry(() => api.get<EventStaffItem[]>('/admin/staff'))
+  },
+  async createStaff(payload: {
+    full_name: string
+    email: string
+    password: string
+    staff_code: string
+    gender: 'MALE' | 'FEMALE' | 'OTHER'
+    age: number
+  }) {
+    const response = await api.post<EventStaffItem>('/admin/staff', payload)
+    return response.data
+  },
+  async updateStaffStatus(staffUserId: number, isActive: boolean) {
+    const response = await api.patch<EventStaffItem>(`/admin/staff/${staffUserId}/status`, { is_active: isActive })
+    return response.data
+  },
   async ticketSales(params?: { event_id?: number; status_filter?: string; limit?: number; offset?: number }) {
     return withRetry(() => api.get<PaginatedAdminTicketSalesResponse>('/admin/tickets/sales', { params }))
   },
@@ -610,31 +629,23 @@ export const adminApi = {
     return response.data
   },
   async getShowZones(eventKey: string | number, showId: number) {
-    return withRetry(() => api.get<SeatZone[]>(`/admin/events/${eventKey}/shows/${showId}/zones`))
+    return withRetry(() => api.get<TicketTier[]>(`/admin/events/${eventKey}/shows/${showId}/zones`))
   },
   async createZone(
     eventKey: string | number,
     showId: number,
-    payload: Omit<SeatZone, 'id'> & { generate_seats?: boolean },
+    payload: Omit<TicketTier, 'id'>,
   ) {
-    const response = await api.post<SeatZone>(`/admin/events/${eventKey}/shows/${showId}/zones`, payload)
-    return response.data
-  },
-  async createInitialZone(
-    eventKey: string | number,
-    showId: number,
-    payload: Omit<SeatZone, 'id'>,
-  ) {
-    const response = await api.post<SeatZone>(`/admin/events/${eventKey}/shows/${showId}/zones/initial`, payload)
+    const response = await api.post<TicketTier>(`/admin/events/${eventKey}/shows/${showId}/zones`, payload)
     return response.data
   },
   async updateZone(
     eventKey: string | number,
     showId: number,
     zoneId: number,
-    payload: Omit<SeatZone, 'id'> & { regenerate_seats?: boolean },
+    payload: Omit<TicketTier, 'id'>,
   ) {
-    const response = await api.patch<SeatZone>(`/admin/events/${eventKey}/shows/${showId}/zones/${zoneId}`, payload)
+    const response = await api.patch<TicketTier>(`/admin/events/${eventKey}/shows/${showId}/zones/${zoneId}`, payload)
     return response.data
   },
   async deleteZone(eventKey: string | number, showId: number, zoneId: number) {

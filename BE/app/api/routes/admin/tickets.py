@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_active_admin
+from app.api.deps import get_current_active_event_staff, get_current_active_admin
+from app.models.event import EventAssignment
 from app.core.db import get_db_session
 from app.models.enums import OrderStatus
 from app.models.event import Event, SeatZone, Show
@@ -27,7 +28,7 @@ async def list_admin_ticket_sales(
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    staff_user: User = Depends(get_current_active_event_staff),
 ) -> PaginatedAdminTicketSalesResponse:
     allowed_statuses = {
         OrderStatus.PAID,
@@ -57,6 +58,8 @@ async def list_admin_ticket_sales(
         .join(User, Order.user_id == User.id)
         .outerjoin(SeatZone, Ticket.ticket_tier_id == SeatZone.id)
         .where(Order.status.in_(allowed_statuses))
+        #.where(Order.status.in_([OrderStatus.PAID, OrderStatus.PENDING]))
+        .where(Event.id.in_(select(EventAssignment.event_id).where(EventAssignment.staff_id == staff_user.id, EventAssignment.is_active.is_(True))))
         .order_by(Order.created_at.desc())
     )
     if event_id:
@@ -187,7 +190,7 @@ async def get_admin_ticket_transaction_history(
 @router.get("/tickets/revenue-by-show", response_model=list[AdminEventRevenueResponse])
 async def list_admin_show_revenue(
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    staff_user: User = Depends(get_current_active_event_staff),
 ) -> list[AdminEventRevenueResponse]:
     stmt = (
         select(
@@ -203,6 +206,7 @@ async def list_admin_show_revenue(
         .outerjoin(Order, Order.show_id == Show.id)
         .outerjoin(Ticket, Ticket.order_id == Order.id)
         .where(Show.is_deleted.is_(False))
+        .where(Event.id.in_(select(EventAssignment.event_id).where(EventAssignment.staff_id == staff_user.id, EventAssignment.is_active.is_(True))))
         .group_by(Event.id, Event.title, Show.id, Show.title, Show.start_at)
         .order_by(Show.start_at.desc())
     )

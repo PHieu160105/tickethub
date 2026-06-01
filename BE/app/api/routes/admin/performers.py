@@ -4,13 +4,14 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_active_admin
+from app.api.deps import get_current_active_event_staff, get_current_show_event_staff
 from app.core.db import get_db_session
 from app.models.performer import Performer
 from app.models.user import User
 from app.schemas.admin import UploadImageResponse
 from app.schemas.performer import (
     AdminShowPerformerResponse,
+    MAX_PERFORMER_IMAGE_BYTES,
     PerformerDetailResponse,
     PerformerSuggestionResponse,
     ShowPerformerBulkUpdateRequest,
@@ -31,7 +32,7 @@ router = APIRouter()
 async def get_admin_show_performers(
     show_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_show_event_staff),
 ) -> list[AdminShowPerformerResponse]:
     await get_show_by_id(session, show_id)
     return await list_admin_show_performers(session, show_id)
@@ -42,7 +43,7 @@ async def save_admin_show_performers(
     show_id: int,
     payload: ShowPerformerBulkUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_show_event_staff),
 ) -> list[AdminShowPerformerResponse]:
     show = await get_show_by_id(session, show_id)
     rows = await update_show_performer_lineup(session, show, payload.performers)
@@ -61,7 +62,7 @@ async def suggest_admin_performers(
     q: str = Query(..., min_length=1, max_length=255),
     limit: int = Query(default=8, ge=1, le=20),
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> list[PerformerSuggestionResponse]:
     return await suggest_performers(session, q, limit)
 
@@ -70,7 +71,7 @@ async def suggest_admin_performers(
 async def get_admin_performer_detail(
     performer_id: int,
     session: AsyncSession = Depends(get_db_session),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> PerformerDetailResponse:
     performer = await session.get(Performer, performer_id)
     if performer is None:
@@ -81,7 +82,7 @@ async def get_admin_performer_detail(
 @router.post("/performers/upload-image", response_model=UploadImageResponse)
 async def upload_performer_image(
     file: UploadFile = File(...),
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_active_event_staff),
 ) -> UploadImageResponse:
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chi cho phep upload file anh")
@@ -91,7 +92,7 @@ async def upload_performer_image(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dinh dang duoc ho tro: jpg, jpeg, png, webp")
 
     content = await file.read()
-    if len(content) > 10 * 1024 * 1024:
+    if len(content) > MAX_PERFORMER_IMAGE_BYTES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Anh phai co dung luong khong qua 10MB")
 
     base64_content = b64encode(content).decode("ascii")

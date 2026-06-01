@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from app.api.deps import get_current_active_admin
+from app.api.deps import get_current_system_admin
 from app.models.user import User
 from app.schemas.site_settings import SiteSettingsPayload
 from app.services.site_settings_service import load_site_settings, save_site_settings
@@ -20,7 +20,7 @@ async def get_public_site_settings() -> SiteSettingsPayload:
 
 
 @admin_router.get("/site", response_model=SiteSettingsPayload)
-async def get_admin_site_settings(_: User = Depends(get_current_active_admin)) -> SiteSettingsPayload:
+async def get_admin_site_settings(_: User = Depends(get_current_system_admin)) -> SiteSettingsPayload:
     """Trả cấu hình có thể chỉnh sửa cho form admin."""
 
     return load_site_settings()
@@ -29,7 +29,7 @@ async def get_admin_site_settings(_: User = Depends(get_current_active_admin)) -
 @admin_router.put("/site", response_model=SiteSettingsPayload)
 async def update_admin_site_settings(
     payload: SiteSettingsPayload,
-    _: User = Depends(get_current_active_admin),
+    _: User = Depends(get_current_system_admin),
 ) -> SiteSettingsPayload:
     """Ghi đè cấu hình website đang lưu trong file JSON backend."""
 

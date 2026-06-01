@@ -79,13 +79,6 @@ function isSvgMarkup(value: string | null) {
     return Boolean(value && value.slice(0, 500).toLowerCase().includes('<svg'))
 }
 
-function computeCentroid(points: { x: number; y: number }[]) {
-    if (points.length === 0) return { x: 50, y: 50 }
-    const x = points.reduce((sum, p) => sum + p.x, 0) / points.length
-    const y = points.reduce((sum, p) => sum + p.y, 0) / points.length
-    return { x, y }
-}
-
 function deriveSeatIdentity(label: string, fallbackRowLabel?: string, fallbackSeatNumber = 0) {
     const normalized = label.trim()
     const match = normalized.match(/^([A-Za-z]+(?:\d+)?)\s*[- ]?\s*(\d+)$/)
@@ -1112,25 +1105,6 @@ export default function AdminVenues() {
         }))
     }
 
-    function handlePolygonMouseDown(event: MouseEvent<SVGPolygonElement>, polygon: VenuePolygonItem) {
-        event.preventDefault()
-        event.stopPropagation()
-        suppressNextCanvasClickRef.current = true
-
-        if (editingPolygonId !== polygon.id) {
-            startEditPolygon(polygon)
-            return
-        }
-
-        const coordinates = getCanvasCoordinates(event.clientX, event.clientY)
-        if (!coordinates) return
-        pushHistorySnapshot()
-        setDraggingPolygonPointIndex(null)
-        setDraggingPolygonBody(true)
-        setDragPolygonStartCursor(coordinates)
-        setDragPolygonStartPoints(draftPolygonPoints.map((point) => ({ x: point.x, y: point.y })))
-    }
-
     function getCanvasCoordinates(clientX: number, clientY: number) {
         const element = builderCanvasRef.current
         if (!element) return null
@@ -1933,11 +1907,6 @@ export default function AdminVenues() {
                                             <Button variant="ghost" onClick={() => setViewport(DEFAULT_VIEWPORT)}>
                                                 Đặt lại góc nhìn
                                             </Button>
-                                            {false && placementMode === 'polygon' && (
-                                                <Button variant="ghost" onClick={() => (editingPolygonId ? cancelPolygonEditing() : setDraftPolygonPoints([]))}>
-                                                    {editingPolygonId ? 'Thoát chỉnh polygon' : 'Xóa điểm nháp'}
-                                                </Button>
-                                            )}
                                             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm customer-text-body  hover:bg-white/15" title="Nhập file nền SVG/ảnh">
                                                 <FileUp className="h-4 w-4" />
                                                 Đổi nền
@@ -1987,72 +1956,6 @@ export default function AdminVenues() {
                                                 />
                                             )
                                         )}
-
-                                        {false && venuePolygons.map((polygon) => {
-                                            const polySection = polygon.section_id ? sectionMap.get(polygon.section_id) : undefined
-                                            const polyColor = polySection?.color ?? '#fbbf24'
-                                            const polyPts = editingPolygonId === polygon.id ? draftPolygonPoints : polygon.points
-                                            const centroid = computeCentroid(polyPts)
-                                            return (
-                                                <>
-                                                    <svg key={polygon.id} className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                                        <polygon
-                                                            points={polyPts.map((point) => `${point.x},${point.y}`).join(' ')}
-                                                            onMouseDown={(event) => handlePolygonMouseDown(event, polygon)}
-                                                            onClick={(event) => event.stopPropagation()}
-                                                            fill={editingPolygonId === polygon.id ? 'rgba(56, 189, 248, 0.18)' : `${polyColor}33`}
-                                                            stroke={editingPolygonId === polygon.id ? 'rgba(56, 189, 248, 0.95)' : `${polyColor}dd`}
-                                                            strokeWidth={editingPolygonId === polygon.id ? '0.5' : '0.35'}
-                                                            className={editingPolygonId === polygon.id ? 'cursor-move' : 'cursor-pointer'}
-                                                        />
-                                                    </svg>
-                                                    {(polygon.section_name ?? polygon.label) && (
-                                                        <div
-                                                            key={`clabel-${polygon.id}`}
-                                                            className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded bg-black/60 px-2 py-0.5 text-[9px] font-semibold customer-text-body  whitespace-nowrap"
-                                                            style={{ left: `${centroid.x}%`, top: `${centroid.y}%` }}
-                                                        >
-                                                            {polygon.section_name ?? polygon.label}
-                                                        </div>
-                                                    )}
-                                                </>
-                                            )
-                                        })}
-
-                                        {false && draftPolygonPoints.length >= 1 && (
-                                            <svg className="absolute inset-0 h-full w-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                                <polyline
-                                                    points={draftPolygonPoints.map((point) => `${point.x},${point.y}`).join(' ')}
-                                                    fill={draftPolygonPoints.length >= 3 ? 'rgba(56, 189, 248, 0.16)' : 'none'}
-                                                    stroke="rgba(56, 189, 248, 0.95)"
-                                                    strokeWidth="0.35"
-                                                />
-                                            </svg>
-                                        )}
-
-                                        {false && draftPolygonPoints.map((point, index) => (
-                                            <button
-                                                key={`${point.x}-${point.y}-${index}`}
-                                                type="button"
-                                                onMouseDown={(event) => {
-                                                    event.preventDefault()
-                                                    event.stopPropagation()
-                                                    if (editingPolygonId !== null) {
-                                                        pushHistorySnapshot()
-                                                        suppressNextCanvasClickRef.current = true
-                                                        setDraggingPolygonPointIndex(index)
-                                                    }
-                                                }}
-                                                onDoubleClick={(event) => {
-                                                    event.preventDefault()
-                                                    event.stopPropagation()
-                                                    handleRemovePolygonPoint(index)
-                                                }}
-                                                className={`absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border ${editingPolygonId !== null ? 'cursor-grab border-cyan-100 bg-cyan-300 shadow-[0_0_0_4px_rgba(34,211,238,0.18)]' : 'border-cyan-200 bg-cyan-400'}`}
-                                                style={{ left: `${point.x}%`, top: `${point.y}%` }}
-                                                title={editingPolygonId !== null ? 'Kéo để chỉnh đỉnh. Bấm đúp để xóa điểm.' : 'Điểm đa giác nháp'}
-                                            />
-                                        ))}
 
                                         {selectionStart && selectionCurrent && (
                                             <div

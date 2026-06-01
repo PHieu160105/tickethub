@@ -9,28 +9,30 @@ from app.models.enums import EventCategory, EventStatus, Gender, SeatSource, Sea
 from app.schemas.performer import PublicShowPerformerResponse
 
 
-class SeatZoneCreate(BaseModel):
-    """Payload cấu hình ma trận ghế khi tạo buổi diễn."""
+class TicketTierCreate(BaseModel):
+    """Payload tạo hạng vé của một buổi diễn."""
 
     code: str = Field(min_length=1, max_length=30)
     name: str = Field(min_length=1, max_length=100)
-    row_count: int = Field(ge=1, le=40)
-    seats_per_row: int = Field(ge=1, le=60)
-    price: Decimal = Field(gt=0)
+    description: str | None = None
+    base_price: Decimal = Field(gt=0)
     color: str = Field(default="#024ddf", max_length=20)
-    generate_seats: bool = True
+    is_active: bool = True
 
 
-class SeatZoneUpdate(BaseModel):
-    """Payload admin chỉnh sửa ma trận một khu vực ghế của buổi diễn."""
+class TicketTierUpdate(BaseModel):
+    """Payload cập nhật hạng vé của một buổi diễn."""
 
     code: str = Field(min_length=1, max_length=30)
     name: str = Field(min_length=1, max_length=100)
-    row_count: int = Field(ge=1, le=40)
-    seats_per_row: int = Field(ge=1, le=60)
-    price: Decimal = Field(gt=0)
+    description: str | None = None
+    base_price: Decimal = Field(gt=0)
     color: str = Field(default="#024ddf", max_length=20)
-    regenerate_seats: bool = False
+    is_active: bool = True
+
+
+SeatZoneCreate = TicketTierCreate
+SeatZoneUpdate = TicketTierUpdate
 
 
 class EventCreateRequest(BaseModel):
@@ -77,7 +79,7 @@ class ShowCreateRequest(BaseModel):
     seat_source: SeatSource = SeatSource.LAYOUT
     venue_id: int | None = Field(default=None, ge=1)
     venue_layout_id: int | None = Field(default=None, ge=1)
-    zones: list[SeatZoneCreate] = Field(default_factory=list)
+    zones: list[TicketTierCreate] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_show_source(self) -> "ShowCreateRequest":
@@ -151,21 +153,24 @@ class ShowDetailResponse(ShowSummaryResponse):
     event_slug: str
     event_title: str
     hold_minutes: int
-    zones: list["SeatZoneResponse"]
+    zones: list["TicketTierResponse"]
 
 
-class SeatZoneResponse(BaseModel):
-    """Payload khu vực ghế dạng chỉ đọc."""
+class TicketTierResponse(BaseModel):
+    """Payload hạng vé dạng chỉ đọc."""
 
     id: int
     code: str
     name: str
-    row_count: int
-    seats_per_row: int
-    price: Decimal
+    description: str | None
+    base_price: Decimal
     color: str
+    is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+
+SeatZoneResponse = TicketTierResponse
 
 
 class SeatUserInfoResponse(BaseModel):
@@ -214,7 +219,7 @@ class SeatMatrixResponse(BaseModel):
     event_slug: str
     event_title: str
     queue_required: bool = False
-    zones: list[SeatZoneResponse]
+    zones: list[TicketTierResponse]
     seats: list[SeatResponse]
 
 

@@ -4,6 +4,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import PerformerRole
 
+MAX_PERFORMER_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_PERFORMER_IMAGE_DATA_URL_LENGTH = 14_000_000
+
 
 class PublicShowPerformerResponse(BaseModel):
     """Thông tin performer được phép hiển thị public trên show."""
@@ -30,7 +33,7 @@ class ShowPerformerUpsertRequest(BaseModel):
     performer_id: int | None = None
     stage_name: str = Field(min_length=1, max_length=255)
     artist_type: str | None = Field(default=None, max_length=120)
-    image_url: str | None = Field(default=None, max_length=2_000_000)
+    image_url: str | None = Field(default=None, max_length=MAX_PERFORMER_IMAGE_DATA_URL_LENGTH)
     role: PerformerRole
     sort_order: int = Field(default=0, ge=0, le=10_000)
 

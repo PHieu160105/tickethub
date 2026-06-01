@@ -206,7 +206,7 @@ export function CustomerSeatMap({
               const isSelected = selectedSeatIds.includes(seat.id)
               const zoneColor = seatColorMap?.get(seat.id) ?? seatMap.zones.find((item) => item.id === seat.zone_id)?.color
               const priceLabel = formatCurrencyVnd(seat.price)
-              const tooltipContent = `${seat.label} · ${seat.zone_name ?? 'Khu vực chung'} · ${priceLabel}`
+              const tooltipContent = `${seat.label} · ${seat.zone_name ?? 'Hạng vé phổ thông'} · ${priceLabel}`
               return (
                 <button
                   key={seat.id}

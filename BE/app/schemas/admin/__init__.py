@@ -2,13 +2,8 @@ from .dashboard import AudienceDistributionResponse, DashboardStreamResponse, Da
 from .events import UploadImageResponse
 from .refunds import AdminRefundBatchResponse, AdminRefundListResponse, AdminRefundOrderResponse, ShowCancelRequest
 from .shows import EventDetailStatsResponse, EventZoneStatsResponse
-from .tickets import (
-    AdminEventRevenueResponse,
-    AdminTicketSaleResponse,
-    AdminTicketTransactionDetailResponse,
-    AdminTransactionLogResponse,
-    PaginatedAdminTicketSalesResponse,
-)
+from .staff import EventStaffCreateRequest, EventStaffResponse, EventStaffStatusRequest
+from .tickets import AdminEventRevenueResponse, AdminTicketSaleResponse, PaginatedAdminTicketSalesResponse
 from .users import AdminUserResponse, PaginatedAdminUsersResponse
 
 __all__ = [
@@ -24,6 +19,9 @@ __all__ = [
     "DashboardStreamResponse",
     "DashboardSummaryResponse",
     "EventDetailStatsResponse",
+    "EventStaffCreateRequest",
+    "EventStaffResponse",
+    "EventStaffStatusRequest",
     "EventZoneStatsResponse",
     "PaginatedAdminTicketSalesResponse",
     "PaginatedAdminUsersResponse",
