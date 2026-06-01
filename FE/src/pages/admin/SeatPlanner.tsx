@@ -13,6 +13,7 @@ import type { SeatMapResponse, SeatMapSeat, ShowDetail, TicketTier } from '@/typ
 
 const EMPTY_TIER = { code: '', name: '', description: '', base_price: '0', color: '#ef4444', is_active: true }
 const EMPTY_SEAT = { seat_label: '', x: '50', y: '50', ticket_tier_id: '', price: '', is_admin_locked: false }
+const EMPTY_SELECTED_SEAT_PROPERTIES = { ticket_tier_id: '', price: '', is_admin_locked: false }
 const EMPTY_BULK = {
   ticket_tier_id: '',
   pattern: 'straight' as 'straight' | 'arc',
@@ -85,6 +86,7 @@ export default function AdminSeatPlanner() {
   const [tiers, setTiers] = useState<TicketTier[]>([])
   const [tierEditor, setTierEditor] = useState(EMPTY_TIER)
   const [seatEditor, setSeatEditor] = useState(EMPTY_SEAT)
+  const [selectedSeatProperties, setSelectedSeatProperties] = useState(EMPTY_SELECTED_SEAT_PROPERTIES)
   const [bulkEditor, setBulkEditor] = useState(EMPTY_BULK)
   const [editingTierId, setEditingTierId] = useState<number | null>(null)
   const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([])
@@ -207,8 +209,16 @@ export default function AdminSeatPlanner() {
   }, [dirty])
 
   useEffect(() => {
-    if (!selectedSeat || selectedSeatIds.length !== 1) return
-    setSeatEditor(seatForm(selectedSeat))
+    if (!selectedSeat) {
+      setSelectedSeatProperties(EMPTY_SELECTED_SEAT_PROPERTIES)
+      return
+    }
+    setSelectedSeatProperties({
+      ticket_tier_id: selectedSeat.ticket_tier_id ? String(selectedSeat.ticket_tier_id) : '',
+      price: String(selectedSeat.price),
+      is_admin_locked: selectedSeat.is_admin_locked,
+    })
+    if (selectedSeatIds.length === 1) setSeatEditor(seatForm(selectedSeat))
   }, [selectedSeat, selectedSeatIds.length])
 
   function getCoordinates(clientX: number, clientY: number) {
@@ -408,6 +418,25 @@ export default function AdminSeatPlanner() {
         price: seatEditor.price ? Number(seatEditor.price) : tier.base_price,
         status: seat.status === 'SOLD' ? 'SOLD' : (seatEditor.is_admin_locked ? 'LOCKED' : 'AVAILABLE'),
         is_admin_locked: seatEditor.is_admin_locked,
+      } : seat),
+    })
+    setDirty(true)
+  }
+
+  function applySelectedSeatProperties() {
+    if (!seatMap || selectedSeatIds.length === 0) return
+    const tier = tierMap.get(Number(selectedSeatProperties.ticket_tier_id))
+    if (!tier) return
+    pushHistory()
+    setSeatMap({
+      ...seatMap,
+      seats: seatMap.seats.map((seat) => selectedSeatIds.includes(seat.id) ? {
+        ...seat,
+        ticket_tier_id: tier.id,
+        ticket_tier_name: tier.name,
+        price: selectedSeatProperties.price ? Number(selectedSeatProperties.price) : tier.base_price,
+        status: seat.status === 'SOLD' ? 'SOLD' : (selectedSeatProperties.is_admin_locked ? 'LOCKED' : 'AVAILABLE'),
+        is_admin_locked: selectedSeatProperties.is_admin_locked,
       } : seat),
     })
     setDirty(true)
@@ -620,8 +649,8 @@ export default function AdminSeatPlanner() {
               footerRight={`Zoom ${Math.round(viewport.scale * 100)}%`}
               toolbar={(
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button size="icon" variant={tool === 'single' ? 'primary' : 'outline'} onClick={() => setTool('single')} title="Đặt ghế lẻ"><Plus className="h-4 w-4" /></Button>
-                  <Button size="icon" variant={tool === 'bulk' ? 'primary' : 'outline'} onClick={() => setTool('bulk')} title="Tạo cụm ghế"><Copy className="h-4 w-4" /></Button>
+                  <Button size="icon" variant={tool === 'single' ? 'primary' : 'outline'} onClick={() => { setTool('single'); setSelectedSeatIds([]) }} title="Đặt ghế lẻ"><Plus className="h-4 w-4" /></Button>
+                  <Button size="icon" variant={tool === 'bulk' ? 'primary' : 'outline'} onClick={() => { setTool('bulk'); setSelectedSeatIds([]) }} title="Tạo cụm ghế"><Copy className="h-4 w-4" /></Button>
                   <Button size="icon" variant={tool === 'select' ? 'primary' : 'outline'} onClick={() => setTool('select')} title="Chọn và kéo ghế"><MousePointer2 className="h-4 w-4" /></Button>
                   <Button size="icon" variant={tool === 'pan' ? 'primary' : 'outline'} onClick={() => setTool('pan')} title="Di chuyển góc nhìn"><Hand className="h-4 w-4" /></Button>
                   <Button variant="outline" onClick={() => setSnapToGrid((current) => !current)}>Bám lưới {snapToGrid ? 'Bật' : 'Tắt'}</Button>
@@ -672,6 +701,25 @@ export default function AdminSeatPlanner() {
               <p className="pt-2 text-xs admin-text-muted">Ghế khóa bởi nhân viên hiển thị màu đỏ đậm và khách hàng không thể mua.</p>
             </CardContent>
           </Card>
+
+          {tool === 'select' && selectedSeatIds.length > 0 ? <Card>
+            <CardHeader><CardTitle>Ghế đang chọn</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm admin-text-muted">Đã chọn {selectedSeatIds.length} ghế.</p>
+              <label className="block text-xs uppercase tracking-[0.18em] admin-text-muted">Hạng vé</label>
+              <select className="h-11 w-full rounded-lg border admin-border admin-bg-listbox px-3 admin-text-body" value={selectedSeatProperties.ticket_tier_id} onChange={(event) => setSelectedSeatProperties({ ...selectedSeatProperties, ticket_tier_id: event.target.value })}>
+                <option value="">Chọn hạng vé</option>
+                {tiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.code} · {tier.name}</option>)}
+              </select>
+              <label className="block text-xs uppercase tracking-[0.18em] admin-text-muted">Giá riêng</label>
+              <Input type="number" value={selectedSeatProperties.price} onChange={(event) => setSelectedSeatProperties({ ...selectedSeatProperties, price: event.target.value })} placeholder="Để trống dùng giá hạng vé" />
+              <label className="flex items-center gap-2 rounded-lg border admin-border px-3 py-3 text-sm admin-text-muted"><input type="checkbox" checked={selectedSeatProperties.is_admin_locked} onChange={(event) => setSelectedSeatProperties({ ...selectedSeatProperties, is_admin_locked: event.target.checked })} /> Khóa sẵn nhóm ghế này</label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button onClick={applySelectedSeatProperties}>Áp dụng thuộc tính</Button>
+                <Button variant="outline" onClick={deleteSelectedSeats}><Trash2 className="h-4 w-4" /> Xóa ghế đã chọn</Button>
+              </div>
+            </CardContent>
+          </Card> : null}
 
           {tool === 'single' ? <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><Plus className="h-5 w-5 text-emerald-400" /> Ghế lẻ</CardTitle></CardHeader>
@@ -773,7 +821,7 @@ export default function AdminSeatPlanner() {
           {seatsByTier.map(({ tier, seats }) => <div key={tier.id} className="rounded-lg border admin-border p-4">
             <div className="mb-3 flex items-center justify-between gap-3"><span className="flex items-center gap-2 font-semibold admin-text-body"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: tier.color }} />{tier.code} · {tier.name}</span><span className="text-xs admin-text-muted">{seats.length} ghế</span></div>
             <div className="flex max-h-36 flex-wrap gap-2 overflow-y-auto">
-              {seats.map((seat) => <button key={seat.id} type="button" onClick={() => setSelectedSeatIds([seat.id])} className={`rounded border px-2 py-1 text-xs ${selectedSeatIds.includes(seat.id) ? 'border-sky-400 bg-sky-500/20 text-sky-100' : 'admin-border admin-text-muted'}`}>{seat.label}</button>)}
+              {seats.map((seat) => <button key={seat.id} type="button" onClick={() => { setTool('select'); setSelectedSeatIds([seat.id]) }} className={`rounded border px-2 py-1 text-xs ${selectedSeatIds.includes(seat.id) ? 'border-sky-400 bg-sky-500/20 text-sky-100' : 'admin-border admin-text-muted'}`}>{seat.label}</button>)}
             </div>
           </div>)}
         </CardContent>

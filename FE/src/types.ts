@@ -120,8 +120,6 @@ export interface VenueSeatItem {
   id: number
   venue_layout_id: number | null
   label: string
-  row_label: string | null
-  seat_number: number | null
   x: number | null
   y: number | null
 }

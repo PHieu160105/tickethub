@@ -38,11 +38,6 @@ const EMPTY_BULK = {
 }
 const DEFAULT_VIEWPORT = { scale: 1, offsetX: 0, offsetY: 0 }
 
-function deriveSeatIdentity(label: string) {
-  const match = label.trim().match(/^([A-Za-z]+)\s*[- ]?\s*(\d+)$/)
-  return match ? { row_label: match[1], seat_number: Number(match[2]) } : { row_label: null, seat_number: null }
-}
-
 export default function AdminVenues() {
   const builderCanvasRef = useRef<HTMLDivElement>(null)
   const [step, setStep] = useState<StudioStep>('venue')
@@ -407,8 +402,6 @@ export default function AdminVenues() {
           update: finalSeats.filter((seat) => movedSeatIds.includes(seat.id)).map((seat) => ({
             id: seat.id,
             label: seat.label,
-            row_label: seat.row_label,
-            seat_number: seat.seat_number,
             x: seat.x ?? 0,
             y: seat.y ?? 0,
           })),
@@ -447,8 +440,7 @@ export default function AdminVenues() {
     if (!selectedVenue || !selectedLayoutId || !seatForm.label.trim()) return
     setBusy(true)
     try {
-      const identity = deriveSeatIdentity(seatForm.label)
-      const payload = { ...identity, label: seatForm.label.trim(), x: Number(seatForm.x), y: Number(seatForm.y) }
+      const payload = { label: seatForm.label.trim(), x: Number(seatForm.x), y: Number(seatForm.y) }
       if (editingSeatId) await adminApi.updateVenueSeat(editingSeatId, payload)
       else await adminApi.createVenueSeatSingle(selectedVenue.id, { ...payload, layout_id: selectedLayoutId })
       await loadSeats(selectedVenue.id, selectedLayoutId)
@@ -502,6 +494,27 @@ export default function AdminVenues() {
       if (editingSeatId === seatId) resetSeatForm()
     } catch (errorValue) {
       setError(extractApiErrorMessage(errorValue, 'Không thể xóa ghế mẫu.'))
+    }
+  }
+
+  async function deleteSelectedSeats() {
+    if (!selectedVenue || !selectedLayoutId || selectedSeatIds.length === 0 || !window.confirm(`Xóa ${selectedSeatIds.length} ghế mẫu đã chọn?`)) return
+    setBusy(true)
+    try {
+      await adminApi.syncVenueSeats(selectedVenue.id, {
+        layout_id: selectedLayoutId,
+        create: [],
+        update: [],
+        delete_ids: selectedSeatIds,
+      })
+      setSeats((current) => current.filter((seat) => !selectedSeatIds.includes(seat.id)))
+      setSelectedSeatIds([])
+      setEditingSeatId(null)
+      setMessage('Đã xóa các ghế mẫu được chọn.')
+    } catch (errorValue) {
+      setError(extractApiErrorMessage(errorValue, 'Không thể xóa các ghế mẫu được chọn.'))
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -648,7 +661,7 @@ export default function AdminVenues() {
                     <Button size="icon" variant={activeBuilderPanel === 'seat' && placementMode === 'seat' ? 'primary' : 'outline'} onClick={() => { resetSeatForm(); setActiveBuilderPanel('seat') }} title="Thêm một ghế">
                       <Plus className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant={activeBuilderPanel === 'bulk' && placementMode === 'bulk' ? 'primary' : 'outline'} onClick={() => { setActiveBuilderPanel('bulk'); setPlacementMode('bulk') }} title="Tạo nhiều ghế">
+                    <Button size="icon" variant={activeBuilderPanel === 'bulk' && placementMode === 'bulk' ? 'primary' : 'outline'} onClick={() => { setActiveBuilderPanel('bulk'); setPlacementMode('bulk'); setSelectedSeatIds([]) }} title="Tạo nhiều ghế">
                       <Copy className="h-4 w-4" />
                     </Button>
                     <Button size="icon" variant={placementMode === 'select' ? 'primary' : 'outline'} onClick={() => setPlacementMode('select')} title="Chọn ghế">
@@ -696,7 +709,15 @@ export default function AdminVenues() {
           </Card>
 
           <div className="space-y-6">
-            {activeBuilderPanel === 'seat' ? (
+            {placementMode === 'select' && selectedSeatIds.length > 0 ? (
+              <Card className="border-white/10">
+                <CardHeader><CardTitle>Ghế đang chọn</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm admin-text-muted">Đã chọn {selectedSeatIds.length} ghế.</p>
+                  <Button variant="outline" className="w-full" onClick={() => void deleteSelectedSeats()}><Trash2 className="h-4 w-4" /> Xóa ghế đã chọn</Button>
+                </CardContent>
+              </Card>
+            ) : activeBuilderPanel === 'seat' ? (
               <Card className="border-white/10">
                 <CardHeader><CardTitle>{editingSeatId ? 'Chỉnh sửa ghế' : 'Ghế lẻ'}</CardTitle></CardHeader>
                 <CardContent className="space-y-4">

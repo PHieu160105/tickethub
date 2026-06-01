@@ -69,8 +69,6 @@ class ArcConfig(BaseModel):
 class VenueSeatSingleCreateRequest(BaseModel):
     layout_id: int | None = Field(default=None, ge=1)
     label: str = Field(min_length=1, max_length=100)
-    row_label: str | None = Field(default=None, min_length=1, max_length=20)
-    seat_number: int | None = Field(default=None, ge=0)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
 
@@ -90,8 +88,6 @@ class VenueSeatBulkCreateRequest(BaseModel):
 
 class VenueSeatUpdateRequest(BaseModel):
     label: str | None = Field(default=None, min_length=1, max_length=100)
-    row_label: str | None = Field(default=None, min_length=1, max_length=20)
-    seat_number: int | None = Field(default=None, ge=0)
     x: float | None = Field(default=None, ge=0.0, le=100.0)
     y: float | None = Field(default=None, ge=0.0, le=100.0)
 
@@ -100,8 +96,6 @@ class VenueSeatResponse(BaseModel):
     id: int
     venue_layout_id: int | None
     label: str
-    row_label: str | None
-    seat_number: int | None
     x: float | None
     y: float | None
 
@@ -114,8 +108,6 @@ class VenueSeatBulkCreateResponse(BaseModel):
 class VenueSeatSyncCreateItem(BaseModel):
     client_id: int = Field(lt=0)
     label: str = Field(min_length=1, max_length=100)
-    row_label: str | None = Field(default=None, min_length=1, max_length=20)
-    seat_number: int | None = Field(default=None, ge=0)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
 
@@ -123,8 +115,6 @@ class VenueSeatSyncCreateItem(BaseModel):
 class VenueSeatSyncUpdateItem(BaseModel):
     id: int = Field(ge=1)
     label: str = Field(min_length=1, max_length=100)
-    row_label: str | None = Field(default=None, min_length=1, max_length=20)
-    seat_number: int | None = Field(default=None, ge=0)
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
 
@@ -140,8 +130,6 @@ class VenueSeatSyncCreatedItem(BaseModel):
     client_id: int
     id: int
     label: str
-    row_label: str | None
-    seat_number: int | None
     x: float | None
     y: float | None
 

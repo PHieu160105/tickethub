@@ -65,8 +65,6 @@ def _seat_response(seat: Seat) -> VenueSeatResponse:
         id=seat.id,
         venue_layout_id=seat.venue_layout_id,
         label=seat.label,
-        row_label=seat.row_label,
-        seat_number=seat.seat_number,
         x=float(seat.x_coord) if seat.x_coord is not None else None,
         y=float(seat.y_coord) if seat.y_coord is not None else None,
     )
@@ -116,9 +114,7 @@ async def _store_venue_background(venue: Venue, file: UploadFile) -> tuple[str, 
     return "raster", file.content_type
 
 
-def _derive_layout_seat_identity(label: str, row_label: str | None, seat_number: int | None) -> tuple[str | None, int | None]:
-    if row_label is not None or seat_number is not None:
-        return row_label, seat_number
+def _derive_layout_seat_identity(label: str) -> tuple[str | None, int | None]:
     match = re.match(r"^\s*([A-Za-z]+)\s*[- ]?\s*(\d+)\s*$", label)
     return (match.group(1), int(match.group(2))) if match else (None, None)
 
@@ -290,7 +286,7 @@ async def create_venue_seat_single(
     exists = await session.scalar(select(func.count()).select_from(Seat).where(Seat.venue_layout_id == layout.id, func.lower(Seat.seat_label) == payload.label.lower()))
     if exists:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nhãn ghế đã tồn tại trong bố cục này")
-    row_label, seat_number = _derive_layout_seat_identity(payload.label, payload.row_label, payload.seat_number)
+    row_label, seat_number = _derive_layout_seat_identity(payload.label)
     seat = Seat(venue_layout_id=layout.id, row_label=row_label, seat_number=seat_number, label=payload.label, x=round(payload.x, 2), y=round(payload.y, 2), is_active=True)
     session.add(seat)
     await session.flush()
@@ -363,10 +359,10 @@ async def sync_venue_seats(
         if not seat:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghế mẫu")
         seat.label = item.label
-        seat.row_label, seat.seat_number = _derive_layout_seat_identity(item.label, item.row_label, item.seat_number)
+        seat.row_label, seat.seat_number = _derive_layout_seat_identity(item.label)
         seat.x, seat.y = round(item.x, 2), round(item.y, 2)
     for item in payload.create:
-        row_label, seat_number = _derive_layout_seat_identity(item.label, item.row_label, item.seat_number)
+        row_label, seat_number = _derive_layout_seat_identity(item.label)
         seat = Seat(venue_layout_id=layout.id, row_label=row_label, seat_number=seat_number, label=item.label, x=round(item.x, 2), y=round(item.y, 2), is_active=True)
         session.add(seat)
         created_pairs.append((item.client_id, seat))
@@ -381,7 +377,7 @@ async def sync_venue_seats(
         await session.refresh(seat)
     return VenueSeatSyncResponse(
         created=[
-            VenueSeatSyncCreatedItem(client_id=client_id, id=seat.id, label=seat.label, row_label=seat.row_label, seat_number=seat.seat_number, x=float(seat.x_coord) if seat.x_coord is not None else None, y=float(seat.y_coord) if seat.y_coord is not None else None)
+            VenueSeatSyncCreatedItem(client_id=client_id, id=seat.id, label=seat.label, x=float(seat.x_coord) if seat.x_coord is not None else None, y=float(seat.y_coord) if seat.y_coord is not None else None)
             for client_id, seat in created_pairs
         ],
         updated_ids=[item.id for item in payload.update],
@@ -404,8 +400,8 @@ async def update_venue_seat(
         if exists:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nhãn ghế đã tồn tại trong bố cục này")
         seat.label = payload.label
-    if payload.label is not None or payload.row_label is not None or payload.seat_number is not None:
-        seat.row_label, seat.seat_number = _derive_layout_seat_identity(seat.label, payload.row_label if payload.row_label is not None else seat.row_label, payload.seat_number if payload.seat_number is not None else seat.seat_number)
+    if payload.label is not None:
+        seat.row_label, seat.seat_number = _derive_layout_seat_identity(seat.label)
     if payload.x is not None:
         seat.x = round(payload.x, 2)
     if payload.y is not None:

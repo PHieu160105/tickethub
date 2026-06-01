@@ -82,8 +82,6 @@ async def test_create_layout_and_seat_template(db_session, admin_user):
                 json={
                     "layout_id": layout["id"],
                     "label": "A1",
-                    "row_label": "A",
-                    "seat_number": 1,
                     "x": 25,
                     "y": 35,
                 },
@@ -97,13 +95,15 @@ async def test_create_layout_and_seat_template(db_session, admin_user):
         assert seat_response.status_code == status.HTTP_200_OK
         seat = seat_response.json()
         assert seat["label"] == "A1"
-        assert seat["row_label"] == "A"
-        assert seat["seat_number"] == 1
+        assert "row_label" not in seat
+        assert "seat_number" not in seat
         assert "section_id" not in seat
 
         stored_seat = await db_session.scalar(select(Seat).where(Seat.id == seat["id"]))
         assert stored_seat is not None
         assert stored_seat.venue_layout_id == layout["id"]
+        assert stored_seat.row_label == "A"
+        assert stored_seat.seat_number == 1
     finally:
         app.dependency_overrides.clear()
 

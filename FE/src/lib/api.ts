@@ -66,7 +66,7 @@ type ApiErrorBody = {
   message?: string
 }
 type VenueSeatSyncResponse = {
-  created: Array<{ client_id: number; id: number; label: string; row_label: string; seat_number: number; x: number | null; y: number | null }>
+  created: Array<{ client_id: number; id: number; label: string; x: number | null; y: number | null }>
   updated_ids: number[]
   deleted_ids: number[]
 }
@@ -541,7 +541,7 @@ export const adminApi = {
   },
   async createVenueSeatSingle(
     venueId: number,
-    payload: { layout_id?: number | null; label: string; row_label?: string | null; seat_number?: number | null; x: number; y: number },
+    payload: { layout_id?: number | null; label: string; x: number; y: number },
   ) {
     const response = await api.post<VenueSeatItem>(`/admin/venues/${venueId}/seats/single`, payload)
     return response.data
@@ -566,7 +566,7 @@ export const adminApi = {
   },
   async updateVenueSeat(
     seatId: number,
-    payload: Partial<{ label: string; row_label: string | null; seat_number: number | null; x: number; y: number }>,
+    payload: Partial<{ label: string; x: number; y: number }>,
   ) {
     const response = await api.patch<VenueSeatItem>(`/admin/seats/${seatId}`, payload)
     return response.data
@@ -575,8 +575,8 @@ export const adminApi = {
     venueId: number,
     payload: {
       layout_id?: number | null
-      create: Array<{ client_id: number; label: string; row_label: string | null; seat_number: number | null; x: number; y: number }>
-      update: Array<{ id: number; label: string; row_label: string | null; seat_number: number | null; x: number; y: number }>
+      create: Array<{ client_id: number; label: string; x: number; y: number }>
+      update: Array<{ id: number; label: string; x: number; y: number }>
       delete_ids: number[]
     },
   ) {
