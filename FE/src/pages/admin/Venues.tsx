@@ -63,12 +63,19 @@ export default function AdminVenues() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [activeBuilderPanel, setActiveBuilderPanel] = useState<'seat' | 'bulk'>('seat')
-  const [placementMode, setPlacementMode] = useState<'seat' | 'select' | 'pan'>('seat')
+  const [placementMode, setPlacementMode] = useState<'seat' | 'bulk' | 'select' | 'pan'>('seat')
   const [canvasCursor, setCanvasCursor] = useState<{ x: number; y: number } | null>(null)
   const [viewport, setViewport] = useState(DEFAULT_VIEWPORT)
   const [panStart, setPanStart] = useState<{ clientX: number; clientY: number; offsetX: number; offsetY: number } | null>(null)
+  const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null)
+  const [selectionCurrent, setSelectionCurrent] = useState<{ x: number; y: number } | null>(null)
+  const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([])
+  const [draggingSeatId, setDraggingSeatId] = useState<number | null>(null)
+  const [dragStartPosition, setDragStartPosition] = useState<{ x: number; y: number } | null>(null)
+  const [dragSelectedSeatStartPositions, setDragSelectedSeatStartPositions] = useState<Record<number, { x: number; y: number }> | null>(null)
   const [snapToGrid, setSnapToGrid] = useState(false)
   const [seatSize, setSeatSize] = useState(1.5)
+  const seatsRef = useRef<VenueSeatItem[]>([])
 
   const selectedLayout = layouts.find((item) => item.id === selectedLayoutId) ?? null
   const canvasAspectRatio = selectedVenue && selectedVenue.width > 0 && selectedVenue.height > 0
@@ -77,6 +84,12 @@ export default function AdminVenues() {
 
   async function loadSeats(venueId: number, layoutId: number | null) {
     setSeats(layoutId ? await adminApi.listVenueSeats(venueId, layoutId) : [])
+    setSelectedSeatIds([])
+    setSelectionStart(null)
+    setSelectionCurrent(null)
+    setDraggingSeatId(null)
+    setDragStartPosition(null)
+    setDragSelectedSeatStartPositions(null)
   }
 
   async function selectVenue(venueId: number) {
@@ -116,13 +129,8 @@ export default function AdminVenues() {
   }, [])
 
   useEffect(() => {
-    function stopPanning() {
-      setPanStart(null)
-    }
-
-    window.addEventListener('mouseup', stopPanning)
-    return () => window.removeEventListener('mouseup', stopPanning)
-  }, [])
+    seatsRef.current = seats
+  }, [seats])
 
   function startCreateVenue() {
     setEditingVenueId(null)
@@ -242,6 +250,14 @@ export default function AdminVenues() {
   }
 
   function handleCanvasMouseDown(event: MouseEvent<HTMLDivElement>) {
+    if (placementMode === 'select') {
+      const point = getCanvasCoordinates(event.clientX, event.clientY)
+      if (!point) return
+      event.preventDefault()
+      setSelectionStart(point)
+      setSelectionCurrent(point)
+      return
+    }
     if (placementMode !== 'pan') return
     event.preventDefault()
     setPanStart({ clientX: event.clientX, clientY: event.clientY, offsetX: viewport.offsetX, offsetY: viewport.offsetY })
@@ -249,18 +265,16 @@ export default function AdminVenues() {
 
   function handleCanvasMouseMove(event: MouseEvent<HTMLDivElement>) {
     setCanvasCursor(getCanvasCoordinates(event.clientX, event.clientY))
-    if (placementMode !== 'pan' || !panStart) return
-    setViewport((current) => ({
-      ...current,
-      offsetX: panStart.offsetX + event.clientX - panStart.clientX,
-      offsetY: panStart.offsetY + event.clientY - panStart.clientY,
-    }))
   }
 
   function handleCanvasClick(event: MouseEvent<HTMLDivElement>) {
-    if (placementMode !== 'seat') return
+    if (!['seat', 'bulk'].includes(placementMode) || draggingSeatId !== null) return
     const point = getCanvasCoordinates(event.clientX, event.clientY)
     if (!point) return
+    if (placementMode === 'bulk') {
+      setBulkForm((current) => ({ ...current, start_x: point.x.toFixed(2), start_y: point.y.toFixed(2) }))
+      return
+    }
     setSeatForm((current) => ({ ...current, x: point.x.toFixed(2), y: point.y.toFixed(2) }))
   }
 
@@ -268,8 +282,155 @@ export default function AdminVenues() {
     setViewport((current) => ({ ...current, scale: Math.max(0.5, Math.min(3, current.scale * multiplier)) }))
   }
 
+  function handleCanvasWheel(event: WheelEvent) {
+    event.preventDefault()
+    const element = builderCanvasRef.current
+    if (!element) return
+    const rect = element.getBoundingClientRect()
+    const pointerX = event.clientX - rect.left
+    const pointerY = event.clientY - rect.top
+    setViewport((current) => {
+      const scale = Math.max(0.5, Math.min(3, Number((current.scale * (event.deltaY < 0 ? 1.1 : 0.9)).toFixed(2))))
+      return {
+        scale,
+        offsetX: pointerX - ((pointerX - current.offsetX) / current.scale) * scale,
+        offsetY: pointerY - ((pointerY - current.offsetY) / current.scale) * scale,
+      }
+    })
+  }
+
+  function handleSeatMouseDown(event: MouseEvent<HTMLButtonElement>, seat: VenueSeatItem) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (placementMode !== 'select') {
+      editSeat(seat)
+      return
+    }
+    const nextSelection = event.shiftKey
+      ? (selectedSeatIds.includes(seat.id) ? selectedSeatIds.filter((id) => id !== seat.id) : [...selectedSeatIds, seat.id])
+      : (selectedSeatIds.includes(seat.id) ? selectedSeatIds : [seat.id])
+    if (!nextSelection.includes(seat.id)) {
+      setSelectedSeatIds(nextSelection)
+      return
+    }
+    const point = { x: seat.x ?? 0, y: seat.y ?? 0 }
+    setSelectedSeatIds(nextSelection)
+    setDraggingSeatId(seat.id)
+    setDragStartPosition(point)
+    setDragSelectedSeatStartPositions(Object.fromEntries(
+      seats.filter((item) => nextSelection.includes(item.id)).map((item) => [item.id, { x: item.x ?? 0, y: item.y ?? 0 }]),
+    ))
+  }
+
+  useEffect(() => {
+    if (!panStart) return
+    const onMove = (event: globalThis.MouseEvent) => {
+      setViewport((current) => ({
+        ...current,
+        offsetX: panStart.offsetX + event.clientX - panStart.clientX,
+        offsetY: panStart.offsetY + event.clientY - panStart.clientY,
+      }))
+    }
+    const onUp = () => setPanStart(null)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [panStart])
+
+  useEffect(() => {
+    if (placementMode !== 'select' || !selectionStart) return
+    const onMove = (event: globalThis.MouseEvent) => {
+      const point = getCanvasCoordinates(event.clientX, event.clientY)
+      if (point) setSelectionCurrent(point)
+    }
+    const onUp = () => {
+      const end = selectionCurrent ?? selectionStart
+      const minX = Math.min(selectionStart.x, end.x)
+      const maxX = Math.max(selectionStart.x, end.x)
+      const minY = Math.min(selectionStart.y, end.y)
+      const maxY = Math.max(selectionStart.y, end.y)
+      setSelectedSeatIds(seats.filter((seat) => {
+        const x = seat.x ?? 0
+        const y = seat.y ?? 0
+        return x >= minX && x <= maxX && y >= minY && y <= maxY
+      }).map((seat) => seat.id))
+      setSelectionStart(null)
+      setSelectionCurrent(null)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [placementMode, seats, selectionCurrent, selectionStart, snapToGrid, viewport])
+
+  useEffect(() => {
+    if (draggingSeatId === null || !dragStartPosition || !dragSelectedSeatStartPositions) return
+    const onMove = (event: globalThis.MouseEvent) => {
+      const point = getCanvasCoordinates(event.clientX, event.clientY)
+      if (!point) return
+      setSeats((current) => current.map((seat) => {
+        const start = dragSelectedSeatStartPositions[seat.id]
+        if (!start) return seat
+        return {
+          ...seat,
+          x: Math.max(0, Math.min(100, Number((start.x + point.x - dragStartPosition.x).toFixed(2)))),
+          y: Math.max(0, Math.min(100, Number((start.y + point.y - dragStartPosition.y).toFixed(2)))),
+        }
+      }))
+    }
+    const onUp = async (event: globalThis.MouseEvent) => {
+      const movedSeatIds = Object.keys(dragSelectedSeatStartPositions).map(Number)
+      const point = getCanvasCoordinates(event.clientX, event.clientY)
+      const finalSeats = seatsRef.current.map((seat) => {
+        const start = dragSelectedSeatStartPositions[seat.id]
+        if (!start || !point) return seat
+        return {
+          ...seat,
+          x: Math.max(0, Math.min(100, Number((start.x + point.x - dragStartPosition.x).toFixed(2)))),
+          y: Math.max(0, Math.min(100, Number((start.y + point.y - dragStartPosition.y).toFixed(2)))),
+        }
+      })
+      setSeats(finalSeats)
+      setDraggingSeatId(null)
+      setDragStartPosition(null)
+      setDragSelectedSeatStartPositions(null)
+      if (!selectedVenue || !selectedLayoutId) return
+      try {
+        await adminApi.syncVenueSeats(selectedVenue.id, {
+          layout_id: selectedLayoutId,
+          create: [],
+          update: finalSeats.filter((seat) => movedSeatIds.includes(seat.id)).map((seat) => ({
+            id: seat.id,
+            label: seat.label,
+            row_label: seat.row_label,
+            seat_number: seat.seat_number,
+            x: seat.x ?? 0,
+            y: seat.y ?? 0,
+          })),
+          delete_ids: [],
+        })
+        setMessage(`Đã cập nhật vị trí ${movedSeatIds.length} ghế mẫu.`)
+      } catch (errorValue) {
+        setError(extractApiErrorMessage(errorValue, 'Không thể cập nhật vị trí ghế mẫu.'))
+        await loadSeats(selectedVenue.id, selectedLayoutId)
+      }
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [dragSelectedSeatStartPositions, dragStartPosition, draggingSeatId, selectedLayoutId, selectedVenue, snapToGrid, viewport])
+
   function editSeat(seat: VenueSeatItem) {
     setEditingSeatId(seat.id)
+    setSelectedSeatIds([seat.id])
     setSeatForm({ label: seat.label, x: String(seat.x ?? 50), y: String(seat.y ?? 50) })
     setActiveBuilderPanel('seat')
     setPlacementMode('select')
@@ -277,6 +438,7 @@ export default function AdminVenues() {
 
   function resetSeatForm() {
     setEditingSeatId(null)
+    setSelectedSeatIds([])
     setSeatForm(EMPTY_SEAT)
     setPlacementMode('seat')
   }
@@ -345,6 +507,12 @@ export default function AdminVenues() {
 
   const canGoNext = step === 'venue' ? Boolean(selectedVenue) : step === 'layout' ? Boolean(selectedLayoutId) : false
   const stepIndex = STEPS.indexOf(step)
+  const selectionBox = selectionStart && selectionCurrent ? {
+    left: `${Math.min(selectionStart.x, selectionCurrent.x)}%`,
+    top: `${Math.min(selectionStart.y, selectionCurrent.y)}%`,
+    width: `${Math.abs(selectionStart.x - selectionCurrent.x)}%`,
+    height: `${Math.abs(selectionStart.y - selectionCurrent.y)}%`,
+  } : null
 
   if (loading) return <GlobalLoader />
 
@@ -468,6 +636,7 @@ export default function AdminVenues() {
                 onMouseDown={handleCanvasMouseDown}
                 onMouseMove={handleCanvasMouseMove}
                 onClick={handleCanvasClick}
+                onWheel={handleCanvasWheel}
                 onZoomIn={() => zoomCanvas(1.1)}
                 onZoomOut={() => zoomCanvas(0.9)}
                 cursorClassName={placementMode === 'pan' ? 'cursor-grab' : placementMode === 'select' ? 'cursor-default' : 'cursor-crosshair'}
@@ -479,7 +648,7 @@ export default function AdminVenues() {
                     <Button size="icon" variant={activeBuilderPanel === 'seat' && placementMode === 'seat' ? 'primary' : 'outline'} onClick={() => { resetSeatForm(); setActiveBuilderPanel('seat') }} title="Thêm một ghế">
                       <Plus className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant={activeBuilderPanel === 'bulk' ? 'primary' : 'outline'} onClick={() => { setActiveBuilderPanel('bulk'); setPlacementMode('select') }} title="Tạo nhiều ghế">
+                    <Button size="icon" variant={activeBuilderPanel === 'bulk' && placementMode === 'bulk' ? 'primary' : 'outline'} onClick={() => { setActiveBuilderPanel('bulk'); setPlacementMode('bulk') }} title="Tạo nhiều ghế">
                       <Copy className="h-4 w-4" />
                     </Button>
                     <Button size="icon" variant={placementMode === 'select' ? 'primary' : 'outline'} onClick={() => setPlacementMode('select')} title="Chọn ghế">
@@ -505,17 +674,23 @@ export default function AdminVenues() {
                 )}
               >
                 {selectedVenue?.background_source ? <img src={selectedVenue.background_source} alt="Nền địa điểm" className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-80" /> : null}
+                {selectionBox ? <div className="pointer-events-none absolute border border-sky-500 bg-sky-400/20" style={selectionBox} /> : null}
                 {seats.map((seat) => (
                   <button
                     key={seat.id}
                     type="button"
-                    onClick={(event) => { event.stopPropagation(); editSeat(seat) }}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-blue-600 shadow-lg ${editingSeatId === seat.id ? 'ring-2 ring-brand-yellow/60' : ''}`}
+                    onMouseDown={(event) => handleSeatMouseDown(event, seat)}
+                    onClick={(event) => event.stopPropagation()}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-blue-600 shadow-lg ${selectedSeatIds.includes(seat.id) || editingSeatId === seat.id ? 'ring-2 ring-brand-yellow/60' : ''} ${draggingSeatId === seat.id ? 'cursor-grabbing scale-110' : placementMode === 'select' ? 'cursor-grab' : ''}`}
                     style={{ left: `${seat.x ?? 0}%`, top: `${seat.y ?? 0}%`, width: `${seatSize}%`, aspectRatio: '1' }}
                     title={seat.label}
                   />
                 ))}
-                <div className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-brand-red bg-brand-red/30 shadow-[0_0_0_6px_rgba(252,83,109,0.18)]" style={{ left: `${seatForm.x}%`, top: `${seatForm.y}%` }} title="Vị trí ghế đang chọn" />
+                <div
+                  className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-brand-red bg-brand-red/30 shadow-[0_0_0_6px_rgba(252,83,109,0.18)]"
+                  style={{ left: `${placementMode === 'bulk' ? bulkForm.start_x : seatForm.x}%`, top: `${placementMode === 'bulk' ? bulkForm.start_y : seatForm.y}%` }}
+                  title={placementMode === 'bulk' ? 'Điểm bắt đầu cụm ghế' : 'Vị trí ghế đang chọn'}
+                />
               </InteractiveSeatCanvas>
             </CardContent>
           </Card>
