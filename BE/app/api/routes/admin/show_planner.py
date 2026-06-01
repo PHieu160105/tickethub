@@ -25,7 +25,6 @@ from app.schemas.event import (
     TicketTierUpdate,
 )
 from app.services.dashboard_service import broadcast_dashboard_update
-from app.services.audit_service import add_audit_log, model_snapshot
 from app.services.event_inventory_service import sync_show_ticket_inventory
 from app.services.event_lifecycle_service import create_show_ticket_tier, delete_show_ticket_tier, update_show_ticket_tier
 
@@ -79,13 +78,12 @@ async def create_ticket_tier(
     show_id: int,
     payload: TicketTierCreate,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_assigned_event_staff),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> TicketTierResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
     try:
         tier = await create_show_ticket_tier(session, show, payload)
-        add_audit_log(session, staff_user, "CREATE_TICKET_TIER", "ticket_tiers", tier.id, new_value=model_snapshot(tier, "show_id", "code", "name", "base_price", "color", "is_active"))
         await session.commit()
     except Exception:
         await session.rollback()
@@ -102,15 +100,12 @@ async def update_ticket_tier(
     ticket_tier_id: int,
     payload: TicketTierUpdate,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_assigned_event_staff),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> TicketTierResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
     try:
-        current_tier = await session.get(TicketTier, ticket_tier_id)
-        old_value = model_snapshot(current_tier, "show_id", "code", "name", "base_price", "color", "is_active") if current_tier else None
         tier = await update_show_ticket_tier(session, show, ticket_tier_id, payload)
-        add_audit_log(session, staff_user, "UPDATE_TICKET_TIER", "ticket_tiers", tier.id, old_value=old_value, new_value=model_snapshot(tier, "show_id", "code", "name", "base_price", "color", "is_active"))
         await session.commit()
     except Exception:
         await session.rollback()
@@ -126,15 +121,12 @@ async def delete_ticket_tier(
     show_id: int,
     ticket_tier_id: int,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_assigned_event_staff),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> APIMessage:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
     try:
-        tier = await session.get(TicketTier, ticket_tier_id)
-        old_value = model_snapshot(tier, "show_id", "code", "name", "base_price", "color", "is_active") if tier else None
         await delete_show_ticket_tier(session, show, ticket_tier_id)
-        add_audit_log(session, staff_user, "DELETE_TICKET_TIER", "ticket_tiers", ticket_tier_id, old_value=old_value)
         await session.commit()
     except Exception:
         await session.rollback()
@@ -161,7 +153,7 @@ async def create_show_seat_single(
     show_id: int,
     payload: SeatSingleCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_assigned_event_staff),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> SeatCreateResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
@@ -186,7 +178,6 @@ async def create_show_seat_single(
     session.add(ticket)
     try:
         await session.flush()
-        add_audit_log(session, staff_user, "CREATE_SHOW_SEAT", "tickets", ticket.id, new_value=model_snapshot(ticket, "show_id", "ticket_tier_id", "seat_label", "x_coord", "y_coord", "price", "status"))
         await session.commit()
         await session.refresh(ticket)
     except Exception:
@@ -203,7 +194,7 @@ async def create_show_seat_bulk(
     show_id: int,
     payload: SeatBulkCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_assigned_event_staff),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> SeatBulkCreateResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
@@ -250,7 +241,6 @@ async def create_show_seat_bulk(
 
     try:
         await session.flush()
-        add_audit_log(session, staff_user, "BULK_CREATE_SHOW_SEATS", "shows", show.id, new_value={"ticket_ids": [ticket.id for ticket in created], "created_count": len(created)})
         await session.commit()
         for ticket in created:
             await session.refresh(ticket)
@@ -268,7 +258,7 @@ async def sync_show_seats(
     show_id: int,
     payload: SeatSyncRequest,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_assigned_event_staff),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> SeatSyncResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
@@ -343,7 +333,6 @@ async def sync_show_seats(
             await session.delete(ticket)
 
         await session.flush()
-        add_audit_log(session, staff_user, "SYNC_SHOW_SEATS", "shows", show.id, new_value={"created_count": len(created_pairs), "updated_ids": update_ids, "deleted_ids": delete_ids})
         await session.commit()
         for _, ticket in created_pairs:
             await session.refresh(ticket)
@@ -376,14 +365,13 @@ async def update_show_seat(
     seat_id: int,
     payload: SeatUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_assigned_event_staff),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> SeatCreateResponse:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
     ticket = await session.scalar(select(Ticket).where(Ticket.id == seat_id, Ticket.show_id == show.id))
     if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
-    old_value = model_snapshot(ticket, "ticket_tier_id", "seat_label", "x_coord", "y_coord", "price", "status", "is_staff_locked")
     if payload.ticket_tier_id is not None:
         tier = await _default_ticket_tier(session, show.id, payload.ticket_tier_id)
         ticket.ticket_tier_id = tier.id
@@ -408,7 +396,6 @@ async def update_show_seat(
             ticket.status = SeatStatus.LOCKED if payload.is_admin_locked else SeatStatus.AVAILABLE
 
     try:
-        add_audit_log(session, staff_user, "UPDATE_SHOW_SEAT", "tickets", ticket.id, old_value=old_value, new_value=model_snapshot(ticket, "ticket_tier_id", "seat_label", "x_coord", "y_coord", "price", "status", "is_staff_locked"))
         await session.commit()
         await session.refresh(ticket)
     except Exception:
@@ -425,7 +412,7 @@ async def delete_show_seat(
     show_id: int,
     seat_id: int,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_assigned_event_staff),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> APIMessage:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     _ensure_show_is_draft(show)
@@ -434,7 +421,6 @@ async def delete_show_seat(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
     if ticket.seat_id is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Khong the xoa ghe duoc sinh tu layout")
-    add_audit_log(session, staff_user, "DELETE_SHOW_SEAT", "tickets", ticket.id, old_value=model_snapshot(ticket, "show_id", "ticket_tier_id", "seat_label", "x_coord", "y_coord", "price", "status"))
     await session.delete(ticket)
     await session.commit()
     await _invalidate_show_cache(show.id)

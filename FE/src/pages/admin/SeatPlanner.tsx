@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { GlobalLoader } from '@/components/ui/GlobalLoader'
 import { Input } from '@/components/ui/Input'
-import { adminApi, eventApi, extractApiErrorMessage, seatmapApi } from '@/lib/api'
+import { adminApi, extractApiErrorMessage, seatmapApi } from '@/lib/api'
 import type { SeatMapResponse, TicketTier } from '@/types'
 
 const EMPTY_TIER = { code: '', name: '', description: '', base_price: '0', color: '#ef4444', is_active: true }
@@ -43,7 +43,7 @@ export default function AdminSeatPlanner() {
     setError(null)
     try {
       const [, nextSeatMap, nextTiers] = await Promise.all([
-        eventApi.show(showId),
+        adminApi.getShow(eventKey, showId),
         seatmapApi.get(showId),
         adminApi.getShowTicketTiers(eventKey, showId),
       ])

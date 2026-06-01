@@ -1,8 +1,6 @@
-"""ORM models for base users, subtype tables, and admin audit data."""
+"""ORM models for base users and subtype tables."""
 
-from datetime import datetime, timezone
-
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -61,12 +59,6 @@ class User(TimestampMixin, Base):
         primaryjoin="User.id == foreign(EventAssignment.staff_id)",
         foreign_keys="EventAssignment.staff_id",
     )
-    admin_audit_logs = relationship(
-        "AdminAuditLog",
-        back_populates="actor_user",
-        primaryjoin="User.id == foreign(AdminAuditLog.actor_user_id)",
-        foreign_keys="AdminAuditLog.actor_user_id",
-    )
     @property
     def role(self) -> UserType:
         return self.user_type
@@ -112,18 +104,3 @@ class SystemAdmin(TimestampMixin, Base):
     admin_code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
 
     user = relationship("User", back_populates="system_admin_profile")
-
-
-class AdminAuditLog(Base):
-    __tablename__ = "admin_audit_logs"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
-    action: Mapped[str] = mapped_column(String(100), nullable=False)
-    target_table: Mapped[str] = mapped_column(String(100), nullable=False)
-    target_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    old_value: Mapped[str | None] = mapped_column(Text, nullable=True)
-    new_value: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
-
-    actor_user = relationship("User", back_populates="admin_audit_logs", foreign_keys=[actor_user_id], primaryjoin="User.id == foreign(AdminAuditLog.actor_user_id)")

@@ -11,7 +11,6 @@ from app.schemas.admin import EventDetailStatsResponse
 from app.schemas.common import APIMessage
 from app.schemas.event import ShowCreateRequest, ShowDetailResponse, ShowSummaryResponse, ShowUpdateRequest
 from app.services.dashboard_service import broadcast_dashboard_update
-from app.services.audit_service import add_audit_log, model_snapshot
 from app.services.event_lifecycle_service import create_show_with_inventory
 from app.services.event_query_service import build_show_detail_response, get_event_by_slug_or_id, list_event_shows
 from app.services.event_utils import combine_show_datetime
@@ -43,7 +42,6 @@ async def create_admin_show(
     event = await get_event_by_slug_or_id(session, event_key)
     try:
         show = await create_show_with_inventory(session, event, admin_user.id, payload)
-        add_audit_log(session, admin_user, "CREATE_SHOW", "shows", show.id, new_value=model_snapshot(show, "event_id", "title", "location", "start_at", "end_at", "status", "seat_source"))
         await session.commit()
         await session.refresh(show)
     except Exception:
@@ -72,7 +70,7 @@ async def update_admin_show(
     show_id: int,
     payload: ShowUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_assigned_event_staff),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> ShowDetailResponse:
     event, show = await _build_event_or_404_show(session, event_key, show_id)
     updates = payload.model_dump(exclude_unset=True)
@@ -81,7 +79,6 @@ async def update_admin_show(
 
     is_status_only_update = set(updates) == {"status"}
     previous_status = show.status
-    old_value = model_snapshot(show, "title", "description", "location", "start_at", "end_at", "status", "hold_minutes")
     is_unpublishing_show = previous_status == EventStatus.LIVE and updates.get("status") == EventStatus.DRAFT
     if show.status != EventStatus.DRAFT:
         if not is_status_only_update or updates.get("status") != EventStatus.DRAFT:
@@ -116,7 +113,6 @@ async def update_admin_show(
     try:
         if is_unpublishing_show:
             interrupted_seats, expired_queue_count = await _interrupt_active_show_sessions(session, show)
-        add_audit_log(session, staff_user, "UPDATE_SHOW", "shows", show.id, old_value=old_value, new_value=model_snapshot(show, "title", "description", "location", "start_at", "end_at", "status", "hold_minutes"))
         await session.commit()
         await session.refresh(show)
     except Exception:
@@ -146,14 +142,13 @@ async def delete_admin_show(
     event_key: str,
     show_id: int,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_assigned_event_staff),
+    _: User = Depends(get_current_assigned_event_staff),
 ) -> APIMessage:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     if show.status != EventStatus.DRAFT:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chi co the xoa show o trang thai draft")
     try:
         show.is_deleted = True
-        add_audit_log(session, staff_user, "DELETE_SHOW", "shows", show.id, old_value={"is_deleted": False}, new_value={"is_deleted": True})
         await session.commit()
     except Exception:
         await session.rollback()

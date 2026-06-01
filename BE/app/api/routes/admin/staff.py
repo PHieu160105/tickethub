@@ -16,7 +16,6 @@ from app.schemas.admin import (
     EventStaffResponse,
     EventStaffStatusRequest,
 )
-from app.services.audit_service import add_audit_log
 
 router = APIRouter()
 
@@ -78,7 +77,7 @@ async def list_event_staff(
 async def create_event_staff(
     payload: EventStaffCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    system_admin: User = Depends(get_current_system_admin),
+    _: User = Depends(get_current_system_admin),
 ) -> EventStaffResponse:
     if await session.scalar(select(User.id).where(User.email == str(payload.email).lower())):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email da ton tai")
@@ -97,14 +96,6 @@ async def create_event_staff(
     user.event_staff_profile = profile
     session.add(user)
     await session.flush()
-    add_audit_log(
-        session,
-        system_admin,
-        "CREATE_EVENT_STAFF",
-        "event_staff",
-        user.id,
-        new_value={"full_name": user.full_name, "email": user.email, "staff_code": profile.staff_code, "is_active": True},
-    )
     await session.commit()
     await session.refresh(user)
     await session.refresh(profile)
@@ -116,7 +107,7 @@ async def update_event_staff_status(
     staff_user_id: int,
     payload: EventStaffStatusRequest,
     session: AsyncSession = Depends(get_db_session),
-    system_admin: User = Depends(get_current_system_admin),
+    _: User = Depends(get_current_system_admin),
 ) -> EventStaffResponse:
     user = await session.get(User, staff_user_id)
     profile = await session.get(EventStaff, staff_user_id)
@@ -129,17 +120,7 @@ async def update_event_staff_status(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Hay phan cong staff thay the truoc khi vo hieu hoa tai khoan: {', '.join(blocked_titles)}",
             )
-    old_status = profile.is_active
     profile.is_active = payload.is_active
-    add_audit_log(
-        session,
-        system_admin,
-        "UPDATE_EVENT_STAFF_STATUS",
-        "event_staff",
-        staff_user_id,
-        old_value={"is_active": old_status},
-        new_value={"is_active": payload.is_active},
-    )
     await session.commit()
     await session.refresh(user)
     return _staff_response(user, profile)
@@ -202,21 +183,11 @@ async def update_event_assignments(
 
     current_assignments = list(await session.scalars(select(EventAssignment).where(EventAssignment.event_id == event.id)))
     current_by_staff_id = {assignment.staff_id: assignment for assignment in current_assignments}
-    old_staff_ids = sorted(assignment.staff_id for assignment in current_assignments if assignment.is_active)
     for assignment in current_assignments:
         assignment.is_active = assignment.staff_id in requested_staff_ids
     for staff_id in requested_staff_ids - current_by_staff_id.keys():
         session.add(EventAssignment(event_id=event.id, staff_id=staff_id, is_active=True))
 
-    add_audit_log(
-        session,
-        system_admin,
-        "UPDATE_EVENT_ASSIGNMENT",
-        "events",
-        event.id,
-        old_value={"staff_ids": old_staff_ids},
-        new_value={"staff_ids": sorted(requested_staff_ids)},
-    )
     await session.commit()
     overviews = await list_event_assignments(session=session, _=system_admin)
     return next(item for item in overviews if item.event_id == event.id)

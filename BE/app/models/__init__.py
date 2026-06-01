@@ -5,7 +5,7 @@ from app.models.event import Event, EventAssignment, Show, TicketTier
 from app.models.order import Order, Ticket, TransactionLog
 from app.models.performer import Performer, ShowPerformer
 from app.models.seat import Seat
-from app.models.user import AdminAuditLog, Customer, EventStaff, SystemAdmin, User
+from app.models.user import Customer, EventStaff, SystemAdmin, User
 from app.models.venue import Venue, VenueLayout
 
 __all__ = [
@@ -14,7 +14,6 @@ __all__ = [
     "Customer",
     "EventStaff",
     "SystemAdmin",
-    "AdminAuditLog",
     "Event",
     "EventAssignment",
     "Show",

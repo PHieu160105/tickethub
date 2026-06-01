@@ -32,7 +32,6 @@ from app.schemas.venue import (
     VenueSeatUpdateRequest,
     VenueUpdateRequest,
 )
-from app.services.audit_service import add_audit_log, model_snapshot
 
 router = APIRouter(prefix="/venues", tags=["admin-venues"])
 layout_router = APIRouter(prefix="/layouts", tags=["admin-layouts"])
@@ -133,7 +132,6 @@ async def create_venue(
     venue = Venue(name=payload.name, address=payload.address, created_by_staff_id=staff_user.id)
     session.add(venue)
     await session.flush()
-    add_audit_log(session, staff_user, "CREATE_VENUE", "venues", venue.id, new_value=model_snapshot(venue, "name", "address", "is_active"))
     await session.commit()
     await session.refresh(venue)
     return VenueDetailResponse.model_validate(venue)
@@ -145,7 +143,7 @@ async def list_venues(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> list[VenueListResponse]:
     stmt = select(Venue).order_by(Venue.created_at.desc())
     if search:
@@ -167,14 +165,12 @@ async def update_venue(
     venue_id: int,
     payload: VenueUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> VenueDetailResponse:
     venue = await _get_venue_or_404(session, venue_id)
     updates = payload.model_dump(exclude_unset=True)
-    old_value = {field: getattr(venue, field) for field in updates}
     for field_name, field_value in updates.items():
         setattr(venue, field_name, field_value)
-    add_audit_log(session, staff_user, "UPDATE_VENUE", "venues", venue.id, old_value=old_value, new_value={field: getattr(venue, field) for field in updates})
     await session.commit()
     await session.refresh(venue)
     return VenueDetailResponse.model_validate(venue)
@@ -184,10 +180,9 @@ async def update_venue(
 async def delete_venue(
     venue_id: int,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> None:
     venue = await _get_venue_or_404(session, venue_id)
-    add_audit_log(session, staff_user, "DELETE_VENUE", "venues", venue.id, old_value=model_snapshot(venue, "name", "address", "is_active"))
     await session.delete(venue)
     await session.commit()
 
@@ -197,11 +192,10 @@ async def upload_venue_background(
     venue_id: int,
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> dict:
     venue = await _get_venue_or_404(session, venue_id)
     background_type, content_type = await _store_venue_background(venue, file)
-    add_audit_log(session, staff_user, "UPDATE_VENUE_BACKGROUND", "venues", venue.id, new_value={"background_type": background_type, "content_type": content_type, "width": venue.width, "height": venue.height})
     await session.commit()
     await session.refresh(venue)
     return {
@@ -218,7 +212,7 @@ async def upload_venue_background(
 async def list_layouts(
     venue_id: int,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> list[LayoutDetailResponse]:
     await _get_venue_or_404(session, venue_id)
     layouts = await session.scalars(select(VenueLayout).where(VenueLayout.venue_id == venue_id).order_by(VenueLayout.id.asc()))
@@ -230,13 +224,12 @@ async def create_layout(
     venue_id: int,
     payload: LayoutCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> LayoutDetailResponse:
     await _get_venue_or_404(session, venue_id)
     layout = VenueLayout(venue_id=venue_id, name=payload.name, description=payload.description)
     session.add(layout)
     await session.flush()
-    add_audit_log(session, staff_user, "CREATE_VENUE_LAYOUT", "venue_layouts", layout.id, new_value=model_snapshot(layout, "venue_id", "name", "description"))
     await session.commit()
     await session.refresh(layout)
     return LayoutDetailResponse.model_validate(layout)
@@ -247,16 +240,14 @@ async def update_layout(
     layout_id: int,
     payload: LayoutUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> LayoutDetailResponse:
     layout = await session.get(VenueLayout, layout_id)
     if not layout:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy bố cục")
     updates = payload.model_dump(exclude_unset=True)
-    old_value = {field: getattr(layout, field) for field in updates}
     for field_name, field_value in updates.items():
         setattr(layout, field_name, field_value)
-    add_audit_log(session, staff_user, "UPDATE_VENUE_LAYOUT", "venue_layouts", layout.id, old_value=old_value, new_value={field: getattr(layout, field) for field in updates})
     await session.commit()
     await session.refresh(layout)
     return LayoutDetailResponse.model_validate(layout)
@@ -266,12 +257,11 @@ async def update_layout(
 async def delete_layout(
     layout_id: int,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> None:
     layout = await session.get(VenueLayout, layout_id)
     if not layout:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy bố cục")
-    add_audit_log(session, staff_user, "DELETE_VENUE_LAYOUT", "venue_layouts", layout.id, old_value=model_snapshot(layout, "venue_id", "name", "description"))
     await session.delete(layout)
     await session.commit()
 
@@ -281,7 +271,7 @@ async def list_venue_seats(
     venue_id: int,
     layout_id: int | None = Query(default=None, ge=1),
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> list[VenueSeatResponse]:
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, layout_id)
@@ -293,7 +283,7 @@ async def create_venue_seat_single(
     venue_id: int,
     payload: VenueSeatSingleCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> VenueSeatResponse:
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, payload.layout_id)
@@ -304,7 +294,6 @@ async def create_venue_seat_single(
     seat = Seat(venue_layout_id=layout.id, row_label=row_label, seat_number=seat_number, label=payload.label, x=round(payload.x, 2), y=round(payload.y, 2), is_active=True)
     session.add(seat)
     await session.flush()
-    add_audit_log(session, staff_user, "CREATE_LAYOUT_SEAT", "seats", seat.id, new_value=model_snapshot(seat, "venue_layout_id", "label", "row_label", "seat_number", "x", "y"))
     await session.commit()
     await session.refresh(seat)
     return _seat_response(seat)
@@ -315,7 +304,7 @@ async def create_venue_seat_bulk(
     venue_id: int,
     payload: VenueSeatBulkCreateRequest,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> VenueSeatBulkCreateResponse:
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, payload.layout_id)
@@ -344,7 +333,6 @@ async def create_venue_seat_bulk(
             created.append(seat)
             existing_labels.add(label.lower())
     await session.flush()
-    add_audit_log(session, staff_user, "BULK_CREATE_LAYOUT_SEATS", "venue_layouts", layout.id, new_value={"seat_ids": [seat.id for seat in created], "created_count": len(created)})
     await session.commit()
     for seat in created:
         await session.refresh(seat)
@@ -356,7 +344,7 @@ async def sync_venue_seats(
     venue_id: int,
     payload: VenueSeatSyncRequest,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> VenueSeatSyncResponse:
     await _get_venue_or_404(session, venue_id)
     layout = await _resolve_layout_for_venue(session, venue_id, payload.layout_id)
@@ -388,14 +376,6 @@ async def sync_venue_seats(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghế mẫu")
         await session.delete(seat)
     await session.flush()
-    add_audit_log(
-        session,
-        staff_user,
-        "SYNC_LAYOUT_SEATS",
-        "venue_layouts",
-        layout.id,
-        new_value={"created_count": len(created_pairs), "updated_ids": [item.id for item in payload.update], "deleted_ids": payload.delete_ids},
-    )
     await session.commit()
     for _, seat in created_pairs:
         await session.refresh(seat)
@@ -414,12 +394,11 @@ async def update_venue_seat(
     seat_id: int,
     payload: VenueSeatUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> VenueSeatResponse:
     seat = await session.get(Seat, seat_id)
     if not seat:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghế mẫu")
-    old_value = model_snapshot(seat, "label", "row_label", "seat_number", "x", "y")
     if payload.label is not None:
         exists = await session.scalar(select(func.count()).select_from(Seat).where(Seat.venue_layout_id == seat.venue_layout_id, func.lower(Seat.seat_label) == payload.label.lower(), Seat.id != seat.id))
         if exists:
@@ -431,7 +410,6 @@ async def update_venue_seat(
         seat.x = round(payload.x, 2)
     if payload.y is not None:
         seat.y = round(payload.y, 2)
-    add_audit_log(session, staff_user, "UPDATE_LAYOUT_SEAT", "seats", seat.id, old_value=old_value, new_value=model_snapshot(seat, "label", "row_label", "seat_number", "x", "y"))
     await session.commit()
     await session.refresh(seat)
     return _seat_response(seat)
@@ -441,12 +419,11 @@ async def update_venue_seat(
 async def delete_venue_seat(
     seat_id: int,
     session: AsyncSession = Depends(get_db_session),
-    staff_user: User = Depends(get_current_active_event_staff),
+    _: User = Depends(get_current_active_event_staff),
 ) -> APIMessage:
     seat = await session.get(Seat, seat_id)
     if not seat:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghế mẫu")
-    add_audit_log(session, staff_user, "DELETE_LAYOUT_SEAT", "seats", seat.id, old_value=model_snapshot(seat, "venue_layout_id", "label", "row_label", "seat_number", "x", "y"))
     await session.delete(seat)
     await session.commit()
     return APIMessage(detail="Đã xóa ghế")
