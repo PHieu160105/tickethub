@@ -6,27 +6,35 @@ import { bookingApi } from '@/features/booking/api/bookingApi'
 import { pendingPaymentStorage, queueStorage } from '@/lib/storage'
 import type { OrderStatusResponse } from '@/types'
 
+const formatCurrencyVnd = (amount: number) =>
+  new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0,
+  }).format(amount)
+
 export default function PaymentResult() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [order, setOrder] = useState<OrderStatusResponse | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string>('')
+  const [errorMessage, setErrorMessage] = useState('')
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const pendingPayment = pendingPaymentStorage.get()
     const orderIdFromUrl = Number(searchParams.get('orderId'))
-    const orderId = Number.isFinite(orderIdFromUrl) && orderIdFromUrl > 0
-      ? orderIdFromUrl
-      : pendingPayment?.orderId ?? null
+    const orderId =
+      Number.isFinite(orderIdFromUrl) && orderIdFromUrl > 0
+        ? orderIdFromUrl
+        : pendingPayment?.orderId ?? null
     const gatewayError = searchParams.get('gatewayError')
 
     if (!orderId) {
       setIsLoading(false)
       setErrorMessage(
         gatewayError === 'invalid_signature'
-          ? 'KhÃ´ng thá»ƒ xÃ¡c minh pháº£n há»“i tá»« cá»•ng thanh toÃ¡n.'
-          : 'KhÃ´ng tÃ¬m tháº¥y phiÃªn thanh toÃ¡n Ä‘ang chá» xá»­ lÃ½.',
+          ? 'Khong the xac minh phan hoi tu cong thanh toan.'
+          : 'Khong tim thay phien thanh toan dang cho xu ly.',
       )
       return
     }
@@ -72,10 +80,10 @@ export default function PaymentResult() {
         if (pendingPayment) {
           queueStorage.clearToken(pendingPayment.showId)
         }
-        setErrorMessage('Thanh toÃ¡n chÆ°a hoÃ n táº¥t hoáº·c Ä‘Ã£ bá»‹ há»§y.')
+        setErrorMessage('Thanh toan chua hoan tat hoac da bi huy.')
       } catch (error) {
         if (!isMounted) return
-        setErrorMessage(error instanceof Error ? error.message : 'KhÃ´ng thá»ƒ kiá»ƒm tra tráº¡ng thÃ¡i thanh toÃ¡n.')
+        setErrorMessage(error instanceof Error ? error.message : 'Khong the kiem tra trang thai thanh toan.')
       } finally {
         if (isMounted) {
           setIsLoading(false)
@@ -97,32 +105,30 @@ export default function PaymentResult() {
     <div className="min-h-screen customer-text-body font-body">
       <main className="max-w-3xl mx-auto px-6 py-16">
         <div className="backdrop-blur-xl customer-bg-surface p-8 rounded-3xl border border-[var(--customer-bg-opp)] space-y-6">
-          <h1 className="text-3xl font-headline font-black tracking-tight">Káº¿t quáº£ thanh toÃ¡n</h1>
+          <h1 className="text-3xl font-headline font-black tracking-tight">Ket qua thanh toan</h1>
 
-          {isLoading && <p className="text-slate-400">Äang kiá»ƒm tra tráº¡ng thÃ¡i thanh toÃ¡n vá»›i há»‡ thá»‘ng...</p>}
+          {isLoading && <p className="text-slate-400">Dang kiem tra trang thai thanh toan voi he thong...</p>}
 
           {!isLoading && order?.order_status === 'PENDING_PAYMENT' && (
-            <p className="text-slate-300">ÄÆ¡n hÃ ng váº«n Ä‘ang chá» VNPAY xÃ¡c nháº­n. Trang nÃ y sáº½ tá»± lÃ m má»›i tráº¡ng thÃ¡i.</p>
+            <p className="text-slate-300">Don hang van dang cho VNPAY xac nhan. Trang nay se tu lam moi trang thai.</p>
           )}
 
-          {!isLoading && errorMessage && (
-            <p className="text-amber-300">{errorMessage}</p>
-          )}
+          {!isLoading && errorMessage && <p className="text-amber-300">{errorMessage}</p>}
 
           {!isLoading && order && (
             <div className="space-y-2 text-sm">
-              <p>MÃ£ Ä‘Æ¡n: {order.order_id}</p>
-              <p>Tráº¡ng thÃ¡i: {order.order_status}</p>
-              <p>Tá»•ng tiá»n: {order.total_amount.toLocaleString('vi-VN')} Ä‘</p>
+              <p>Ma don: {order.order_id}</p>
+              <p>Trang thai: {order.order_status}</p>
+              <p>Tong tien: {formatCurrencyVnd(order.total_amount)}</p>
             </div>
           )}
 
           <div className="flex gap-4">
             <Button onClick={() => window.location.reload()} disabled={isLoading}>
-              Kiá»ƒm tra láº¡i
+              Kiem tra lai
             </Button>
             <Link to="/tickets">
-              <Button variant="outline">VÃ© cá»§a tÃ´i</Button>
+              <Button variant="outline">Ve cua toi</Button>
             </Link>
           </div>
         </div>

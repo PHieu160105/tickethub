@@ -3,7 +3,7 @@ from .events import UploadImageResponse
 from .refunds import AdminRefundBatchResponse, AdminRefundListResponse, AdminRefundOrderResponse, ShowCancelRequest
 from .shows import EventDetailStatsResponse, EventZoneStatsResponse
 from .staff import EventStaffCreateRequest, EventStaffResponse, EventStaffStatusRequest
-from .tickets import AdminEventRevenueResponse, AdminTicketSaleResponse, PaginatedAdminTicketSalesResponse
+from .tickets import AdminEventRevenueResponse, AdminTicketSaleResponse, PaginatedAdminTicketSalesResponse, AdminTicketTransactionDetailResponse, AdminTransactionLogResponse
 from .users import AdminUserResponse, PaginatedAdminUsersResponse
 
 __all__ = [
