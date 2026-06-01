@@ -62,6 +62,9 @@ class Show(TimestampMixin, Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     created_by_staff_id: Mapped[int] = mapped_column(ForeignKey("event_staff.user_id"), nullable=False, index=True)
     venue_layout_id: Mapped[int | None] = mapped_column(ForeignKey("venue_layouts.id", ondelete="SET NULL"), nullable=True, index=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_by_staff_id: Mapped[int | None] = mapped_column(ForeignKey("event_staff.user_id"), nullable=True, index=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     location = synonym("venue")
 
@@ -71,6 +74,11 @@ class Show(TimestampMixin, Base):
         back_populates="created_shows",
         foreign_keys=[created_by_staff_id],
         primaryjoin="User.id == foreign(Show.created_by_staff_id)",
+    )
+    cancelled_by_staff = relationship(
+        "User",
+        foreign_keys=[cancelled_by_staff_id],
+        primaryjoin="User.id == foreign(Show.cancelled_by_staff_id)",
     )
     venue_layout = relationship("VenueLayout")
     ticket_tiers = relationship("TicketTier", back_populates="show", cascade="all,delete")

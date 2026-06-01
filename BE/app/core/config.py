@@ -78,6 +78,13 @@ class Settings(BaseSettings):
     zalo_client_id: str = ""
     zalo_client_secret: str = ""
     zalo_redirect_uri: str = "http://localhost:8000/api/auth/zalo/callback"
+    public_backend_base_url: str = Field(default="", validation_alias="PUBLIC_BACKEND_BASE_URL")
+    vnpay_tmn_code: str = Field(default="", validation_alias="VNPAY_TMN_CODE")
+    vnpay_hash_secret: str = Field(default="", validation_alias="VNPAY_HASH_SECRET")
+    vnpay_payment_url: str = Field(default="https://sandbox.vnpayment.vn/paymentv2/vpcpay.html", validation_alias="VNPAY_PAYMENT_URL")
+    vnpay_return_url: str = Field(default="", validation_alias="VNPAY_RETURN_URL")
+    vnpay_querydr_url: str = Field(default="https://sandbox.vnpayment.vn/merchant_webapi/api/transaction", validation_alias="VNPAY_QUERYDR_URL")
+    vnpay_bank_code: str = Field(default="", validation_alias="VNPAY_BANK_CODE")
 
     @property
     def allowed_origins(self) -> list[str]:

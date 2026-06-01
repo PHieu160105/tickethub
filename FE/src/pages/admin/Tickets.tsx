@@ -5,8 +5,15 @@ import { Calendar, DollarSign, RefreshCcw, Ticket, TrendingUp } from 'lucide-rea
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Modal } from '@/components/ui/Modal'
 import { adminApi, extractApiErrorMessage } from '@/lib/api'
-import type { AdminEventRevenueItem, AdminTicketSaleItem, DashboardSummary } from '@/types'
+import type {
+  AdminEventRevenueItem,
+  AdminTicketSaleItem,
+  AdminTicketTransactionHistory,
+  AdminTransactionLogItem,
+  DashboardSummary,
+} from '@/types'
 
 const PAGE_SIZE = 10
 
@@ -37,10 +44,44 @@ function formatCurrency(amount: number) {
   }).format(amount)
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) return 'N/A'
+  return new Date(value).toLocaleString('vi-VN')
+}
+
 function statusBadge(status: string) {
-  if (status === 'PAID') return <Badge variant="success" size="sm">Đã thanh toán</Badge>
-  if (status === 'PENDING') return <Badge variant="warning" size="sm">Đang chờ</Badge>
-  return <Badge variant="default" size="sm">Khác</Badge>
+  if (status === 'PAID') return <Badge variant="success" size="sm">Da thanh toan</Badge>
+  if (status === 'PENDING_PAYMENT') return <Badge variant="warning" size="sm">Dang cho thanh toan</Badge>
+  if (status === 'PAYMENT_FAILED') return <Badge variant="danger" size="sm">Thanh toan that bai</Badge>
+  if (status === 'CANCELLED') return <Badge variant="default" size="sm">Da huy</Badge>
+  return <Badge variant="default" size="sm">Khac</Badge>
+}
+
+function parseRawPayload(rawPayload?: string | null): Record<string, unknown> | null {
+  if (!rawPayload) return null
+  try {
+    const parsed = JSON.parse(rawPayload)
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null
+  } catch {
+    return null
+  }
+}
+
+function pickPrimaryTransactionLog(transaction: AdminTicketTransactionHistory): AdminTransactionLogItem | null {
+  const logs = transaction.logs
+  if (transaction.order_status === 'PAID') {
+    return logs.find((log) => log.action === 'PAYMENT_SUCCESS') ?? logs[0] ?? null
+  }
+  if (transaction.order_status === 'PAYMENT_FAILED') {
+    return logs.find((log) => log.status === 'PAYMENT_FAILED' || log.action.includes('FAILED')) ?? logs[0] ?? null
+  }
+  if (transaction.order_status === 'CANCELLED') {
+    return logs.find((log) => log.status === 'CANCELLED' || log.action.includes('FAILED') || log.action.includes('CANCEL')) ?? logs[0] ?? null
+  }
+  if (transaction.order_status === 'PENDING_PAYMENT') {
+    return logs.find((log) => Boolean(log.gateway_transaction_id) || Boolean(log.raw_payload)) ?? logs[0] ?? null
+  }
+  return logs[0] ?? null
 }
 
 function FilterListbox({ value, options, onChange, buttonClassName = 'w-full sm:w-48' }: FilterListboxProps) {
@@ -80,6 +121,10 @@ export default function AdminTickets() {
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [totalSales, setTotalSales] = useState(0)
+  const [selectedTransaction, setSelectedTransaction] = useState<AdminTicketTransactionHistory | null>(null)
+  const [transactionLoading, setTransactionLoading] = useState(false)
+  const [transactionError, setTransactionError] = useState<string | null>(null)
+  const [transactionModalOpen, setTransactionModalOpen] = useState(false)
 
   const selectedEventId = eventFilter === 'all' ? undefined : Number(eventFilter)
 
@@ -111,10 +156,25 @@ export default function AdminTickets() {
     try {
       await Promise.all([loadStaticData(), loadSalesData()])
     } catch (errorValue) {
-      setError(extractApiErrorMessage(errorValue, 'Không tải được dữ liệu vé và doanh thu.'))
+      setError(extractApiErrorMessage(errorValue, 'Khong tai duoc du lieu ve va doanh thu.'))
     } finally {
       setLoading(false)
       setRefreshing(false)
+    }
+  }
+
+  async function openTransactionHistory(ticketId: number) {
+    setTransactionModalOpen(true)
+    setTransactionLoading(true)
+    setTransactionError(null)
+    setSelectedTransaction(null)
+    try {
+      const detail = await adminApi.ticketTransactionHistory(ticketId)
+      setSelectedTransaction(detail)
+    } catch (errorValue) {
+      setTransactionError(extractApiErrorMessage(errorValue, 'Khong tai duoc thong tin giao dich.'))
+    } finally {
+      setTransactionLoading(false)
     }
   }
 
@@ -126,29 +186,34 @@ export default function AdminTickets() {
   const totalTicketsSold = summary.tickets_sold
   const totalPages = Math.max(1, Math.ceil(totalSales / PAGE_SIZE))
   const eventOptions: SelectOption[] = [
-    { value: 'all', label: 'Tất cả sự kiện' },
+    { value: 'all', label: 'Tat ca su kien' },
     ...revenueByShow.map((eventItem) => ({
       value: String(eventItem.event_id),
       label: eventItem.event_title,
     })),
   ]
   const statusOptions: SelectOption[] = [
-    { value: 'all', label: 'Tất cả trạng thái' },
-    { value: 'PAID', label: 'Đã thanh toán' },
-    { value: 'PENDING', label: 'Đang chờ' },
+    { value: 'all', label: 'Tat ca trang thai' },
+    { value: 'PAID', label: 'Da thanh toan' },
+    { value: 'PENDING_PAYMENT', label: 'Dang cho thanh toan' },
+    { value: 'PAYMENT_FAILED', label: 'Thanh toan that bai' },
+    { value: 'CANCELLED', label: 'Da huy' },
   ]
+
+  const primaryLog = selectedTransaction ? pickPrimaryTransactionLog(selectedTransaction) : null
+  const primaryPayload = parseRawPayload(primaryLog?.raw_payload)
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-display font-bold admin-text-header">Vé và Doanh thu</h2>
-          <p className="text-gray-400 mt-1">Thông tin vé và doanh thu</p>
+          <h2 className="text-2xl font-display font-bold admin-text-header">Ve va Doanh thu</h2>
+          <p className="text-gray-400 mt-1">Thong tin ve va doanh thu</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => void loadTicketsData(true)} isLoading={refreshing}>
             <RefreshCcw className="h-4 w-4" />
-            Làm mới
+            Lam moi
           </Button>
         </div>
       </div>
@@ -164,7 +229,7 @@ export default function AdminTickets() {
           <CardContent className="pt-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-bold admin-text-body mb-1">Doanh thu tổng</p>
+                <p className="text-sm font-bold admin-text-body mb-1">Doanh thu tong</p>
                 <p className="text-2xl font-bold text-green-400">{formatCurrency(totalRevenue)}</p>
               </div>
               <div className="h-12 w-12 rounded-lg bg-green-500/20 flex items-center justify-center">
@@ -173,7 +238,7 @@ export default function AdminTickets() {
             </div>
             <div className="mt-4 flex items-center gap-2 text-sm text-green-400">
               <TrendingUp className="h-4 w-4" />
-              <span>Cập nhật từ /admin/dashboard/summary</span>
+              <span>Cap nhat tu /admin/dashboard/summary</span>
             </div>
           </CardContent>
         </Card>
@@ -182,7 +247,7 @@ export default function AdminTickets() {
           <CardContent className="pt-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-bold admin-text-body mb-1">Vé đã bán</p>
+                <p className="text-sm font-bold admin-text-body mb-1">Ve da ban</p>
                 <p className="text-2xl font-bold text-brand-red">{totalTicketsSold.toLocaleString()}</p>
               </div>
               <div className="h-12 w-12 rounded-lg bg-brand-red/20 flex items-center justify-center">
@@ -191,7 +256,7 @@ export default function AdminTickets() {
             </div>
             <div className="mt-4 flex items-center gap-2 text-sm text-gray-400">
               <Ticket className="h-4 w-4" />
-              <span>Chỉ hiện giao dịch đang hoạt động.</span>
+              <span>Hien thi cac giao dich ve theo trang thai thanh toan.</span>
             </div>
           </CardContent>
         </Card>
@@ -200,7 +265,7 @@ export default function AdminTickets() {
           <CardContent className="pt-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-bold admin-text-body mb-1">Kết quả filter</p>
+                <p className="text-sm font-bold admin-text-body mb-1">Ket qua filter</p>
                 <p className="text-2xl font-bold text-brand-yellow">{totalSales}</p>
               </div>
               <div className="h-12 w-12 rounded-lg bg-brand-yellow/20 flex items-center justify-center">
@@ -220,9 +285,9 @@ export default function AdminTickets() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm admin-text-body">Đang tải doanh thu...</p>
+            <p className="text-sm admin-text-body">Dang tai doanh thu...</p>
           ) : revenueByShow.length === 0 ? (
-            <p className="text-sm text-gray-400">Chưa có dữ liệu doanh thu theo show.</p>
+            <p className="text-sm text-gray-400">Chua co du lieu doanh thu theo show.</p>
           ) : (
             <div className="space-y-4">
               {revenueByShow.map((item) => {
@@ -237,12 +302,12 @@ export default function AdminTickets() {
                         </p>
                       </div>
                       <div className="flex items-center gap-4">
-                        <span className="text-gray-400">{item.tickets_sold} vé</span>
+                        <span className="text-gray-400">{item.tickets_sold} ve</span>
                         <span className="text-green-400 font-medium">{formatCurrency(item.revenue)}</span>
                       </div>
                     </div>
                     <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ background: `linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))`, width: `${Math.max(progress, 2)}%` }} />
+                      <div className="h-full rounded-full" style={{ background: 'linear-gradient(to right, var(--admin-bg-opt), var(--admin-bg-opp))', width: `${Math.max(progress, 2)}%` }} />
                     </div>
                   </div>
                 )
@@ -255,7 +320,7 @@ export default function AdminTickets() {
       <Card>
         <CardHeader>
           <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <span>Giao dịch vé gần đây</span>
+            <span>Giao dich ve gan day</span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:w-auto">
               <FilterListbox
                 value={eventFilter}
@@ -280,22 +345,23 @@ export default function AdminTickets() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-gray-300">Đang tải giao dịch...</p>
+            <p className="text-sm text-gray-300">Dang tai giao dich...</p>
           ) : ticketSales.length === 0 ? (
-            <p className="text-sm text-gray-400">Không có giao dịch.</p>
+            <p className="text-sm text-gray-400">Khong co giao dich.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10 text-left admin-text-body">
                     <th className="pb-3 font-medium">ID</th>
-                    <th className="pb-3 font-medium">Sự kiện</th>
+                    <th className="pb-3 font-medium">Su kien</th>
                     <th className="pb-3 font-medium">Show</th>
-                    <th className="pb-3 font-medium">Khách hàng</th>
-                    <th className="pb-3 font-medium">Ghế</th>
-                    <th className="pb-3 font-medium">Giá</th>
-                    <th className="pb-3 font-medium">Thời gian</th>
-                    <th className="pb-3 font-medium">Trạng thái</th>
+                    <th className="pb-3 font-medium">Khach hang</th>
+                    <th className="pb-3 font-medium">Ghe</th>
+                    <th className="pb-3 font-medium">Gia</th>
+                    <th className="pb-3 font-medium">Thoi gian</th>
+                    <th className="pb-3 font-medium">Trang thai</th>
+                    <th className="pb-3 font-medium text-right">Chi tiet</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -313,6 +379,11 @@ export default function AdminTickets() {
                       <td className="py-3 text-green-400">{formatCurrency(sale.price)}</td>
                       <td className="py-3 admin-text-body">{new Date(sale.purchased_at).toLocaleString('vi-VN')}</td>
                       <td className="py-3">{statusBadge(sale.order_status)}</td>
+                      <td className="py-3 text-right">
+                        <Button variant="outline" size="sm" onClick={() => void openTransactionHistory(sale.id)}>
+                          Xem giao dich
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -322,7 +393,7 @@ export default function AdminTickets() {
 
           <div className="mt-4 flex flex-wrap justify-end gap-2">
             <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>
-              Trước
+              Truoc
             </Button>
             <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
               Sau
@@ -330,6 +401,95 @@ export default function AdminTickets() {
           </div>
         </CardContent>
       </Card>
+
+      <Modal
+        isOpen={transactionModalOpen}
+        onClose={() => {
+          setTransactionModalOpen(false)
+          setSelectedTransaction(null)
+          setTransactionError(null)
+          setTransactionLoading(false)
+        }}
+        title="Thong tin giao dich"
+        className="max-w-4xl"
+      >
+        {transactionLoading ? (
+          <p className="text-sm admin-text-body">Dang tai thong tin giao dich...</p>
+        ) : transactionError ? (
+          <p className="text-sm text-red-300">{transactionError}</p>
+        ) : selectedTransaction ? (
+          <div className="space-y-6">
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="rounded-xl border border-white/10 p-4 space-y-2">
+                <h3 className="font-semibold admin-text-header">Order</h3>
+                <p>Ma order: {selectedTransaction.order_code ?? `#${selectedTransaction.order_id}`}</p>
+                <div className="flex items-center gap-2">
+                  <span>Trang thai:</span>
+                  {statusBadge(selectedTransaction.order_status)}
+                </div>
+                <p>Provider: {selectedTransaction.payment_provider ?? 'N/A'}</p>
+                <p>Gateway ref: {selectedTransaction.gateway_order_ref ?? 'N/A'}</p>
+                <p>Gateway tx: {selectedTransaction.gateway_transaction_id ?? 'N/A'}</p>
+                <p>Bat dau thanh toan: {formatDateTime(selectedTransaction.payment_started_at)}</p>
+                <p>Het han: {formatDateTime(selectedTransaction.payment_expires_at)}</p>
+                <p>Thanh toan luc: {formatDateTime(selectedTransaction.paid_at)}</p>
+              </div>
+              <div className="rounded-xl border border-white/10 p-4 space-y-2">
+                <h3 className="font-semibold admin-text-header">Ve va nguoi mua</h3>
+                <p>Khach hang: {selectedTransaction.buyer_name ?? 'N/A'}</p>
+                <p>Email: {selectedTransaction.buyer_email ?? 'N/A'}</p>
+                <p>Dien thoai: {selectedTransaction.buyer_phone ?? 'N/A'}</p>
+                <p>Su kien: {selectedTransaction.event_title}</p>
+                <p>Show: {selectedTransaction.show_title}</p>
+                <p>Thoi gian show: {formatDateTime(selectedTransaction.show_start_at)}</p>
+                <p>Venue: {selectedTransaction.venue}</p>
+                <p>Ve: {selectedTransaction.ticket_tier_name} - {selectedTransaction.seat_label}</p>
+                <p>Gia: {formatCurrency(selectedTransaction.price)}</p>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h3 className="font-semibold admin-text-header">Chi tiet thanh toan</h3>
+              {!primaryLog ? (
+                <p className="text-sm text-gray-400">Chua co thong tin thanh toan de hien thi.</p>
+              ) : (
+                <div className="rounded-xl border border-white/10 p-4 space-y-3">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" size="sm">{primaryLog.action}</Badge>
+                      {statusBadge(primaryLog.status)}
+                    </div>
+                    <p className="text-xs text-gray-400">{formatDateTime(primaryLog.created_at)}</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                    <p>Payment method: {primaryLog.payment_method ?? 'N/A'}</p>
+                    <p>Gateway tx: {primaryLog.gateway_transaction_id ?? 'N/A'}</p>
+                    <p>Response code: {primaryLog.gateway_response_code ?? 'N/A'}</p>
+                    <p>So tien: {primaryLog.amount != null ? formatCurrency(primaryLog.amount) : 'N/A'}</p>
+                  </div>
+                  {primaryLog.message && (
+                    <p className="text-sm text-amber-300">{primaryLog.message}</p>
+                  )}
+                  {primaryPayload && (
+                    <div className="rounded-lg bg-white/5 p-3 text-xs text-gray-300">
+                      <p className="font-medium text-white mb-2">VNPAY payload summary</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {Boolean(primaryPayload['vnp_TransactionNo']) && <p>{`vnp_TransactionNo: ${String(primaryPayload['vnp_TransactionNo'])}`}</p>}
+                        {Boolean(primaryPayload['vnp_ResponseCode']) && <p>{`vnp_ResponseCode: ${String(primaryPayload['vnp_ResponseCode'])}`}</p>}
+                        {Boolean(primaryPayload['vnp_TransactionStatus']) && <p>{`vnp_TransactionStatus: ${String(primaryPayload['vnp_TransactionStatus'])}`}</p>}
+                        {Boolean(primaryPayload['vnp_PayDate']) && <p>{`vnp_PayDate: ${String(primaryPayload['vnp_PayDate'])}`}</p>}
+                        {Boolean(primaryPayload['vnp_BankCode']) && <p>{`vnp_BankCode: ${String(primaryPayload['vnp_BankCode'])}`}</p>}
+                        {Boolean(primaryPayload['vnp_CardType']) && <p>{`vnp_CardType: ${String(primaryPayload['vnp_CardType'])}`}</p>}
+                        {Boolean(primaryPayload['vnp_BankTranNo']) && <p>{`vnp_BankTranNo: ${String(primaryPayload['vnp_BankTranNo'])}`}</p>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   )
 }

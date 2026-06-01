@@ -353,6 +353,9 @@ async def build_show_summary_response(session: AsyncSession, show: Show, perform
         "seat_source": show.seat_source,
         "performers": performers,
         "venue_layout_id": show.venue_layout_id,
+        "cancelled_at": show.cancelled_at,
+        "cancelled_by_staff_id": show.cancelled_by_staff_id,
+        "cancellation_reason": show.cancellation_reason,
     }
 
 

@@ -22,6 +22,7 @@ class EventStatus(StrEnum):
     DRAFT = "DRAFT"
     LIVE = "LIVE"
     CLOSED = "CLOSED"
+    CANCELLED = "CANCELLED"
 
 
 class EventCategory(StrEnum):
@@ -47,8 +48,13 @@ class SeatStatus(StrEnum):
 
 class OrderStatus(StrEnum):
     PENDING = "PENDING"
+    PENDING_PAYMENT = "PENDING_PAYMENT"
     PAID = "PAID"
+    PAYMENT_FAILED = "PAYMENT_FAILED"
     CANCELLED = "CANCELLED"
+    REFUND_PENDING = "REFUND_PENDING"
+    REFUNDED = "REFUNDED"
+    REFUND_FAILED = "REFUND_FAILED"
 
 
 class QueueStatus(StrEnum):

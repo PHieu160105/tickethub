@@ -1,4 +1,4 @@
-"""Schema giữ ghế, thanh toán và vé điện tử."""
+"""Schemas for seat locking, payment checkout, and customer tickets."""
 
 from datetime import datetime
 from decimal import Decimal
@@ -10,39 +10,31 @@ from app.models.enums import OrderStatus, SeatStatus
 
 
 class LockSeatsRequest(BaseModel):
-    """Payload yêu cầu giữ một hoặc nhiều ghế."""
-
     show_id: int
     seat_ids: list[int] = Field(min_length=1)
     queue_token: str | None = None
 
 
 class LockSeatsResponse(BaseModel):
-    """Kết quả giữ ghế, tách rõ ghế giữ thành công và ghế bị từ chối."""
-
     locked_seat_ids: list[int]
     failed_seat_ids: list[int]
     message: str
 
 
 class ReleaseSeatsRequest(BaseModel):
-    """Payload trả ghế thủ công khi người dùng rời luồng thanh toán."""
-
     show_id: int
     seat_ids: list[int] = Field(min_length=1)
 
 
 class CheckoutRequest(BaseModel):
-    """Payload xác nhận thanh toán mô phỏng, chưa đi qua cổng thanh toán thật."""
-
     show_id: int
     queue_token: str | None = None
-    discount_code: str | None = None
+    buyer_name: str = Field(min_length=1, max_length=255)
+    buyer_email: str = Field(min_length=3, max_length=255)
+    buyer_phone: str = Field(min_length=3, max_length=50)
 
 
 class CheckoutItemResponse(BaseModel):
-    """Một dòng ghế đã mua trong đơn hàng."""
-
     seat_id: int
     seat_label: str
     ticket_tier_name: str
@@ -52,20 +44,32 @@ class CheckoutItemResponse(BaseModel):
 
 
 class CheckoutResponse(BaseModel):
-    """Phản hồi xác nhận đơn hàng sau khi mô phỏng thanh toán thành công."""
-
     order_id: int
     order_status: OrderStatus
     total_amount: Decimal
-    discount_amount: Decimal = Decimal("0")
-    discount_code: str | None = None
-    paid_at: datetime
-    items: list[CheckoutItemResponse]
+    payment_url: str
+    gateway_order_ref: str
+    payment_expires_at: datetime | None = None
+    paid_at: datetime | None = None
+    items: list[CheckoutItemResponse] = Field(default_factory=list)
+
+
+class OrderStatusResponse(BaseModel):
+    order_id: int
+    order_code: str | None = None
+    order_status: OrderStatus
+    total_amount: Decimal
+    payment_provider: str | None = None
+    gateway_order_ref: str | None = None
+    gateway_transaction_id: str | None = None
+    payment_url: str | None = None
+    payment_expires_at: datetime | None = None
+    paid_at: datetime | None = None
+    refunded_at: datetime | None = None
+    items: list[CheckoutItemResponse] = Field(default_factory=list)
 
 
 class MyTicketResponse(BaseModel):
-    """Payload vé của khách hàng trên màn quản lý vé cá nhân."""
-
     ticket_id: int | None = None
     ticket_code: str
     qr_payload: str | None = None
@@ -83,5 +87,5 @@ class MyTicketResponse(BaseModel):
     price: Decimal
     order_id: int | None = None
     seat_status: SeatStatus
-    ticket_status: Literal['active'] = 'active'
+    ticket_status: Literal["active"] = "active"
     issued_at: datetime | None = None

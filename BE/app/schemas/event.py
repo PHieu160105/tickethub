@@ -113,6 +113,9 @@ class ShowSummaryResponse(BaseModel):
     seat_source: SeatSource = SeatSource.LAYOUT
     performers: list[PublicShowPerformerResponse] = Field(default_factory=list)
     venue_layout_id: int | None = None
+    cancelled_at: datetime | None = None
+    cancelled_by_staff_id: int | None = None
+    cancellation_reason: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
