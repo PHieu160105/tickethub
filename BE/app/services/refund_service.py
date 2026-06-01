@@ -199,6 +199,23 @@ async def refresh_show_refunds(
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     await _ensure_staff_can_manage_show(session, show, actor)
 
+    unsupported_orders = list(
+        await session.scalars(
+            select(Order)
+            .where(
+                Order.show_id == show.id,
+                Order.payment_provider == "VNPAY",
+                Order.status.in_([OrderStatus.PAID, OrderStatus.REFUND_PENDING, OrderStatus.REFUND_FAILED]),
+            )
+            .order_by(Order.id.asc())
+        )
+    )
+    if unsupported_orders:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Hoan tien tu dong cho VNPay chua duoc ho tro",
+        )
+
     pending_orders = list(
         await session.scalars(
             select(Order)
