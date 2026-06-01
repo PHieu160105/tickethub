@@ -116,14 +116,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const acceptExternalAuth = (payload: { access_token: string; refresh_token: string; user: ApiUser }) => {
+  const acceptExternalAuth = useCallback((payload: { access_token: string; refresh_token: string; user: ApiUser }) => {
     authStorage.setToken(payload.access_token)
     authStorage.setRefreshToken(payload.refresh_token)
     authStorage.setUser(payload.user)
     const enrichedUser = enrichUser(payload.user)
     setUser(enrichedUser)
     return enrichedUser
-  }
+  }, [])
 
   const register = async (
     email: string,
@@ -179,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateProfile,
       logout,
     }),
-    [user, isLoading, isAuthenticated, isAdmin, updateProfile],
+    [user, isLoading, isAuthenticated, isAdmin, acceptExternalAuth, updateProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

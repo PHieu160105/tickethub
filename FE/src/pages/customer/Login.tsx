@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { ArrowLeft, Eye, EyeOff, Mail, Lock, Rocket } from 'lucide-react'
@@ -24,6 +24,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
+  const handledExternalAuthRef = useRef(false)
   const { login, loginWithGoogle, acceptExternalAuth } = useAuth()
   const navigate = useNavigate()
 
@@ -34,12 +35,16 @@ export default function Login() {
     const oauthError = searchParams.get('oauth_error')
 
     if (oauthError) {
+      if (handledExternalAuthRef.current) return
+      handledExternalAuthRef.current = true
       setErrorMessage(oauthError)
       setSearchParams({}, { replace: true })
       return
     }
 
     if (!accessToken || !refreshToken || !userParam) return
+    if (handledExternalAuthRef.current) return
+    handledExternalAuthRef.current = true
 
     try {
       const parsedUser = JSON.parse(userParam) as ApiUser
