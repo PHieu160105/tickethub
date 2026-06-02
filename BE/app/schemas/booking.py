@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import OrderStatus, SeatStatus
+from app.models.enums import EventStatus, OrderStatus, SeatStatus
 
 
 class LockSeatsRequest(BaseModel):
@@ -86,6 +86,13 @@ class MyTicketResponse(BaseModel):
     ticket_tier_name: str
     price: Decimal
     order_id: int | None = None
+    order_status: OrderStatus
+    show_status: EventStatus
+    refund_status: Literal["NONE", "REFUND_PENDING", "REFUNDED", "REFUND_FAILED"] = "NONE"
+    cancelled_at: datetime | None = None
+    cancellation_reason: str | None = None
+    refund_started_at: datetime | None = None
+    refunded_at: datetime | None = None
     seat_status: SeatStatus
-    ticket_status: Literal["active"] = "active"
+    ticket_status: Literal["active", "cancelled"] = "active"
     issued_at: datetime | None = None
