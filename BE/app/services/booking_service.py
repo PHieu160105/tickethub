@@ -26,6 +26,22 @@ from app.ws.connection_manager import seat_ws_manager
 logger = logging.getLogger(__name__)
 
 
+def _derive_ticket_status(show_status: EventStatus) -> str:
+    return "cancelled" if show_status == EventStatus.CANCELLED else "active"
+
+
+def _derive_refund_status(order_status: OrderStatus, show_status: EventStatus) -> str:
+    if order_status == OrderStatus.REFUND_PENDING:
+        return "REFUND_PENDING"
+    if order_status == OrderStatus.REFUNDED:
+        return "REFUNDED"
+    if order_status == OrderStatus.REFUND_FAILED:
+        return "REFUND_FAILED"
+    if show_status == EventStatus.CANCELLED and order_status == OrderStatus.PAID:
+        return "NONE"
+    return "NONE"
+
+
 def _as_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -370,8 +386,15 @@ async def fetch_my_tickets(
             ticket_tier_name=tier.name if tier else "Khu vực chung",
             price=Decimal(str(ticket.price)),
             order_id=order.id,
+            order_status=order.status,
+            show_status=show.status,
+            refund_status=_derive_refund_status(order.status, show.status),
+            cancelled_at=show.cancelled_at,
+            cancellation_reason=show.cancellation_reason,
+            refund_started_at=order.refund_started_at,
+            refunded_at=order.refunded_at,
             seat_status=ticket.status,
-            ticket_status="active",
+            ticket_status=_derive_ticket_status(show.status),
             issued_at=ticket.issued_at,
         )
         for ticket, order, event, show, tier, seat in active_rows

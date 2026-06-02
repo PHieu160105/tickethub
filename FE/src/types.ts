@@ -6,6 +6,8 @@ export type SeatStatus = 'AVAILABLE' | 'LOCKED' | 'SOLD'
 export type QueueStatus = 'WAITING' | 'ADMITTED' | 'EXPIRED' | 'COMPLETED'
 export type PerformerRole = 'MAIN' | 'GUEST' | 'BACKUP'
 export type SeatSource = 'LAYOUT' | 'FREE_FORM'
+export type OrderStatus = 'PENDING' | 'PENDING_PAYMENT' | 'PAID' | 'PAYMENT_FAILED' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED' | 'REFUND_FAILED'
+export type RefundStatus = 'NONE' | 'REFUND_PENDING' | 'REFUNDED' | 'REFUND_FAILED'
 
 export interface User {
   id: number
@@ -283,7 +285,7 @@ export interface CheckoutItem {
 
 export interface CheckoutResponse {
   order_id: number
-  order_status: 'PENDING_PAYMENT' | 'PAID' | 'PAYMENT_FAILED' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED' | 'REFUND_FAILED'
+  order_status: OrderStatus
   total_amount: number
   payment_url: string
   gateway_order_ref: string
@@ -295,7 +297,7 @@ export interface CheckoutResponse {
 export interface OrderStatusResponse {
   order_id: number
   order_code?: string | null
-  order_status: 'PENDING_PAYMENT' | 'PAID' | 'PAYMENT_FAILED' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED' | 'REFUND_FAILED'
+  order_status: OrderStatus
   total_amount: number
   payment_provider?: string | null
   gateway_order_ref?: string | null
@@ -323,8 +325,15 @@ export interface TicketItem {
   ticket_tier_name: string
   price: number
   order_id?: number
+  order_status: OrderStatus
+  show_status: EventStatus
+  refund_status: RefundStatus
+  cancelled_at?: string | null
+  cancellation_reason?: string | null
+  refund_started_at?: string | null
+  refunded_at?: string | null
   seat_status: SeatStatus
-  ticket_status: 'active'
+  ticket_status: 'active' | 'cancelled'
   issued_at?: string
 }
 
@@ -441,7 +450,7 @@ export interface AdminTicketSaleItem {
   venue: string
   price: number
   purchased_at: string
-  order_status: 'PENDING_PAYMENT' | 'PAID' | 'PAYMENT_FAILED' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED' | 'REFUND_FAILED'
+  order_status: OrderStatus
 }
 
 export interface AdminTransactionLogItem {
@@ -470,7 +479,7 @@ export interface AdminTicketTransactionHistory {
   venue: string
   order_id: number
   order_code?: string | null
-  order_status: 'PENDING_PAYMENT' | 'PAID' | 'PAYMENT_FAILED' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED' | 'REFUND_FAILED'
+  order_status: OrderStatus
   payment_provider?: string | null
   gateway_order_ref?: string | null
   gateway_transaction_id?: string | null
