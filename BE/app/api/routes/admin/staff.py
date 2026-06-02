@@ -112,7 +112,7 @@ async def update_event_staff_status(
     user = await session.get(User, staff_user_id)
     profile = await session.get(EventStaff, staff_user_id)
     if not user or not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay event staff")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy event staff")
     if not payload.is_active and profile.is_active:
         blocked_titles = await _events_without_another_active_staff(session, staff_user_id)
         if blocked_titles:
@@ -167,7 +167,7 @@ async def update_event_assignments(
 ) -> EventAssignmentOverviewResponse:
     event = await session.scalar(select(Event).where(Event.id == event_id, Event.is_deleted.is_(False)))
     if not event:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay su kien")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy sự kiện")
 
     requested_staff_ids = set(payload.staff_ids)
     active_staff_ids = set(

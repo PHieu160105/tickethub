@@ -45,15 +45,18 @@ function formatCurrency(amount: number) {
 }
 
 function formatDateTime(value?: string | null) {
-  if (!value) return 'N/A'
+  if (!value) return 'Chưa có'
   return new Date(value).toLocaleString('vi-VN')
 }
 
 function statusBadge(status: string) {
   if (status === 'PAID') return <Badge variant="success" size="sm">Da thanh toan</Badge>
-  if (status === 'PENDING_PAYMENT') return <Badge variant="warning" size="sm">Dang cho thanh toan</Badge>
-  if (status === 'PAYMENT_FAILED') return <Badge variant="danger" size="sm">Thanh toan that bai</Badge>
+  if (status === 'PENDING_PAYMENT') return <Badge variant="warning" size="sm">Đang chờ thanh toán</Badge>
+  if (status === 'PAYMENT_FAILED') return <Badge variant="danger" size="sm">Thanh toán thất bại</Badge>
   if (status === 'CANCELLED') return <Badge variant="default" size="sm">Da huy</Badge>
+  if (status === 'REFUND_PENDING') return <Badge variant="warning" size="sm">Đang chờ hoàn tiền</Badge>
+  if (status === 'REFUNDED') return <Badge variant="success" size="sm">Đã hoàn tiền</Badge>
+  if (status === 'REFUND_FAILED') return <Badge variant="danger" size="sm">Hoàn tiền lỗi</Badge>
   return <Badge variant="default" size="sm">Khac</Badge>
 }
 
@@ -71,6 +74,15 @@ function pickPrimaryTransactionLog(transaction: AdminTicketTransactionHistory): 
   const logs = transaction.logs
   if (transaction.order_status === 'PAID') {
     return logs.find((log) => log.action === 'PAYMENT_SUCCESS') ?? logs[0] ?? null
+  }
+  if (transaction.order_status === 'REFUND_PENDING') {
+    return logs.find((log) => log.action === 'REFUND_REQUESTED') ?? logs[0] ?? null
+  }
+  if (transaction.order_status === 'REFUNDED') {
+    return logs.find((log) => log.action === 'REFUND_SIMULATED_SUCCESS') ?? logs[0] ?? null
+  }
+  if (transaction.order_status === 'REFUND_FAILED') {
+    return logs.find((log) => log.action === 'REFUND_SIMULATED_FAILED') ?? logs[0] ?? null
   }
   if (transaction.order_status === 'PAYMENT_FAILED') {
     return logs.find((log) => log.status === 'PAYMENT_FAILED' || log.action.includes('FAILED')) ?? logs[0] ?? null
@@ -125,6 +137,8 @@ export default function AdminTickets() {
   const [transactionLoading, setTransactionLoading] = useState(false)
   const [transactionError, setTransactionError] = useState<string | null>(null)
   const [transactionModalOpen, setTransactionModalOpen] = useState(false)
+  const [resendingEmail, setResendingEmail] = useState(false)
+  const [resendMessage, setResendMessage] = useState<string | null>(null)
 
   const selectedEventId = eventFilter === 'all' ? undefined : Number(eventFilter)
 
@@ -156,7 +170,7 @@ export default function AdminTickets() {
     try {
       await Promise.all([loadStaticData(), loadSalesData()])
     } catch (errorValue) {
-      setError(extractApiErrorMessage(errorValue, 'Khong tai duoc du lieu ve va doanh thu.'))
+      setError(extractApiErrorMessage(errorValue, 'Không tải được dữ liệu vé và doanh thu.'))
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -167,14 +181,32 @@ export default function AdminTickets() {
     setTransactionModalOpen(true)
     setTransactionLoading(true)
     setTransactionError(null)
+    setResendMessage(null)
     setSelectedTransaction(null)
     try {
       const detail = await adminApi.ticketTransactionHistory(ticketId)
       setSelectedTransaction(detail)
     } catch (errorValue) {
-      setTransactionError(extractApiErrorMessage(errorValue, 'Khong tai duoc thong tin giao dich.'))
+      setTransactionError(extractApiErrorMessage(errorValue, 'Không tải được thông tin giao dịch.'))
     } finally {
       setTransactionLoading(false)
+    }
+  }
+
+  async function handleResendTicketEmail() {
+    if (!selectedTransaction) return
+    setResendingEmail(true)
+    setTransactionError(null)
+    setResendMessage(null)
+    try {
+      const message = await adminApi.resendTicketEmail(selectedTransaction.order_id)
+      setResendMessage(message.detail)
+      const detail = await adminApi.ticketTransactionHistory(selectedTransaction.ticket_id)
+      setSelectedTransaction(detail)
+    } catch (errorValue) {
+      setTransactionError(extractApiErrorMessage(errorValue, 'Không thể gửi lại mail vé.'))
+    } finally {
+      setResendingEmail(false)
     }
   }
 
@@ -186,28 +218,32 @@ export default function AdminTickets() {
   const totalTicketsSold = summary.tickets_sold
   const totalPages = Math.max(1, Math.ceil(totalSales / PAGE_SIZE))
   const eventOptions: SelectOption[] = [
-    { value: 'all', label: 'Tat ca su kien' },
+    { value: 'all', label: 'Tất cả sự kiện' },
     ...revenueByShow.map((eventItem) => ({
       value: String(eventItem.event_id),
       label: eventItem.event_title,
     })),
   ]
   const statusOptions: SelectOption[] = [
-    { value: 'all', label: 'Tat ca trang thai' },
+    { value: 'all', label: 'Tất cả trạng thái' },
     { value: 'PAID', label: 'Da thanh toan' },
-    { value: 'PENDING_PAYMENT', label: 'Dang cho thanh toan' },
-    { value: 'PAYMENT_FAILED', label: 'Thanh toan that bai' },
+    { value: 'REFUND_PENDING', label: 'Đang chờ hoàn tiền' },
+    { value: 'REFUNDED', label: 'Đã hoàn tiền' },
+    { value: 'REFUND_FAILED', label: 'Hoàn tiền lỗi' },
+    { value: 'PENDING_PAYMENT', label: 'Đang chờ thanh toán' },
+    { value: 'PAYMENT_FAILED', label: 'Thanh toán thất bại' },
     { value: 'CANCELLED', label: 'Da huy' },
   ]
 
   const primaryLog = selectedTransaction ? pickPrimaryTransactionLog(selectedTransaction) : null
   const primaryPayload = parseRawPayload(primaryLog?.raw_payload)
+  const canResendTicketEmail = selectedTransaction ? ['PAID', 'REFUND_PENDING', 'REFUNDED', 'REFUND_FAILED'].includes(selectedTransaction.order_status) : false
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-display font-bold admin-text-header">Ve va Doanh thu</h2>
+          <h2 className="text-2xl font-display font-bold admin-text-header">Vé và Doanh thu</h2>
           <p className="text-gray-400 mt-1">Thong tin ve va doanh thu</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -285,9 +321,9 @@ export default function AdminTickets() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm admin-text-body">Dang tai doanh thu...</p>
+            <p className="text-sm admin-text-body">Đang tải doanh thu...</p>
           ) : revenueByShow.length === 0 ? (
-            <p className="text-sm text-gray-400">Chua co du lieu doanh thu theo show.</p>
+            <p className="text-sm text-gray-400">Chưa có dữ liệu doanh thu theo show.</p>
           ) : (
             <div className="space-y-4">
               {revenueByShow.map((item) => {
@@ -320,7 +356,7 @@ export default function AdminTickets() {
       <Card>
         <CardHeader>
           <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <span>Giao dich ve gan day</span>
+            <span>Giao dịch vé gần đây</span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:w-auto">
               <FilterListbox
                 value={eventFilter}
@@ -345,23 +381,23 @@ export default function AdminTickets() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-gray-300">Dang tai giao dich...</p>
+            <p className="text-sm text-gray-300">Đang tải giao dịch...</p>
           ) : ticketSales.length === 0 ? (
-            <p className="text-sm text-gray-400">Khong co giao dich.</p>
+            <p className="text-sm text-gray-400">Không có giao dịch.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10 text-left admin-text-body">
                     <th className="pb-3 font-medium">ID</th>
-                    <th className="pb-3 font-medium">Su kien</th>
+                    <th className="pb-3 font-medium">Sự kiện</th>
                     <th className="pb-3 font-medium">Show</th>
-                    <th className="pb-3 font-medium">Khach hang</th>
-                    <th className="pb-3 font-medium">Ghe</th>
-                    <th className="pb-3 font-medium">Gia</th>
-                    <th className="pb-3 font-medium">Thoi gian</th>
-                    <th className="pb-3 font-medium">Trang thai</th>
-                    <th className="pb-3 font-medium text-right">Chi tiet</th>
+                    <th className="pb-3 font-medium">Khách hàng</th>
+                    <th className="pb-3 font-medium">Ghế</th>
+                    <th className="pb-3 font-medium">Giá</th>
+                    <th className="pb-3 font-medium">Thời gian</th>
+                    <th className="pb-3 font-medium">Trạng thái</th>
+                    <th className="pb-3 font-medium text-right">Chi tiết</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -381,7 +417,7 @@ export default function AdminTickets() {
                       <td className="py-3">{statusBadge(sale.order_status)}</td>
                       <td className="py-3 text-right">
                         <Button variant="outline" size="sm" onClick={() => void openTransactionHistory(sale.id)}>
-                          Xem giao dich
+                          Xem giao dịch
                         </Button>
                       </td>
                     </tr>
@@ -409,49 +445,57 @@ export default function AdminTickets() {
           setSelectedTransaction(null)
           setTransactionError(null)
           setTransactionLoading(false)
+          setResendMessage(null)
+          setResendingEmail(false)
         }}
-        title="Thong tin giao dich"
+        title="Thông tin giao dịch"
         className="max-w-4xl"
       >
         {transactionLoading ? (
-          <p className="text-sm admin-text-body">Dang tai thong tin giao dich...</p>
+          <p className="text-sm admin-text-body">Đang tải thông tin giao dịch...</p>
         ) : transactionError ? (
           <p className="text-sm text-red-300">{transactionError}</p>
         ) : selectedTransaction ? (
           <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {resendMessage ? <p className="text-sm text-green-300">{resendMessage}</p> : null}
+              <Button variant="outline" onClick={() => void handleResendTicketEmail()} isLoading={resendingEmail} disabled={!canResendTicketEmail}>
+                Gửi lại mail vé
+              </Button>
+            </div>
             <section className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div className="rounded-xl border border-white/10 p-4 space-y-2">
-                <h3 className="font-semibold admin-text-header">Order</h3>
+                <h3 className="font-semibold admin-text-header">Đơn hàng</h3>
                 <p>Ma order: {selectedTransaction.order_code ?? `#${selectedTransaction.order_id}`}</p>
                 <div className="flex items-center gap-2">
-                  <span>Trang thai:</span>
+                  <span>Trạng thái:</span>
                   {statusBadge(selectedTransaction.order_status)}
                 </div>
-                <p>Provider: {selectedTransaction.payment_provider ?? 'N/A'}</p>
-                <p>Gateway ref: {selectedTransaction.gateway_order_ref ?? 'N/A'}</p>
-                <p>Gateway tx: {selectedTransaction.gateway_transaction_id ?? 'N/A'}</p>
-                <p>Bat dau thanh toan: {formatDateTime(selectedTransaction.payment_started_at)}</p>
-                <p>Het han: {formatDateTime(selectedTransaction.payment_expires_at)}</p>
-                <p>Thanh toan luc: {formatDateTime(selectedTransaction.paid_at)}</p>
+                <p>Nhà cung cấp: {selectedTransaction.payment_provider ?? 'Chưa có'}</p>
+                <p>Mã tham chiếu cổng: {selectedTransaction.gateway_order_ref ?? 'Chưa có'}</p>
+                <p>Mã giao dịch cổng: {selectedTransaction.gateway_transaction_id ?? 'Chưa có'}</p>
+                <p>Bắt đầu thanh toán: {formatDateTime(selectedTransaction.payment_started_at)}</p>
+                <p>Hết hạn: {formatDateTime(selectedTransaction.payment_expires_at)}</p>
+                <p>Thanh toán lúc: {formatDateTime(selectedTransaction.paid_at)}</p>
               </div>
               <div className="rounded-xl border border-white/10 p-4 space-y-2">
-                <h3 className="font-semibold admin-text-header">Ve va nguoi mua</h3>
-                <p>Khach hang: {selectedTransaction.buyer_name ?? 'N/A'}</p>
-                <p>Email: {selectedTransaction.buyer_email ?? 'N/A'}</p>
-                <p>Dien thoai: {selectedTransaction.buyer_phone ?? 'N/A'}</p>
-                <p>Su kien: {selectedTransaction.event_title}</p>
+                <h3 className="font-semibold admin-text-header">Vé và người mua</h3>
+                <p>Khách hàng: {selectedTransaction.buyer_name ?? 'Chưa có'}</p>
+                <p>Email: {selectedTransaction.buyer_email ?? 'Chưa có'}</p>
+                <p>Điện thoại: {selectedTransaction.buyer_phone ?? 'Chưa có'}</p>
+                <p>Sự kiện: {selectedTransaction.event_title}</p>
                 <p>Show: {selectedTransaction.show_title}</p>
-                <p>Thoi gian show: {formatDateTime(selectedTransaction.show_start_at)}</p>
+                <p>Thời gian show: {formatDateTime(selectedTransaction.show_start_at)}</p>
                 <p>Venue: {selectedTransaction.venue}</p>
                 <p>Ve: {selectedTransaction.ticket_tier_name} - {selectedTransaction.seat_label}</p>
-                <p>Gia: {formatCurrency(selectedTransaction.price)}</p>
+                <p>Giá: {formatCurrency(selectedTransaction.price)}</p>
               </div>
             </section>
 
             <section className="space-y-4">
-              <h3 className="font-semibold admin-text-header">Chi tiet thanh toan</h3>
+              <h3 className="font-semibold admin-text-header">Chi tiết thanh toán</h3>
               {!primaryLog ? (
-                <p className="text-sm text-gray-400">Chua co thong tin thanh toan de hien thi.</p>
+                <p className="text-sm text-gray-400">Chưa có thông tin thanh toán để hiển thị.</p>
               ) : (
                 <div className="rounded-xl border border-white/10 p-4 space-y-3">
                   <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -462,17 +506,17 @@ export default function AdminTickets() {
                     <p className="text-xs text-gray-400">{formatDateTime(primaryLog.created_at)}</p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                    <p>Payment method: {primaryLog.payment_method ?? 'N/A'}</p>
-                    <p>Gateway tx: {primaryLog.gateway_transaction_id ?? 'N/A'}</p>
-                    <p>Response code: {primaryLog.gateway_response_code ?? 'N/A'}</p>
-                    <p>So tien: {primaryLog.amount != null ? formatCurrency(primaryLog.amount) : 'N/A'}</p>
+                    <p>Phương thức thanh toán: {primaryLog.payment_method ?? 'Chưa có'}</p>
+                    <p>Mã giao dịch cổng: {primaryLog.gateway_transaction_id ?? 'Chưa có'}</p>
+                    <p>Mã phản hồi: {primaryLog.gateway_response_code ?? 'Chưa có'}</p>
+                    <p>Số tiền: {primaryLog.amount != null ? formatCurrency(primaryLog.amount) : 'Chưa có'}</p>
                   </div>
                   {primaryLog.message && (
                     <p className="text-sm text-amber-300">{primaryLog.message}</p>
                   )}
                   {primaryPayload && (
                     <div className="rounded-lg bg-white/5 p-3 text-xs text-gray-300">
-                      <p className="font-medium text-white mb-2">VNPAY payload summary</p>
+                      <p className="font-medium text-white mb-2">Tóm tắt payload VNPAY</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {Boolean(primaryPayload['vnp_TransactionNo']) && <p>{`vnp_TransactionNo: ${String(primaryPayload['vnp_TransactionNo'])}`}</p>}
                         {Boolean(primaryPayload['vnp_ResponseCode']) && <p>{`vnp_ResponseCode: ${String(primaryPayload['vnp_ResponseCode'])}`}</p>}

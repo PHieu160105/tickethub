@@ -216,7 +216,7 @@ async def _resolve_performer(
     if item.performer_id is not None:
         performer = await session.get(Performer, item.performer_id)
         if performer is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay performer duoc chon")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy performer được chọn")
     else:
         performer = await session.scalar(select(Performer).where(Performer.stage_name_normalized == normalized))
 
@@ -266,13 +266,13 @@ async def update_show_performer_lineup(
         role_counts[item.role.value] += 1
         performer_key = f"id:{item.performer_id}" if item.performer_id is not None else f"name:{normalize_stage_name(item.stage_name)}"
         if performer_key in seen_performer_keys:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Khong duoc gan trung performer trong cung show")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không được gán trùng performer trong cùng show")
         seen_performer_keys.add(performer_key)
 
         if item.show_performer_id is not None:
             row = existing_by_id.get(item.show_performer_id)
             if row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay performer cua show de cap nhat")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy performer của show để cập nhật")
             if item.show_performer_id in used_existing_ids:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payload performer chua ban ghi trung lap")
             used_existing_ids.add(item.show_performer_id)
@@ -295,15 +295,15 @@ async def update_show_performer_lineup(
         if row is not None and row.role == PerformerRole.MAIN:
             normalized_stage_name = normalize_stage_name(item.stage_name)
             if item.role != PerformerRole.MAIN:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Khong duoc doi role cua performer main")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không được đổi role của performer main")
             if item.performer_id is not None and item.performer_id != row.performer_id:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Khong duoc thay doi performer main da co cua show")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không được thay đổi performer main đã có của show")
             if normalized_stage_name != row.performer.stage_name_normalized:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Khong duoc thay doi performer main da co cua show")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không được thay đổi performer main đã có của show")
 
         performer = await _resolve_performer(session, item)
         if row is not None and row.role == PerformerRole.MAIN and performer.id != row.performer_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Khong duoc thay doi performer main da co cua show")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không được thay đổi performer main đã có của show")
 
         if row is None:
             row = ShowPerformer(

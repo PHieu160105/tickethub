@@ -75,7 +75,7 @@ async def get_admin_performer_detail(
 ) -> PerformerDetailResponse:
     performer = await session.get(Performer, performer_id)
     if performer is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay performer")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy performer")
     return PerformerDetailResponse.model_validate(performer)
 
 

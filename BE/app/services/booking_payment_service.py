@@ -26,6 +26,7 @@ from app.services.booking_service import (
 from app.services.dashboard_service import broadcast_dashboard_update
 from app.services.event_inventory_service import sync_show_ticket_inventory
 from app.services.queue_service import ensure_queue_access, mark_queue_completed
+from app.services.ticket_delivery_service import dispatch_paid_order_tickets
 from app.services.vnpay_service import VNPayTransactionStatusResult, get_vnpay_service
 from app.ws.connection_manager import seat_ws_manager
 
@@ -175,7 +176,7 @@ async def _finalize_paid_order(
 
     for ticket in tickets:
         ticket_code = f"TR-{now.strftime('%Y%m%d')}-{uuid4().hex[:12].upper()}"
-        qr_payload = f"ticketrush://ticket/{ticket_code}"
+        qr_payload = f"tickethub://ticket/{ticket_code}"
         ticket.ticket_code = ticket_code
         ticket.qr_payload = qr_payload
         ticket.issued_at = now
@@ -202,6 +203,8 @@ async def _finalize_paid_order(
     await session.commit()
 
     await _apply_order_side_effects(show_id=order.show_id, user_id=order.customer_id, changed_tickets=changed_tickets)
+    paid_items = await _build_paid_items(session, order.id)
+    await dispatch_paid_order_tickets(session, order=order, items=paid_items)
     return await build_order_status_response(session, order.customer_id, order.id)
 
 
@@ -225,7 +228,7 @@ async def create_checkout_payment(
     if not tickets:
         await session.commit()
         await _apply_order_side_effects(show_id=show_id, user_id=user_id, changed_tickets=expired_ticket_changes)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Khong co ve dang giu hop le de thanh toan")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không có vé đang giữ hợp lệ để thanh toán")
 
     total_amount = sum(Decimal(str(ticket.price)) for ticket in tickets)
     payment_expires_at = min((_as_utc(ticket.lock_expires_at) for ticket in tickets if ticket.lock_expires_at), default=None)
@@ -349,7 +352,7 @@ async def _reconcile_gateway_status(
 async def build_order_status_response(session: AsyncSession, user_id: int, order_id: int) -> OrderStatusResponse:
     order = await session.scalar(select(Order).where(Order.id == order_id, Order.customer_id == user_id))
     if not order:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay don hang")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy đơn hàng")
     if order.status == OrderStatus.PENDING_PAYMENT and order.gateway_order_ref and order.payment_provider == "VNPAY":
         payment_started_at = _as_utc(order.payment_started_at) or datetime.now(UTC)
         status_result = await get_vnpay_service().query_transaction(
@@ -360,7 +363,7 @@ async def build_order_status_response(session: AsyncSession, user_id: int, order
         await _reconcile_gateway_status(session, order, status_result)
         order = await session.get(Order, order_id)
         if order is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay don hang")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy đơn hàng")
     items = await _build_paid_items(session, order.id) if order.status in {OrderStatus.PAID, OrderStatus.REFUND_PENDING, OrderStatus.REFUNDED, OrderStatus.REFUND_FAILED} else []
     return OrderStatusResponse(
         order_id=order.id,

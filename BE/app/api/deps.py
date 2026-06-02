@@ -100,7 +100,7 @@ async def get_current_assigned_event_staff(
         )
     )
     if not event_id or not assignment:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay su kien duoc phan cong")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy sự kiện được phân công")
     return current_user
 
 
@@ -120,7 +120,7 @@ async def get_current_show_event_staff(
         )
     )
     if not assignment:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay show thuoc su kien duoc phan cong")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy show thuộc sự kiện được phân công")
     return current_user
 
 

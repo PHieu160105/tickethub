@@ -512,9 +512,9 @@ export function ShowPerformersModal({ isOpen, show, onClose, onSaved }: ShowPerf
           <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center text-gray-400">Đang tải lineup nghệ sĩ...</div>
         ) : (
           <>
-            {renderSection('MAIN', 'Main performers', 'Lineup chính của show. Show cần ít nhất 1 main để có thể lưu.')}
-            {renderSection('GUEST', 'Guest performers', 'Khách mời hiển thị public cùng main và có thể xóa khỏi show.')}
-            {renderSection('BACKUP', 'Backup performers', 'Danh sách dự phòng nội bộ của show.')}
+            {renderSection('MAIN', 'Nghệ sĩ chính', 'Danh sách nghệ sĩ chính của show. Show cần ít nhất 1 nghệ sĩ chính để có thể lưu.')}
+            {renderSection('GUEST', 'Khách mời', 'Khách mời hiển thị công khai cùng nghệ sĩ chính và có thể xóa khỏi show.')}
+            {renderSection('BACKUP', 'Dự phòng', 'Danh sách dự phòng nội bộ của show.')}
           </>
         )}
 

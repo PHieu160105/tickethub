@@ -2,10 +2,13 @@
 
 import json
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ENV_FILE_PATH = Path(__file__).resolve().parents[3] / ".env"
 
 
 class Settings(BaseSettings):
@@ -23,7 +26,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file="../.env",
+        env_file=str(ENV_FILE_PATH),
         env_file_encoding="utf-8",
         extra="ignore",
         populate_by_name=True,
@@ -85,6 +88,16 @@ class Settings(BaseSettings):
     vnpay_return_url: str = Field(default="", validation_alias="VNPAY_RETURN_URL")
     vnpay_querydr_url: str = Field(default="https://sandbox.vnpayment.vn/merchant_webapi/api/transaction", validation_alias="VNPAY_QUERYDR_URL")
     vnpay_bank_code: str = Field(default="", validation_alias="VNPAY_BANK_CODE")
+    ticket_delivery_enabled: bool = Field(default=True, validation_alias="TICKET_DELIVERY_ENABLED")
+    ticket_sms_enabled: bool = Field(default=False, validation_alias="TICKET_SMS_ENABLED")
+    smtp_host: str = Field(default="", validation_alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, validation_alias="SMTP_PORT")
+    smtp_username: str = Field(default="", validation_alias="SMTP_USERNAME")
+    smtp_password: str = Field(default="", validation_alias="SMTP_PASSWORD")
+    smtp_from_email: str = Field(default="", validation_alias="SMTP_FROM_EMAIL")
+    smtp_from_name: str = Field(default="TicketRush", validation_alias="SMTP_FROM_NAME")
+    smtp_use_tls: bool = Field(default=True, validation_alias="SMTP_USE_TLS")
+    smtp_local_hostname: str = Field(default="localhost.localdomain", validation_alias="SMTP_LOCAL_HOSTNAME")
 
     @property
     def allowed_origins(self) -> list[str]:
@@ -147,6 +160,45 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return value.strip().lower() in {"1", "true", "yes", "on", "debug", "development"}
         return bool(value)
+
+    @property
+    def smtp_host_clean(self) -> str:
+        return self.smtp_host.strip()
+
+    @property
+    def smtp_username_clean(self) -> str:
+        return self.smtp_username.strip()
+
+    @property
+    def smtp_from_email_clean(self) -> str:
+        return self.smtp_from_email.strip()
+
+    @property
+    def smtp_from_name_clean(self) -> str:
+        return self.smtp_from_name.strip() or "TicketRush"
+
+    @property
+    def smtp_password_clean(self) -> str:
+        # Gmail app passwords are often copied with spaces every 4 chars.
+        return "".join(self.smtp_password.split())
+
+    @property
+    def smtp_local_hostname_clean(self) -> str:
+        return self.smtp_local_hostname.strip() or "localhost.localdomain"
+
+    @property
+    def smtp_config_summary(self) -> dict[str, str | int | bool]:
+        return {
+            "env_file": str(ENV_FILE_PATH),
+            "smtp_host": self.smtp_host_clean,
+            "smtp_port": self.smtp_port,
+            "smtp_username": self.smtp_username_clean,
+            "smtp_from_email": self.smtp_from_email_clean,
+            "smtp_from_name": self.smtp_from_name_clean,
+            "smtp_local_hostname": self.smtp_local_hostname_clean,
+            "smtp_use_tls": self.smtp_use_tls,
+            "ticket_delivery_enabled": self.ticket_delivery_enabled,
+        }
 
 
 @lru_cache

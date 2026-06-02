@@ -290,11 +290,11 @@ async def sync_show_seats(
         for item in payload.update:
             ticket = ticket_map.get(item.id)
             if not ticket:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghế thuộc buổi diễn này")
             if item.ticket_tier_id is not None:
                 tier = tier_map.get(item.ticket_tier_id)
                 if not tier:
-                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay hang ve cua buoi dien nay")
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hạng vé của buổi diễn này")
                 ticket.ticket_tier_id = tier.id
                 if item.price is None:
                     ticket.price = float(tier.base_price)
@@ -329,7 +329,7 @@ async def sync_show_seats(
         for seat_id in delete_ids:
             ticket = ticket_map.get(seat_id)
             if not ticket:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghế thuộc buổi diễn này")
             await session.delete(ticket)
 
         await session.flush()
@@ -371,7 +371,7 @@ async def update_show_seat(
     _ensure_show_is_draft(show)
     ticket = await session.scalar(select(Ticket).where(Ticket.id == seat_id, Ticket.show_id == show.id))
     if not ticket:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghế thuộc buổi diễn này")
     if payload.ticket_tier_id is not None:
         tier = await _default_ticket_tier(session, show.id, payload.ticket_tier_id)
         ticket.ticket_tier_id = tier.id
@@ -418,9 +418,9 @@ async def delete_show_seat(
     _ensure_show_is_draft(show)
     ticket = await session.scalar(select(Ticket).where(Ticket.id == seat_id, Ticket.show_id == show.id))
     if not ticket:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay ghe thuoc buoi dien nay")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghế thuộc buổi diễn này")
     if ticket.seat_id is not None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Khong the xoa ghe duoc sinh tu layout")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không thể xóa ghế được sinh từ layout")
     await session.delete(ticket)
     await session.commit()
     await _invalidate_show_cache(show.id)

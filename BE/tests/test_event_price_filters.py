@@ -9,8 +9,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.main import app
-from app.models.enums import EventStatus, QueueStatus, SeatStatus
-from app.models.order import Ticket
+from app.models.enums import EventStatus, OrderStatus, QueueStatus, SeatStatus
+from app.models.order import Order, Ticket
 from app.services.queue_service import QueueRuntimeEntry, _runtime_queue
 
 
@@ -167,6 +167,44 @@ async def test_admin_show_live_must_be_drafted_before_edit_or_delete(db_session,
         assert delete_response.status_code == status.HTTP_400_BAD_REQUEST
         assert draft_response.status_code == status.HTTP_200_OK
         assert draft_response.json()["status"] == "DRAFT"
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_delete_draft_show_with_booking_history(db_session, admin_user, customer_users, sample_event, sample_show):
+    from app.api.deps import get_current_active_admin, get_db_session
+
+    customer, _ = customer_users
+    sample_show.status = EventStatus.DRAFT
+    db_session.add(
+        Order(
+            customer_id=customer.id,
+            show_id=sample_show.id,
+            order_code="ORD-REFUND-BLOCK",
+            status=OrderStatus.PAID,
+            total_amount=100,
+            payment_provider="VNPAY",
+            paid_at=datetime.now(UTC),
+        )
+    )
+    await db_session.commit()
+
+    async def override_get_db():
+        yield db_session
+
+    async def override_get_admin():
+        return admin_user
+
+    app.dependency_overrides[get_db_session] = override_get_db
+    app.dependency_overrides[get_current_active_admin] = override_get_admin
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            delete_response = await client.delete(f"/api/admin/events/{sample_event.slug}/shows/{sample_show.id}")
+
+        assert delete_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "lich su giao dich" in delete_response.json()["detail"]
     finally:
         app.dependency_overrides.clear()
 

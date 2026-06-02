@@ -363,7 +363,7 @@ async def heartbeat_queue_token(session: AsyncSession, show_id: int, token: str,
     async with _get_show_lock(show_id):
         entry = _show_entries(show_id).get(token)
         if not entry or entry.user_id != user_id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay luot hang doi")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lượt hàng đợi")
         if entry.status != QueueStatus.ADMITTED:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Luot hang doi chua duoc cap quyen vao")
         if entry.expires_at and entry.expires_at < now:

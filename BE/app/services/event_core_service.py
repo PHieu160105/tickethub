@@ -12,7 +12,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import EventCategory, EventStatus, SeatSource, SeatStatus
+from app.models.enums import EventCategory, EventStatus, OrderStatus, SeatSource, SeatStatus
 from app.models.event import Event, EventAssignment, TicketTier, Show
 from app.models.order import Order, Ticket
 from app.models.performer import Performer, ShowPerformer
@@ -70,7 +70,7 @@ async def _get_layout(session: AsyncSession, venue_layout_id: int | None) -> Ven
         return None
     layout = await session.get(VenueLayout, venue_layout_id)
     if not layout:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay bo cuc dia diem")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy bố cục địa điểm")
     return layout
 
 
@@ -191,14 +191,14 @@ async def get_event_by_slug_or_id(session: AsyncSession, event_key: str) -> Even
         stmt = stmt.where(Event.slug == event_key)
     event = await session.scalar(stmt)
     if not event:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay su kien")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy sự kiện")
     return event
 
 
 async def get_show_by_id(session: AsyncSession, show_id: int) -> Show:
     show = await session.scalar(select(Show).where(Show.id == show_id, Show.is_deleted.is_(False)))
     if not show:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay buoi dien")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy buổi diễn")
     return show
 
 
@@ -225,7 +225,7 @@ async def create_show_ticket_tier(session: AsyncSession, show: Show, payload) ->
 async def update_show_ticket_tier(session: AsyncSession, show: Show, ticket_tier_id: int, payload) -> TicketTier:
     tier = await session.scalar(select(TicketTier).where(TicketTier.id == ticket_tier_id, TicketTier.show_id == show.id))
     if not tier:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay hang ve cua buoi dien")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hạng vé của buổi diễn")
 
     tier.code = payload.code
     tier.name = payload.name
@@ -253,7 +253,7 @@ async def update_show_ticket_tier(session: AsyncSession, show: Show, ticket_tier
 async def delete_show_ticket_tier(session: AsyncSession, show: Show, ticket_tier_id: int) -> None:
     tier = await session.scalar(select(TicketTier).where(TicketTier.id == ticket_tier_id, TicketTier.show_id == show.id))
     if not tier:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay hang ve cua buoi dien")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hạng vé của buổi diễn")
     sold_count = await session.scalar(
         select(func.count(Ticket.id)).where(
             Ticket.show_id == show.id,
@@ -262,7 +262,7 @@ async def delete_show_ticket_tier(session: AsyncSession, show: Show, ticket_tier
         )
     )
     if sold_count:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Khong the xoa hang ve da phat sinh ve ban")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không thể xóa hạng vé đã phát sinh vé bán")
 
     replacement_tier = await session.scalar(
         select(TicketTier).where(TicketTier.show_id == show.id, TicketTier.id != tier.id).order_by(TicketTier.id.asc())
@@ -337,11 +337,89 @@ async def _list_show_performers_by_show_ids(session: AsyncSession, show_ids: lis
     return dict(grouped)
 
 
+async def _build_show_action_summary(session: AsyncSession, show_id: int) -> dict[str, int | bool | Decimal]:
+    rows = (
+        await session.execute(
+            select(Order.status, func.count(Order.id))
+            .where(
+                Order.show_id == show_id,
+                Order.status.in_(
+                    [
+                        OrderStatus.PENDING_PAYMENT,
+                        OrderStatus.PAID,
+                        OrderStatus.REFUND_PENDING,
+                        OrderStatus.REFUNDED,
+                        OrderStatus.REFUND_FAILED,
+                    ]
+                ),
+            )
+            .group_by(Order.status)
+        )
+    ).all()
+    counts = {status: int(count or 0) for status, count in rows}
+    paid_order_count = sum(
+        counts.get(status, 0)
+        for status in [
+            OrderStatus.PAID,
+            OrderStatus.REFUND_PENDING,
+            OrderStatus.REFUNDED,
+            OrderStatus.REFUND_FAILED,
+        ]
+    )
+    refundable_order_count = counts.get(OrderStatus.PAID, 0) + counts.get(OrderStatus.REFUND_FAILED, 0)
+    refund_in_progress_count = counts.get(OrderStatus.REFUND_PENDING, 0)
+    has_booking_history = sum(counts.values()) > 0
+    return {
+        "has_booking_history": has_booking_history,
+        "paid_order_count": paid_order_count,
+        "refundable_order_count": refundable_order_count,
+        "refund_in_progress_count": refund_in_progress_count,
+    }
+
+
+async def _build_show_refund_summary(session: AsyncSession, show_id: int) -> dict[str, int | Decimal]:
+    historical_statuses = [
+        OrderStatus.PAID,
+        OrderStatus.REFUND_PENDING,
+        OrderStatus.REFUNDED,
+        OrderStatus.REFUND_FAILED,
+    ]
+    order_rows = (
+        await session.execute(
+            select(Order.status, func.count(Order.id), func.coalesce(func.sum(Order.total_amount), 0))
+            .where(Order.show_id == show_id, Order.status.in_(historical_statuses))
+            .group_by(Order.status)
+        )
+    ).all()
+    order_counts = {status: int(count or 0) for status, count, _ in order_rows}
+    order_amounts = {status: Decimal(str(amount or 0)) for status, _, amount in order_rows}
+
+    ticket_rows = (
+        await session.execute(
+            select(Order.status, func.count(Ticket.id))
+            .select_from(Ticket)
+            .join(Order, Ticket.order_id == Order.id)
+            .where(Ticket.show_id == show_id, Order.status.in_(historical_statuses))
+            .group_by(Order.status)
+        )
+    ).all()
+    ticket_counts = {status: int(count or 0) for status, count in ticket_rows}
+
+    return {
+        "historical_paid_order_count": sum(order_counts.values()),
+        "historical_paid_ticket_count": sum(ticket_counts.values()),
+        "refund_required_amount": sum(order_amounts.values(), Decimal("0")),
+        "refund_pending_amount": order_amounts.get(OrderStatus.REFUND_PENDING, Decimal("0")),
+        "refunded_amount": order_amounts.get(OrderStatus.REFUNDED, Decimal("0")),
+        "refund_failed_amount": order_amounts.get(OrderStatus.REFUND_FAILED, Decimal("0")),
+    }
+
+
 async def build_show_summary_response(session: AsyncSession, show: Show, performers: list[dict] | None = None) -> dict:
     if performers is None:
         performers = (await _list_show_performers_by_show_ids(session, [show.id])).get(show.id, [])
     performers = [item for item in performers if item.get("role") in {"MAIN", "GUEST"}]
-    return {
+    summary = {
         "id": show.id,
         "event_id": show.event_id,
         "title": show.title,
@@ -357,6 +435,9 @@ async def build_show_summary_response(session: AsyncSession, show: Show, perform
         "cancelled_by_staff_id": show.cancelled_by_staff_id,
         "cancellation_reason": show.cancellation_reason,
     }
+    summary.update(await _build_show_action_summary(session, show.id))
+    summary.update(await _build_show_refund_summary(session, show.id))
+    return summary
 
 
 async def build_event_card_response(

@@ -6,10 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
-from app.models.enums import EventStatus, OrderStatus, UserRole
-from app.models.order import Order, Ticket
+from app.models.enums import EventStatus, OrderStatus, SeatStatus, UserRole
+from app.models.order import Order, Ticket, TransactionLog
 from app.models.user import EventStaff, User
 from app.services.booking_payment_service import create_checkout_payment, handle_vnpay_return
+from app.services.event_core_service import build_show_summary_response
 from app.services.refund_service import cancel_show, list_show_refunds, refresh_show_refunds, request_show_refunds
 from app.services.vnpay_service import VNPayCreatePaymentResult, VNPayTransactionStatusResult
 
@@ -42,7 +43,11 @@ class FakeVNPayService:
 
 
 async def _create_paid_order(db_session: AsyncSession, sample_show, user_id: int, monkeypatch: pytest.MonkeyPatch) -> int:
-    ticket = await db_session.scalar(select(Ticket).where(Ticket.show_id == sample_show.id).order_by(Ticket.id.asc()))
+    ticket = await db_session.scalar(
+        select(Ticket)
+        .where(Ticket.show_id == sample_show.id, Ticket.status != SeatStatus.SOLD)
+        .order_by(Ticket.id.asc())
+    )
     assert ticket is not None
     from app.services.booking_service import lock_seats
 
@@ -91,6 +96,16 @@ async def test_staff_can_cancel_show_and_store_reason(
     assert show.cancellation_reason == "Organiser issue"
     assert show.cancelled_by_staff_id == admin_user.id
 
+    with pytest.raises(HTTPException) as exc_info:
+        await cancel_show(
+            db_session,
+            event_key=sample_event.slug,
+            show_id=sample_show.id,
+            actor=admin_user,
+            cancellation_reason="Try again",
+        )
+    assert exc_info.value.status_code == 400
+
 
 @pytest.mark.asyncio
 async def test_other_staff_cannot_cancel_or_refund_show(
@@ -120,7 +135,7 @@ async def test_other_staff_cannot_cancel_or_refund_show(
 
 
 @pytest.mark.asyncio
-async def test_refund_request_is_rejected_for_vnpay_orders(
+async def test_refund_request_and_refresh_follow_simulated_vnpay_flow(
     db_session: AsyncSession,
     sample_event,
     sample_show,
@@ -128,8 +143,21 @@ async def test_refund_request_is_rejected_for_vnpay_orders(
     customer_users,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    user1, _ = customer_users
-    await _create_paid_order(db_session, sample_show, user1.id, monkeypatch)
+    user1, user2 = customer_users
+    sent_emails: list[int] = []
+
+    async def fake_dispatch_refund_processing_email(session, **kwargs):
+        _ = session
+        sent_emails.append(kwargs["order"].id)
+
+    monkeypatch.setattr(
+        "app.services.refund_service.dispatch_refund_processing_email",
+        fake_dispatch_refund_processing_email,
+    )
+
+    created_order_ids: list[int] = []
+    for user_id in [user1.id, user2.id, user1.id, user2.id, user1.id]:
+        created_order_ids.append(await _create_paid_order(db_session, sample_show, user_id, monkeypatch))
 
     await cancel_show(
         db_session,
@@ -145,26 +173,82 @@ async def test_refund_request_is_rejected_for_vnpay_orders(
         show_id=sample_show.id,
         actor=admin_user,
     )
-    assert len(refund_list.orders) == 1
-    assert refund_list.orders[0].refund_status == OrderStatus.PAID
+    assert len(refund_list.orders) == 5
+    assert all(order.refund_status == OrderStatus.PAID for order in refund_list.orders)
 
-    with pytest.raises(HTTPException, match="VNPay"):
-        await request_show_refunds(
-            db_session,
-            event_key=sample_event.slug,
-            show_id=sample_show.id,
-            actor=admin_user,
+    requested = await request_show_refunds(
+        db_session,
+        event_key=sample_event.slug,
+        show_id=sample_show.id,
+        actor=admin_user,
+    )
+    assert requested.requested_count == 5
+    assert requested.refund_pending_count == 5
+    assert sorted(sent_emails) == sorted(created_order_ids)
+
+    order_map = {
+        order.id: order
+        for order in (
+            await db_session.scalars(select(Order).where(Order.id.in_(created_order_ids)))
         )
+    }
+    assert all(order.status == OrderStatus.REFUND_PENDING for order in order_map.values())
+    assert all(order.refund_started_at is not None for order in order_map.values())
 
-    with pytest.raises(HTTPException, match="VNPay"):
-        await refresh_show_refunds(
-            db_session,
-            event_key=sample_event.slug,
-            show_id=sample_show.id,
-            actor=admin_user,
+    refreshed = await refresh_show_refunds(
+        db_session,
+        event_key=sample_event.slug,
+        show_id=sample_show.id,
+        actor=admin_user,
+    )
+    assert refreshed.refunded_count == 4
+    assert refreshed.failed_count == 1
+    assert refreshed.refund_pending_count == 0
+
+    failed_order_ids = [order.order_id for order in refreshed.orders if order.refund_status == OrderStatus.REFUND_FAILED]
+    assert len(failed_order_ids) == 1
+
+    retried = await request_show_refunds(
+        db_session,
+        event_key=sample_event.slug,
+        show_id=sample_show.id,
+        actor=admin_user,
+    )
+    assert retried.requested_count == 1
+    assert retried.refund_pending_count == 1
+
+    retried_refresh = await refresh_show_refunds(
+        db_session,
+        event_key=sample_event.slug,
+        show_id=sample_show.id,
+        actor=admin_user,
+    )
+    assert retried_refresh.failed_count == 1
+
+    refund_list_after_processing = await list_show_refunds(
+        db_session,
+        event_key=sample_event.slug,
+        show_id=sample_show.id,
+        actor=admin_user,
+    )
+    assert len(refund_list_after_processing.orders) == 5
+
+    summary = await build_show_summary_response(db_session, sample_show)
+    total_refund_amount = sum(float(order.total_amount) for order in order_map.values())
+    failed_refund_amount = sum(
+        float(order.total_amount) for order in order_map.values() if order.status == OrderStatus.REFUND_FAILED
+    )
+    assert summary["historical_paid_order_count"] == 5
+    assert summary["historical_paid_ticket_count"] == 5
+    assert float(summary["refund_required_amount"]) == total_refund_amount
+    assert float(summary["refund_failed_amount"]) == failed_refund_amount
+
+    transaction_logs = list(
+        await db_session.scalars(
+            select(TransactionLog).where(TransactionLog.order_id.in_(created_order_ids))
         )
-
-    order = await db_session.scalar(select(Order).where(Order.id == refund_list.orders[0].order_id))
-    assert order is not None
-    assert order.status == OrderStatus.PAID
-    assert order.refunded_at is None
+    )
+    actions = {log.action for log in transaction_logs}
+    assert "REFUND_REQUESTED" in actions
+    assert "REFUND_SIMULATED_SUCCESS" in actions
+    assert "REFUND_SIMULATED_FAILED" in actions

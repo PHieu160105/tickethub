@@ -5,14 +5,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_assigned_event_staff
 from app.core.db import get_db_session
-from app.models.enums import EventStatus
+from sqlalchemy import select
+
+from app.models.enums import EventStatus, OrderStatus
+from app.models.order import Order
 from app.models.user import User
 from app.schemas.admin import EventDetailStatsResponse
 from app.schemas.common import APIMessage
 from app.schemas.event import ShowCreateRequest, ShowDetailResponse, ShowSummaryResponse, ShowUpdateRequest
 from app.services.dashboard_service import broadcast_dashboard_update
 from app.services.event_lifecycle_service import create_show_with_inventory
-from app.services.event_query_service import build_show_detail_response, get_event_by_slug_or_id, list_event_shows
+from app.services.event_query_service import build_show_detail_response, build_show_summary_response, get_event_by_slug_or_id, list_event_shows
 from app.services.event_utils import combine_show_datetime
 from app.ws.connection_manager import seat_ws_manager
 
@@ -29,7 +32,7 @@ async def list_admin_event_shows(
 ) -> list[ShowSummaryResponse]:
     event = await get_event_by_slug_or_id(session, event_key)
     shows = await list_event_shows(session, event.id)
-    return [ShowSummaryResponse.model_validate(show) for show in shows]
+    return [ShowSummaryResponse(**(await build_show_summary_response(session, show))) for show in shows]
 
 
 @router.post("/events/{event_key}/shows", response_model=ShowDetailResponse)
@@ -76,6 +79,8 @@ async def update_admin_show(
     updates = payload.model_dump(exclude_unset=True)
     if not updates:
         return ShowDetailResponse(**(await build_show_detail_response(session, show)))
+    if show.status == EventStatus.CANCELLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Show da bi huy va khong the chinh sua")
 
     is_status_only_update = set(updates) == {"status"}
     previous_status = show.status
@@ -98,7 +103,7 @@ async def update_admin_show(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gio ket thuc phai sau gio bat dau")
 
     if "venue_layout_id" in updates and updates["venue_layout_id"] != show.venue_layout_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Khong ho tro doi dia diem hoac bo cuc sau khi da tao buoi dien")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không hỗ trợ đổi địa điểm hoặc bố cục sau khi đã tạo buổi diễn")
 
     for field_name, field_value in updates.items():
         if field_name in {"show_date", "start_time", "end_time"}:
@@ -145,8 +150,29 @@ async def delete_admin_show(
     _: User = Depends(get_current_assigned_event_staff),
 ) -> APIMessage:
     _, show = await _build_event_or_404_show(session, event_key, show_id)
+    if show.status == EventStatus.CANCELLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Show da bi huy va khong the xoa")
     if show.status != EventStatus.DRAFT:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chi co the xoa show o trang thai draft")
+    blocking_order = await session.scalar(
+        select(Order.id).where(
+            Order.show_id == show.id,
+            Order.status.in_(
+                [
+                    OrderStatus.PENDING_PAYMENT,
+                    OrderStatus.PAID,
+                    OrderStatus.REFUND_PENDING,
+                    OrderStatus.REFUNDED,
+                    OrderStatus.REFUND_FAILED,
+                ]
+            ),
+        )
+    )
+    if blocking_order is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Show da co lich su giao dich. Staff phai huy show va hoan tien thay vi xoa.",
+        )
     try:
         show.is_deleted = True
         await session.commit()

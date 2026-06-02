@@ -22,7 +22,7 @@ async def _build_event_or_404_show(session: AsyncSession, event_key: str, show_i
     event = await get_event_by_slug_or_id(session, event_key)
     show = await get_show_by_id(session, show_id)
     if show.event_id != event.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay buoi dien thuoc su kien nay")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy buổi diễn thuộc sự kiện này")
     return event, show
 
 
