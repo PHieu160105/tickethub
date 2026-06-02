@@ -1,6 +1,6 @@
 export type UserType = 'CUSTOMER' | 'EVENT_STAFF' | 'SYSTEM_ADMIN'
 export type Gender = 'MALE' | 'FEMALE' | 'OTHER'
-export type EventStatus = 'DRAFT' | 'LIVE' | 'CLOSED'
+export type EventStatus = 'DRAFT' | 'LIVE' | 'CLOSED' | 'CANCELLED'
 export type EventCategory = 'MUSIC' | 'THEATER' | 'DANCE' | 'TRADITIONAL' | 'COMEDY' | 'CIRCUS' | 'OTHER'
 export type SeatStatus = 'AVAILABLE' | 'LOCKED' | 'SOLD'
 export type QueueStatus = 'WAITING' | 'ADMITTED' | 'EXPIRED' | 'COMPLETED'
@@ -59,6 +59,19 @@ export interface ShowSummary {
   seat_source: SeatSource
   performers: ShowPerformer[]
   venue_layout_id?: number | null
+  cancelled_at?: string | null
+  cancelled_by_staff_id?: number | null
+  cancellation_reason?: string | null
+  has_booking_history: boolean
+  paid_order_count: number
+  refundable_order_count: number
+  refund_in_progress_count: number
+  historical_paid_order_count: number
+  historical_paid_ticket_count: number
+  refund_required_amount: number
+  refund_pending_amount: number
+  refunded_amount: number
+  refund_failed_amount: number
 }
 
 export interface ShowPerformer {
@@ -428,7 +441,7 @@ export interface AdminTicketSaleItem {
   venue: string
   price: number
   purchased_at: string
-  order_status: string
+  order_status: 'PENDING_PAYMENT' | 'PAID' | 'PAYMENT_FAILED' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED' | 'REFUND_FAILED'
 }
 
 export interface AdminTransactionLogItem {
@@ -457,7 +470,7 @@ export interface AdminTicketTransactionHistory {
   venue: string
   order_id: number
   order_code?: string | null
-  order_status: string
+  order_status: 'PENDING_PAYMENT' | 'PAID' | 'PAYMENT_FAILED' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED' | 'REFUND_FAILED'
   payment_provider?: string | null
   gateway_order_ref?: string | null
   gateway_transaction_id?: string | null
@@ -515,4 +528,35 @@ export interface EventAssignmentOverviewItem {
   event_title: string
   event_status: EventStatus
   assigned_staff: AssignedEventStaffItem[]
+}
+
+export interface AdminRefundOrder {
+  order_id: number
+  order_code?: string | null
+  buyer_name?: string | null
+  buyer_email?: string | null
+  buyer_phone?: string | null
+  total_amount: number
+  payment_provider?: string | null
+  gateway_order_ref?: string | null
+  gateway_transaction_id?: string | null
+  paid_at?: string | null
+  refund_status: 'PAID' | 'REFUND_PENDING' | 'REFUNDED' | 'REFUND_FAILED'
+  refund_started_at?: string | null
+  refunded_at?: string | null
+}
+
+export interface AdminRefundListResponse {
+  show_id: number
+  cancellation_reason?: string | null
+  orders: AdminRefundOrder[]
+}
+
+export interface AdminRefundBatchResponse {
+  show_id: number
+  requested_count: number
+  refund_pending_count: number
+  refunded_count: number
+  failed_count: number
+  orders: AdminRefundOrder[]
 }

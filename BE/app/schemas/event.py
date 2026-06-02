@@ -116,6 +116,16 @@ class ShowSummaryResponse(BaseModel):
     cancelled_at: datetime | None = None
     cancelled_by_staff_id: int | None = None
     cancellation_reason: str | None = None
+    has_booking_history: bool = False
+    paid_order_count: int = 0
+    refundable_order_count: int = 0
+    refund_in_progress_count: int = 0
+    historical_paid_order_count: int = 0
+    historical_paid_ticket_count: int = 0
+    refund_required_amount: Decimal = Decimal("0")
+    refund_pending_amount: Decimal = Decimal("0")
+    refunded_amount: Decimal = Decimal("0")
+    refund_failed_amount: Decimal = Decimal("0")
 
     model_config = ConfigDict(from_attributes=True)
 

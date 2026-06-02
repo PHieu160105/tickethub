@@ -127,7 +127,7 @@ async def google_auth(payload: GoogleTokenRequest, session: AsyncSession = Depen
         return _build_auth_response(user)
 
     if user.user_type != UserType.CUSTOMER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Dang nhap Google chi ap dung cho customer")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Đăng nhập Google chỉ áp dụng cho customer")
 
     if not user.customer_profile:
         user.customer_profile = Customer(google_id=google_id)
@@ -141,13 +141,13 @@ async def google_auth(payload: GoogleTokenRequest, session: AsyncSession = Depen
 @router.get("/zalo/login")
 async def zalo_login() -> RedirectResponse:
     if not settings.zalo_client_id or not settings.zalo_client_secret:
-        return _frontend_auth_error_redirect("Dang nhap Zalo chua duoc cau hinh")
-    return _frontend_auth_error_redirect("Dang nhap Zalo se duoc bo sung o phase tiep theo")
+        return _frontend_auth_error_redirect("Đăng nhập Zalo chưa được cấu hình")
+    return _frontend_auth_error_redirect("Đăng nhập Zalo sẽ được bổ sung ở phase tiếp theo")
 
 
 @router.get("/zalo/callback")
 async def zalo_callback() -> RedirectResponse:
-    return _frontend_auth_error_redirect("Dang nhap Zalo chua san sang tren backend")
+    return _frontend_auth_error_redirect("Đăng nhập Zalo chưa sẵn sàng trên backend")
 
 
 @router.post("/refresh", response_model=AuthTokenResponse)

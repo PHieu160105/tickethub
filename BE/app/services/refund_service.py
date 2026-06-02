@@ -18,6 +18,7 @@ from app.schemas.admin import AdminRefundBatchResponse, AdminRefundListResponse,
 from app.services.booking_payment_service import _release_order_tickets
 from app.services.dashboard_service import broadcast_dashboard_update
 from app.services.queue_service import process_virtual_queue
+from app.services.ticket_delivery_service import dispatch_refund_processing_email
 from app.ws.connection_manager import seat_ws_manager
 
 
@@ -58,6 +59,21 @@ def _refund_response_from_order(order: Order) -> AdminRefundOrderResponse:
     )
 
 
+def _should_fail_simulated_refund(order: Order) -> bool:
+    return order.id % 5 == 0
+
+
+def _build_refund_batch_response(show_id: int, requested_count: int, orders: list[Order]) -> AdminRefundBatchResponse:
+    return AdminRefundBatchResponse(
+        show_id=show_id,
+        requested_count=requested_count,
+        refund_pending_count=sum(1 for order in orders if order.status == OrderStatus.REFUND_PENDING),
+        refunded_count=sum(1 for order in orders if order.status == OrderStatus.REFUNDED),
+        failed_count=sum(1 for order in orders if order.status == OrderStatus.REFUND_FAILED),
+        orders=[_refund_response_from_order(order) for order in orders],
+    )
+
+
 async def cancel_show(
     session: AsyncSession,
     *,
@@ -69,7 +85,7 @@ async def cancel_show(
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     await _ensure_staff_can_manage_show(session, show, actor)
     if show.status == EventStatus.CANCELLED:
-        return show
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Show da bi huy truoc do")
 
     changed_tickets, expired_queue_count = await _interrupt_active_show_sessions(session, show)
     pending_orders = list(
@@ -150,6 +166,8 @@ async def list_show_refunds(
         cancellation_reason=show.cancellation_reason,
         orders=[_refund_response_from_order(order) for order in orders],
     )
+
+
 async def request_show_refunds(
     session: AsyncSession,
     *,
@@ -157,7 +175,7 @@ async def request_show_refunds(
     show_id: int,
     actor: User,
 ) -> AdminRefundBatchResponse:
-    _, show = await _build_event_or_404_show(session, event_key, show_id)
+    event, show = await _build_event_or_404_show(session, event_key, show_id)
     await _ensure_staff_can_manage_show(session, show, actor)
     if show.status != EventStatus.CANCELLED:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chi duoc hoan tien sau khi show da bi huy")
@@ -173,20 +191,54 @@ async def request_show_refunds(
             .with_for_update()
         )
     )
+    requested_orders: list[Order] = []
     if orders:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Hoan tien tu dong cho VNPay chua duoc ho tro",
-        )
+        now = datetime.now(UTC)
+        for order in orders:
+            order.status = OrderStatus.REFUND_PENDING
+            order.refund_started_at = now
+            order.refunded_at = None
+            requested_orders.append(order)
+            session.add(
+                TransactionLog(
+                    order_id=order.id,
+                    action="REFUND_REQUESTED",
+                    status=OrderStatus.REFUND_PENDING.value,
+                    payment_method=order.payment_provider,
+                    gateway_transaction_id=order.gateway_transaction_id,
+                    amount=float(order.total_amount),
+                    message="Refund processing requested after show cancellation",
+                )
+            )
+        await session.commit()
 
-    return AdminRefundBatchResponse(
-        show_id=show.id,
-        requested_count=0,
-        refund_pending_count=0,
-        refunded_count=0,
-        failed_count=0,
-        orders=[],
+        for order in requested_orders:
+            await dispatch_refund_processing_email(
+                session,
+                order=order,
+                event_title=event.title,
+                show_title=show.title,
+                cancellation_reason=show.cancellation_reason or "Show gap su co van hanh",
+            )
+
+    refreshed_orders = list(
+        await session.scalars(
+            select(Order)
+            .where(
+                Order.show_id == show.id,
+                Order.status.in_(
+                    [
+                        OrderStatus.PAID,
+                        OrderStatus.REFUND_PENDING,
+                        OrderStatus.REFUNDED,
+                        OrderStatus.REFUND_FAILED,
+                    ]
+                ),
+            )
+            .order_by(Order.paid_at.desc(), Order.id.desc())
+        )
     )
+    return _build_refund_batch_response(show.id, len(requested_orders), refreshed_orders)
 
 
 async def refresh_show_refunds(
@@ -199,23 +251,6 @@ async def refresh_show_refunds(
     _, show = await _build_event_or_404_show(session, event_key, show_id)
     await _ensure_staff_can_manage_show(session, show, actor)
 
-    unsupported_orders = list(
-        await session.scalars(
-            select(Order)
-            .where(
-                Order.show_id == show.id,
-                Order.payment_provider == "VNPAY",
-                Order.status.in_([OrderStatus.PAID, OrderStatus.REFUND_PENDING, OrderStatus.REFUND_FAILED]),
-            )
-            .order_by(Order.id.asc())
-        )
-    )
-    if unsupported_orders:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Hoan tien tu dong cho VNPay chua duoc ho tro",
-        )
-
     pending_orders = list(
         await session.scalars(
             select(Order)
@@ -225,17 +260,53 @@ async def refresh_show_refunds(
         )
     )
     if pending_orders:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Hoan tien tu dong cho VNPay chua duoc ho tro",
-        )
+        now = datetime.now(UTC)
+        for order in pending_orders:
+            if _should_fail_simulated_refund(order):
+                order.status = OrderStatus.REFUND_FAILED
+                session.add(
+                    TransactionLog(
+                        order_id=order.id,
+                        action="REFUND_SIMULATED_FAILED",
+                        status=OrderStatus.REFUND_FAILED.value,
+                        payment_method=order.payment_provider,
+                        gateway_transaction_id=order.gateway_transaction_id,
+                        amount=float(order.total_amount),
+                        message="Simulated refund failed for sandbox workflow",
+                    )
+                )
+                continue
 
-    refreshed = await list_show_refunds(session, event_key=event_key, show_id=show_id, actor=actor)
-    return AdminRefundBatchResponse(
-        show_id=show.id,
-        requested_count=len(pending_orders),
-        refund_pending_count=sum(1 for order in refreshed.orders if order.refund_status == OrderStatus.REFUND_PENDING),
-        refunded_count=sum(1 for order in refreshed.orders if order.refund_status == OrderStatus.REFUNDED),
-        failed_count=sum(1 for order in refreshed.orders if order.refund_status == OrderStatus.REFUND_FAILED),
-        orders=refreshed.orders,
+            order.status = OrderStatus.REFUNDED
+            order.refunded_at = now
+            session.add(
+                TransactionLog(
+                    order_id=order.id,
+                    action="REFUND_SIMULATED_SUCCESS",
+                    status=OrderStatus.REFUNDED.value,
+                    payment_method=order.payment_provider,
+                    gateway_transaction_id=order.gateway_transaction_id,
+                    amount=float(order.total_amount),
+                    message="Simulated refund completed successfully",
+                )
+            )
+        await session.commit()
+
+    refreshed_orders = list(
+        await session.scalars(
+            select(Order)
+            .where(
+                Order.show_id == show.id,
+                Order.status.in_(
+                    [
+                        OrderStatus.PAID,
+                        OrderStatus.REFUND_PENDING,
+                        OrderStatus.REFUNDED,
+                        OrderStatus.REFUND_FAILED,
+                    ]
+                ),
+            )
+            .order_by(Order.paid_at.desc(), Order.id.desc())
+        )
     )
+    return _build_refund_batch_response(show.id, len(pending_orders), refreshed_orders)

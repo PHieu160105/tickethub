@@ -6,6 +6,9 @@ from app.api.deps import get_current_active_event_staff, get_current_active_admi
 from app.models.event import EventAssignment
 from app.core.db import get_db_session
 from app.models.enums import OrderStatus
+from app.schemas.common import APIMessage
+from app.services.booking_payment_service import _build_paid_items
+from app.services.ticket_delivery_service import resend_paid_order_tickets
 from app.models.event import Event, Show, TicketTier
 from app.models.order import Order, Ticket, TransactionLog
 from app.models.user import User
@@ -35,6 +38,9 @@ async def list_admin_ticket_sales(
         OrderStatus.PENDING_PAYMENT,
         OrderStatus.PAYMENT_FAILED,
         OrderStatus.CANCELLED,
+        OrderStatus.REFUND_PENDING,
+        OrderStatus.REFUNDED,
+        OrderStatus.REFUND_FAILED,
     }
     stmt = (
         select(
@@ -135,7 +141,7 @@ async def get_admin_ticket_transaction_history(
         )
     ).first()
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay giao dich ve")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy giao dịch vé")
 
     logs = list(
         await session.scalars(
@@ -186,6 +192,41 @@ async def get_admin_ticket_transaction_history(
     )
 
 
+@router.post("/tickets/orders/{order_id}/resend-email", response_model=APIMessage)
+async def resend_admin_ticket_email(
+    order_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    staff_user: User = Depends(get_current_active_event_staff),
+) -> APIMessage:
+    order = await session.scalar(
+        select(Order)
+        .join(Show, Show.id == Order.show_id)
+        .where(
+            Order.id == order_id,
+            Show.event_id.in_(
+                select(EventAssignment.event_id).where(
+                    EventAssignment.staff_id == staff_user.id,
+                    EventAssignment.is_active.is_(True),
+                )
+            ),
+        )
+    )
+    if order is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy đơn hàng thuộc phạm vi quản lý")
+    if order.status not in {OrderStatus.PAID, OrderStatus.REFUND_PENDING, OrderStatus.REFUNDED, OrderStatus.REFUND_FAILED}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chỉ có thể gửi lại mail cho đơn đã phát hành vé")
+
+    items = await _build_paid_items(session, order.id)
+    result = await resend_paid_order_tickets(session, order=order, items=items)
+    if result == "sent":
+        return APIMessage(detail="Đã gửi lại mail vé thành công")
+    if result == "skipped":
+        return APIMessage(detail="Mail vé đã bị bỏ qua vì thiếu email hợp lệ hoặc chưa có vé phát hành")
+    if result == "disabled":
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hệ thống đang tắt gửi mail vé")
+    raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Gửi lại mail vé thất bại, vui lòng kiểm tra cấu hình SMTP")
+
+
 @router.get("/tickets/revenue-by-show", response_model=list[AdminEventRevenueResponse])
 async def list_admin_show_revenue(
     session: AsyncSession = Depends(get_db_session),
@@ -198,8 +239,38 @@ async def list_admin_show_revenue(
             Show.id.label("show_id"),
             Show.title.label("show_title"),
             Show.start_at.label("show_start_at"),
-            func.sum(case((Order.status == OrderStatus.PAID, Ticket.price), else_=0)).label("revenue"),
-            func.sum(case((Order.status == OrderStatus.PAID, 1), else_=0)).label("tickets_sold"),
+            func.sum(
+                case(
+                    (
+                        Order.status.in_(
+                            [
+                                OrderStatus.PAID,
+                                OrderStatus.REFUND_PENDING,
+                                OrderStatus.REFUNDED,
+                                OrderStatus.REFUND_FAILED,
+                            ]
+                        ),
+                        Ticket.price,
+                    ),
+                    else_=0,
+                )
+            ).label("revenue"),
+            func.sum(
+                case(
+                    (
+                        Order.status.in_(
+                            [
+                                OrderStatus.PAID,
+                                OrderStatus.REFUND_PENDING,
+                                OrderStatus.REFUNDED,
+                                OrderStatus.REFUND_FAILED,
+                            ]
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("tickets_sold"),
         )
         .join(Show, Show.event_id == Event.id)
         .outerjoin(Order, Order.show_id == Show.id)

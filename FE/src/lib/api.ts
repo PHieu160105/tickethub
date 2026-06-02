@@ -5,6 +5,8 @@ import { API_BASE_URL, API_TIMEOUT, API_RETRY_ATTEMPTS, API_RETRY_DELAY } from '
 import { authStorage } from './storage'
 import type {
   ApiMessage,
+  AdminRefundBatchResponse,
+  AdminRefundListResponse,
   AdminEventUpdatePayload,
   AdminShowPerformer,
   AdminEventRevenueItem,
@@ -399,6 +401,21 @@ export const adminApi = {
     const response = await api.delete<ApiMessage>(`/admin/events/${eventKey}/shows/${showId}`)
     return response.data
   },
+  async cancelShow(eventKey: string | number, showId: number, payload: { cancellation_reason: string }) {
+    const response = await api.post<ApiMessage>(`/admin/events/${eventKey}/shows/${showId}/cancel`, payload)
+    return response.data
+  },
+  async getShowRefunds(eventKey: string | number, showId: number) {
+    return withRetry(() => api.get<AdminRefundListResponse>(`/admin/events/${eventKey}/shows/${showId}/refunds`))
+  },
+  async requestShowRefunds(eventKey: string | number, showId: number) {
+    const response = await api.post<AdminRefundBatchResponse>(`/admin/events/${eventKey}/shows/${showId}/refunds`)
+    return response.data
+  },
+  async refreshShowRefunds(eventKey: string | number, showId: number) {
+    const response = await api.post<AdminRefundBatchResponse>(`/admin/events/${eventKey}/shows/${showId}/refunds/refresh`)
+    return response.data
+  },
   async showStats(eventKey: string | number, showId: number) {
     return withRetry(() => api.get<EventDetailStats>(`/admin/events/${eventKey}/shows/${showId}/stats`))
   },
@@ -472,6 +489,10 @@ export const adminApi = {
   },
   async ticketTransactionHistory(ticketId: number) {
     return withRetry(() => api.get<AdminTicketTransactionHistory>(`/admin/tickets/sales/${ticketId}/transaction-history`))
+  },
+  async resendTicketEmail(orderId: number) {
+    const response = await api.post<ApiMessage>(`/admin/tickets/orders/${orderId}/resend-email`)
+    return response.data
   },
   async revenueByEvent() {
     return withRetry(() => api.get<AdminEventRevenueItem[]>('/admin/tickets/revenue-by-show'))

@@ -17,7 +17,7 @@ from app.services.event_inventory_service import sync_show_ticket_inventory
 async def _get_show_or_404(session: AsyncSession, show_id: int) -> Show:
     show = await session.scalar(select(Show).where(Show.id == show_id, Show.is_deleted.is_(False)))
     if not show:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Khong tim thay buoi dien")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy buổi diễn")
     return show
 
 

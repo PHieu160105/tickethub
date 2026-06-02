@@ -33,8 +33,8 @@ export default function PaymentResult() {
       setIsLoading(false)
       setErrorMessage(
         gatewayError === 'invalid_signature'
-          ? 'Khong the xac minh phan hoi tu cong thanh toan.'
-          : 'Khong tim thay phien thanh toan dang cho xu ly.',
+          ? 'Không thể xác minh phản hồi từ cổng thanh toán.'
+          : 'Không tìm thấy phiên thanh toán đang chờ xử lý.',
       )
       return
     }
@@ -83,7 +83,7 @@ export default function PaymentResult() {
         setErrorMessage('Thanh toan chua hoan tat hoac da bi huy.')
       } catch (error) {
         if (!isMounted) return
-        setErrorMessage(error instanceof Error ? error.message : 'Khong the kiem tra trang thai thanh toan.')
+        setErrorMessage(error instanceof Error ? error.message : 'Không thể kiểm tra trạng thái thanh toán.')
       } finally {
         if (isMounted) {
           setIsLoading(false)
@@ -107,10 +107,10 @@ export default function PaymentResult() {
         <div className="backdrop-blur-xl customer-bg-surface p-8 rounded-3xl border border-[var(--customer-bg-opp)] space-y-6">
           <h1 className="text-3xl font-headline font-black tracking-tight">Ket qua thanh toan</h1>
 
-          {isLoading && <p className="text-slate-400">Dang kiem tra trang thai thanh toan voi he thong...</p>}
+          {isLoading && <p className="text-slate-400">Đang kiểm tra trạng thái thanh toán với hệ thống...</p>}
 
           {!isLoading && order?.order_status === 'PENDING_PAYMENT' && (
-            <p className="text-slate-300">Don hang van dang cho VNPAY xac nhan. Trang nay se tu lam moi trang thai.</p>
+            <p className="text-slate-300">Đơn hàng vẫn đang chờ VNPAY xác nhận. Trang này sẽ tự làm mới trạng thái.</p>
           )}
 
           {!isLoading && errorMessage && <p className="text-amber-300">{errorMessage}</p>}

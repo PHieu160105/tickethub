@@ -37,6 +37,7 @@ function statusBadge(status: EventStatus) {
     DRAFT: { text: 'Bản nháp', variant: 'default' },
     LIVE: { text: 'Đang mở bán', variant: 'success' },
     CLOSED: { text: 'Đã đóng', variant: 'danger' },
+    CANCELLED: { text: 'Đã hủy', variant: 'warning' },
   }
 
   const variant = variants[status]

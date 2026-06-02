@@ -94,6 +94,7 @@ function statusBadge(status: EventStatus) {
     DRAFT: { text: 'Bản nháp', className: 'bg-gray-500/20 text-gray-300' },
     LIVE: { text: 'Đang mở bán', className: 'bg-green-700/20 text-green-300' },
     CLOSED: { text: 'Đã đóng', className: 'bg-red-500/20 text-red-300' },
+    CANCELLED: { text: 'Đã hủy', className: 'bg-amber-500/20 text-amber-300' },
   }
 
   const variant = variants[status]
@@ -155,6 +156,14 @@ function formatDateTime(value: string) {
   return new Date(value).toLocaleString('vi-VN', { timeZone: VIETNAM_TIME_ZONE })
 }
 
+function formatCurrencyVnd(amount: number) {
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
 export default function AdminEvents() {
   const navigate = useNavigate()
   const [events, setEvents] = useState<EventCard[]>([])
@@ -171,13 +180,20 @@ export default function AdminEvents() {
   const [detailModalOpen, setDetailModalOpen] = useState(false)
   const [showModalOpen, setShowModalOpen] = useState(false)
   const [performerModalOpen, setPerformerModalOpen] = useState(false)
+  const [cancelRefundModalOpen, setCancelRefundModalOpen] = useState(false)
+  const [cancelledShowDetailsOpen, setCancelledShowDetailsOpen] = useState(false)
 
   const [editingEvent, setEditingEvent] = useState<EventCard | null>(null)
   const [activeEvent, setActiveEvent] = useState<EventDetail | null>(null)
   const [editingShow, setEditingShow] = useState<ShowSummary | null>(null)
   const [performerShow, setPerformerShow] = useState<ShowSummary | null>(null)
+  const [cancelRefundTargetShow, setCancelRefundTargetShow] = useState<ShowSummary | null>(null)
+  const [cancelledShowDetailsTarget, setCancelledShowDetailsTarget] = useState<ShowSummary | null>(null)
   const [eventForm, setEventForm] = useState<EventFormState>(INITIAL_EVENT_FORM)
   const [showForm, setShowForm] = useState<ShowFormState>(INITIAL_SHOW_FORM)
+  const [cancellationReason, setCancellationReason] = useState('Show gặp sự cố vận hành')
+  const [cancelRefundError, setCancelRefundError] = useState<string | null>(null)
+  const [processingCancellation, setProcessingCancellation] = useState(false)
 
   const filteredEvents = useMemo(
     () =>
@@ -372,6 +388,10 @@ export default function AdminEvents() {
 
   async function openEditShowModal(show: ShowSummary) {
     if (!activeEvent) return
+    if (show.status === 'CANCELLED') {
+      setFormError('Show đã hủy không thể chỉnh sửa.')
+      return
+    }
 
     if (show.status !== 'DRAFT') {
       if (!window.confirm('Show đang Live. Show sẽ được chuyển về Draft trước khi chỉnh sửa. Tiếp tục?')) return
@@ -418,6 +438,10 @@ export default function AdminEvents() {
 
   async function openSeatPlanner(show: ShowSummary) {
     if (!activeEvent) return
+    if (show.status === 'CANCELLED') {
+      setFormError('Show đã hủy không thể mở sơ đồ ghế.')
+      return
+    }
     if (show.status !== 'DRAFT') {
       if (!window.confirm('Seat Planner là thao tác chỉnh sửa show. Show sẽ được chuyển về Draft trước khi mở planner. Tiếp tục?')) return
       try {
@@ -438,8 +462,40 @@ export default function AdminEvents() {
     setPerformerModalOpen(true)
   }
 
+  function openCancelRefundModal(show: ShowSummary) {
+    setCancelRefundTargetShow(show)
+    setCancellationReason(`Show "${show.title}" gặp sự cố vận hành`)
+    setCancelRefundError(null)
+    setCancelRefundModalOpen(true)
+  }
+
+  function closeCancelRefundModal() {
+    setCancelRefundModalOpen(false)
+    setCancelRefundTargetShow(null)
+    setCancellationReason('Show gặp sự cố vận hành')
+    setCancelRefundError(null)
+  }
+
+  function openCancelledShowDetails(show: ShowSummary) {
+    setCancelledShowDetailsTarget(show)
+    setCancelledShowDetailsOpen(true)
+  }
+
+  function closeCancelledShowDetails() {
+    setCancelledShowDetailsOpen(false)
+    setCancelledShowDetailsTarget(null)
+  }
+
   async function handleDeleteShow(show: ShowSummary) {
     if (!activeEvent) return
+    if (show.status === 'CANCELLED') {
+      openCancelledShowDetails(show)
+      return
+    }
+    if (show.has_booking_history) {
+      openCancelRefundModal(show)
+      return
+    }
     if (show.status !== 'DRAFT') {
       if (!window.confirm(`Show "${show.title}" phải ở trạng thái Draft trước khi xóa. Chuyển về Draft ngay?`)) return
       try {
@@ -458,6 +514,31 @@ export default function AdminEvents() {
       await loadEvents()
     } catch (errorValue) {
       setFormError(extractApiErrorMessage(errorValue, 'Không thể xóa show.'))
+    }
+  }
+
+  async function handleConfirmCancelAndRefund() {
+    if (!activeEvent || !cancelRefundTargetShow) return
+    if (cancellationReason.trim().length < 3) {
+      setCancelRefundError('Vui lòng nhập lý do hủy show rõ ràng.')
+      return
+    }
+
+    setProcessingCancellation(true)
+    setCancelRefundError(null)
+    try {
+      await adminApi.cancelShow(activeEvent.slug, cancelRefundTargetShow.id, {
+        cancellation_reason: cancellationReason.trim(),
+      })
+      await adminApi.requestShowRefunds(activeEvent.slug, cancelRefundTargetShow.id)
+      closeCancelRefundModal()
+      await loadEventDetail(activeEvent.slug)
+      await loadEvents()
+      navigate(`/admin/events/${activeEvent.slug}/shows/${cancelRefundTargetShow.id}/refunds`)
+    } catch (errorValue) {
+      setCancelRefundError(extractApiErrorMessage(errorValue, 'Không thể hủy show và khởi tạo hoàn tiền.'))
+    } finally {
+      setProcessingCancellation(false)
     }
   }
 
@@ -769,15 +850,23 @@ export default function AdminEvents() {
                           <Button variant="ghost" size="sm" onClick={() => openPerformerModal(show)}>
                             Nghệ sĩ
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => void openSeatPlanner(show)}>
-                            Sơ đồ ghế
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => void openEditShowModal(show)}>
-                            <Edit className="h-4 w-4" /> Sửa show
-                          </Button>
-                          <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300" onClick={() => void handleDeleteShow(show)}>
-                            <Trash2 className="h-4 w-4" /> Xóa show
-                          </Button>
+                          {show.status === 'CANCELLED' ? (
+                            <Button variant="ghost" size="sm" onClick={() => openCancelledShowDetails(show)}>
+                              Chi tiết hủy
+                            </Button>
+                          ) : (
+                            <>
+                              <Button variant="ghost" size="sm" onClick={() => void openSeatPlanner(show)}>
+                                Sơ đồ ghế
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => void openEditShowModal(show)}>
+                                <Edit className="h-4 w-4" /> Sửa show
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300" onClick={() => void handleDeleteShow(show)}>
+                                <Trash2 className="h-4 w-4" /> Xóa show
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -975,6 +1064,98 @@ export default function AdminEvents() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={cancelRefundModalOpen}
+        onClose={() => {
+          if (!processingCancellation) {
+            closeCancelRefundModal()
+          }
+        }}
+        title="Hủy show và hoàn tiền"
+        className="max-w-2xl"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+            Show này đã có lịch sử giao dịch nên không thể xóa thật. Hệ thống sẽ chuyển show sang trạng thái hủy, gửi email cho khách hàng và đưa các giao dịch vào luồng hoàn tiền mô phỏng để staff theo dõi.
+          </div>
+
+          {cancelRefundTargetShow ? (
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+              <p><strong className="text-white">Show:</strong> {cancelRefundTargetShow.title}</p>
+              <p><strong className="text-white">Đã thanh toán:</strong> {cancelRefundTargetShow.paid_order_count} giao dịch</p>
+              <p><strong className="text-white">Có thể hoàn tiền ngay:</strong> {cancelRefundTargetShow.refundable_order_count} giao dịch</p>
+              <p><strong className="text-white">Đang chờ refund:</strong> {cancelRefundTargetShow.refund_in_progress_count} giao dịch</p>
+            </div>
+          ) : null}
+
+          {cancelRefundError ? <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{cancelRefundError}</div> : null}
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-300">Lý do hủy show</label>
+            <textarea
+              className="w-full rounded-lg border border-white/20 bg-space-700/50 px-4 py-3 text-white"
+              rows={4}
+              value={cancellationReason}
+              onChange={(event) => setCancellationReason(event.target.value)}
+            />
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={closeCancelRefundModal} disabled={processingCancellation}>Đóng</Button>
+            <Button variant="danger" onClick={() => void handleConfirmCancelAndRefund()} isLoading={processingCancellation}>
+              Xác nhận hủy và hoàn tiền
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={cancelledShowDetailsOpen}
+        onClose={closeCancelledShowDetails}
+        title="Chi tiết hủy show"
+        className="max-w-2xl"
+      >
+        {cancelledShowDetailsTarget ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+              <p><strong className="text-white">Show:</strong> {cancelledShowDetailsTarget.title}</p>
+              <p><strong className="text-white">Trạng thái:</strong> Đã hủy</p>
+              <p><strong className="text-white">Thời điểm hủy:</strong> {cancelledShowDetailsTarget.cancelled_at ? formatDateTime(cancelledShowDetailsTarget.cancelled_at) : 'Chưa có'}</p>
+              <p><strong className="text-white">Lý do hủy:</strong> {cancelledShowDetailsTarget.cancellation_reason || 'Chưa cập nhật'}</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Tác động giao dịch</p>
+                <p className="mt-2"><strong className="text-white">Đã thanh toán:</strong> {cancelledShowDetailsTarget.historical_paid_order_count} giao dịch</p>
+                <p><strong className="text-white">Tổng số vé:</strong> {cancelledShowDetailsTarget.historical_paid_ticket_count}</p>
+                <p><strong className="text-white">Tổng cần hoàn:</strong> {formatCurrencyVnd(cancelledShowDetailsTarget.refund_required_amount)}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Trạng thái hoàn tiền</p>
+                <p className="mt-2"><strong className="text-white">Đang pending:</strong> {formatCurrencyVnd(cancelledShowDetailsTarget.refund_pending_amount)}</p>
+                <p><strong className="text-white">Đã hoàn:</strong> {formatCurrencyVnd(cancelledShowDetailsTarget.refunded_amount)}</p>
+                <p><strong className="text-white">Refund lỗi:</strong> {formatCurrencyVnd(cancelledShowDetailsTarget.refund_failed_amount)}</p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button variant="ghost" onClick={closeCancelledShowDetails}>Đóng</Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (!activeEvent) return
+                  closeCancelledShowDetails()
+                  navigate(`/admin/events/${activeEvent.slug}/shows/${cancelledShowDetailsTarget.id}/refunds`)
+                }}
+              >
+                Xem theo dõi hoàn tiền
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </Modal>
 
       <ShowPerformersModal

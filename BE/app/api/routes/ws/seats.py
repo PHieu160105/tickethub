@@ -22,7 +22,7 @@ async def show_seat_ws(websocket: WebSocket, show_id: int, token: str | None = N
         show = await session.scalar(select(Show).where(Show.id == show_id, Show.is_deleted.is_(False)))
 
     if not show:
-        await websocket.close(code=1008, reason="Khong tim thay buoi dien")
+        await websocket.close(code=1008, reason="Không tìm thấy buổi diễn")
         return
     is_internal_user = bool(user and user.user_type in {UserType.EVENT_STAFF, UserType.SYSTEM_ADMIN})
     if not is_internal_user and show.status != EventStatus.LIVE:
