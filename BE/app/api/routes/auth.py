@@ -1,12 +1,16 @@
 """Auth, profile, and social-login routes."""
 
+import base64
+import hashlib
 import json
-from urllib.parse import quote
+import secrets
+from urllib.parse import quote, urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
@@ -20,6 +24,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.core.zalo_auth import ZaloAuthError, exchange_zalo_code, fetch_zalo_profile
 from app.models.enums import UserType
 from app.models.user import Customer, User
 from app.schemas.auth import (
@@ -34,6 +39,8 @@ from app.schemas.auth import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
+ZALO_STATE_COOKIE = "ticketrush_zalo_oauth_state"
+ZALO_VERIFIER_COOKIE = "ticketrush_zalo_code_verifier"
 
 
 def _build_auth_response(user: User) -> AuthTokenResponse:
@@ -59,6 +66,26 @@ def _frontend_auth_redirect(access_token: str, refresh_token: str, user: UserRes
 def _frontend_auth_error_redirect(message: str) -> RedirectResponse:
     url = f"{settings.frontend_app_url.rstrip('/')}/login?oauth_error={quote(message)}"
     return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
+
+
+def _delete_zalo_oauth_cookies(response: RedirectResponse) -> RedirectResponse:
+    response.delete_cookie(ZALO_STATE_COOKIE, path="/api/auth")
+    response.delete_cookie(ZALO_VERIFIER_COOKIE, path="/api/auth")
+    return response
+
+
+def _create_code_challenge(code_verifier: str) -> str:
+    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def _valid_social_fallback_email(provider: str, social_id: str) -> str:
+    return f"{provider}_{social_id}@example.com"
+
+
+def _repair_legacy_social_fallback_email(user: User, provider: str, social_id: str) -> None:
+    if user.email.endswith(f"@{provider}.local"):
+        user.email = _valid_social_fallback_email(provider, social_id)
 
 
 @router.post("/register", response_model=AuthTokenResponse, status_code=status.HTTP_201_CREATED)
@@ -104,6 +131,8 @@ async def google_auth(payload: GoogleTokenRequest, session: AsyncSession = Depen
 
     if not google_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token thieu sub")
+    if not email:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token thieu email")
     if email and email_verified is False:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email Google chua duoc xac minh")
 
@@ -116,7 +145,7 @@ async def google_auth(payload: GoogleTokenRequest, session: AsyncSession = Depen
     if not user:
         user = User(
             full_name=name or email or "Google User",
-            email=email or f"google_{google_id}@google.local",
+            email=email,
             password_hash="SOCIAL_LOGIN",
             user_type=UserType.CUSTOMER,
         )
@@ -141,13 +170,44 @@ async def google_auth(payload: GoogleTokenRequest, session: AsyncSession = Depen
 @router.get("/zalo/login")
 async def zalo_login() -> RedirectResponse:
     if not settings.zalo_client_id or not settings.zalo_client_secret:
-        return _frontend_auth_error_redirect("Đăng nhập Zalo chưa được cấu hình")
-    return _frontend_auth_error_redirect("Đăng nhập Zalo sẽ được bổ sung ở phase tiếp theo")
+        return _frontend_auth_error_redirect("Dang nhap Zalo chua duoc cau hinh")
+
+    state = secrets.token_urlsafe(32)
+    code_verifier = secrets.token_urlsafe(48)
+    params = urlencode(
+        {
+            "app_id": settings.zalo_client_id,
+            "redirect_uri": settings.zalo_redirect_uri,
+            "state": state,
+            "code_challenge": _create_code_challenge(code_verifier),
+            "code_challenge_method": "S256",
+        }
+    )
+    response = RedirectResponse(url=f"https://oauth.zaloapp.com/v4/permission?{params}", status_code=status.HTTP_302_FOUND)
+    response.set_cookie(
+        ZALO_STATE_COOKIE,
+        state,
+        max_age=600,
+        httponly=True,
+        samesite="lax",
+        secure=settings.environment == "production",
+        path="/api/auth",
+    )
+    response.set_cookie(
+        ZALO_VERIFIER_COOKIE,
+        code_verifier,
+        max_age=600,
+        httponly=True,
+        samesite="lax",
+        secure=settings.environment == "production",
+        path="/api/auth",
+    )
+    return response
 
 
 @router.get("/zalo/callback")
 async def zalo_callback() -> RedirectResponse:
-    return _frontend_auth_error_redirect("Đăng nhập Zalo chưa sẵn sàng trên backend")
+    return _frontend_auth_error_redirect("Dang nhap Zalo chua san sang tren backend")
 
 
 @router.post("/refresh", response_model=AuthTokenResponse)

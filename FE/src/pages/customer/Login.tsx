@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { ArrowLeft, Eye, EyeOff, Mail, Lock, Rocket } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 //import LogoSVG from '@/assets/logo.svg'
 import { FcGoogle } from 'react-icons/fc'
+import { SiZalo } from 'react-icons/si'
 import type { User as ApiUser } from '@/types'
+import { authApi } from '@/lib/api'
 
 export function Logo() {
   return (
@@ -22,6 +24,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
+  const handledExternalAuthRef = useRef(false)
   const { login, loginWithGoogle, acceptExternalAuth } = useAuth()
   const navigate = useNavigate()
 
@@ -32,12 +35,16 @@ export default function Login() {
     const oauthError = searchParams.get('oauth_error')
 
     if (oauthError) {
+      if (handledExternalAuthRef.current) return
+      handledExternalAuthRef.current = true
       setErrorMessage(oauthError)
       setSearchParams({}, { replace: true })
       return
     }
 
     if (!accessToken || !refreshToken || !userParam) return
+    if (handledExternalAuthRef.current) return
+    handledExternalAuthRef.current = true
 
     try {
       const parsedUser = JSON.parse(userParam) as ApiUser
@@ -163,8 +170,9 @@ export default function Login() {
               </div>
 
               {/* Nút đăng nhập mạng xã hội. */}
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <button
+                  type="button"
                   className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc"
                   onClick={async () => {
                     setIsLoading(true)
@@ -182,6 +190,15 @@ export default function Login() {
                 >
                   <FcGoogle className="w-5 h-5" />
                   <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-slate-500">Google</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white/5 border border-slate-600/10 hover:bg-white/10 transition-colors group/soc disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => authApi.startZaloLogin()}
+                  disabled={isLoading}
+                >
+                  <SiZalo className="h-5 w-5 text-[#0068ff]" />
+                  <span className="font-label text-[10px] tracking-widest uppercase font-semibold text-slate-500">Zalo</span>
                 </button>
               </div>
 
